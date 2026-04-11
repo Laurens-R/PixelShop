@@ -10,40 +10,6 @@
   background: vars.$color-surface;
 }
 
-// ─── Filter row ───────────────────────────────────────────────────────────────
-
-.filterRow {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  border-bottom: 1px solid vars.$color-border;
-  flex-shrink: 0;
-}
-
-.searchIcon {
-  flex-shrink: 0;
-  color: vars.$color-text-muted;
-}
-
-.kindSelect {
-  @include m.ps-dropdown;
-  flex: 1;
-  min-width: 0;
-}
-
-.filterIcons {
-  display: flex;
-  gap: 1px;
-  flex-shrink: 0;
-}
-
-.filterIcon {
-  @include m.icon-button(18px);
-  font-size: 9px;
-  border-radius: vars.$radius-sm;
-}
-
 // ─── Blend mode + Opacity ─────────────────────────────────────────────────────
 
 .blendRow {
@@ -82,10 +48,19 @@
 .lockBtn {
   @include m.icon-button(18px);
   border-radius: vars.$radius-sm;
+  color: vars.$color-text-muted;
+
+  &:hover:not(:disabled) {
+    color: vars.$color-text;
+  }
 }
 
-.lockSpacer {
-  flex: 1;
+.lockBtnActive {
+  color: vars.$color-accent-blue;
+
+  &:hover:not(:disabled) {
+    color: vars.$color-accent-blue-hover;
+  }
 }
 
 .numLabel {
@@ -93,23 +68,6 @@
   color: vars.$color-text-dim;
   flex-shrink: 0;
   white-space: nowrap;
-}
-
-.numField {
-  display: flex;
-  align-items: center;
-}
-
-.numInput {
-  @include m.ps-input;
-  width: 34px;
-  text-align: right;
-}
-
-.numSuffix {
-  font-size: vars.$font-size-xs;
-  color: vars.$color-text-muted;
-  margin-left: 1px;
 }
 
 // ─── Layer list ───────────────────────────────────────────────────────────────
@@ -177,8 +135,17 @@
   font-size: vars.$font-size-sm;
   color: vars.$color-text;
   font-style: italic;
+  cursor: text;
 
   @include m.truncate;
+}
+
+.nameInput {
+  @include m.ps-input;
+  flex: 1;
+  min-width: 0;
+  font-size: vars.$font-size-sm;
+  font-style: italic;
 }
 
 .lockIcon {
@@ -192,7 +159,7 @@
 .footer {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 2px;
   padding: 3px 4px;
   border-top: 1px solid vars.$color-border;
   background: vars.$color-surface;
@@ -207,17 +174,5 @@
   &:hover:not(:disabled) {
     color: vars.$color-text;
   }
-}
-
-.footerSpacer {
-  flex: 1;
-}
-
-.fxLabel {
-  font-size: 10px;
-  font-style: italic;
-  font-weight: 600;
-  font-family: serif;
-  color: currentColor;
 }
 

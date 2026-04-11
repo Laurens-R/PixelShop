@@ -1,7 +1,7 @@
 // ─── Shader helpers ───────────────────────────────────────────────────────────
 
 export function compileShader(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   type: GLenum,
   source: string
 ): WebGLShader {
@@ -21,7 +21,7 @@ export function compileShader(
 }
 
 export function linkProgram(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   vertexShader: WebGLShader,
   fragmentShader: WebGLShader
 ): WebGLProgram {
@@ -44,7 +44,7 @@ export function linkProgram(
 // ─── Texture helpers ──────────────────────────────────────────────────────────
 
 export function createPixelTexture(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   width: number,
   height: number,
   data?: Uint8Array | null
@@ -75,7 +75,7 @@ export function createPixelTexture(
 }
 
 export function uploadTextureData(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   texture: WebGLTexture,
   width: number,
   height: number,
@@ -88,7 +88,7 @@ export function uploadTextureData(
 // ─── Buffer helpers ───────────────────────────────────────────────────────────
 
 export function createStaticBuffer(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   data: Float32Array
 ): WebGLBuffer {
   const buffer = gl.createBuffer()
@@ -101,7 +101,7 @@ export function createStaticBuffer(
 }
 
 export function fillRectBuffer(
-  gl: WebGLRenderingContext,
+  gl: WebGL2RenderingContext,
   x: number,
   y: number,
   w: number,

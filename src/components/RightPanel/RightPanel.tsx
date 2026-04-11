@@ -95,16 +95,25 @@ export function RightPanel(): React.JSX.Element {
                   name: `Layer ${state.layers.length + 1}`,
                   visible: true,
                   opacity: 1,
-                  locked: false
+                  locked: false,
+                  blendMode: 'normal'
                 }
               })
             }}
             onLayerDelete={(id) => dispatch({ type: 'REMOVE_LAYER', payload: id })}
-            onLayerToggleVisibility={(id) =>
-              dispatch({ type: 'TOGGLE_LAYER_VISIBILITY', payload: id })
-            }
+            onLayerToggleVisibility={(id) => dispatch({ type: 'TOGGLE_LAYER_VISIBILITY', payload: id })}
+            onLayerToggleLock={(id) => dispatch({ type: 'TOGGLE_LAYER_LOCK', payload: id })}
             onLayerOpacityChange={(id, opacity) =>
               dispatch({ type: 'SET_LAYER_OPACITY', payload: { id, opacity } })
+            }
+            onLayerBlendChange={(id, blendMode) =>
+              dispatch({ type: 'SET_LAYER_BLEND', payload: { id, blendMode } })
+            }
+            onLayerRename={(id, name) =>
+              dispatch({ type: 'RENAME_LAYER', payload: { id, name } })
+            }
+            onLayersReorder={(layers) =>
+              dispatch({ type: 'REORDER_LAYERS', payload: layers })
             }
           />
         )}

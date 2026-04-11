@@ -130,13 +130,6 @@
   }
 }
 
-.chNum {
-  @include m.ps-input;
-  width: 34px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
 // ─── Hex input ────────────────────────────────────────────────────────────────
 
 .hexRow {

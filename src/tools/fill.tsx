@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState } from 'react'
+import { SliderInput } from '@/components/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolOptionsStyles } from './types'
 
 function createFillHandler(): ToolHandler {
@@ -10,10 +11,11 @@ function createFillHandler(): ToolHandler {
 }
 
 function FillOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
+  const [tolerance, setTolerance] = useState(32)
   return (
     <>
       <label className={styles.optLabel}>Tolerance:</label>
-      <input className={styles.optInput} type="number" defaultValue={32} min={0} max={255} style={{ width: 42 }} />
+      <SliderInput value={tolerance} min={0} max={255} inputWidth={42} onChange={setTolerance} />
       <span className={styles.optSep} />
       <label className={styles.optCheckLabel}>
         <input type="checkbox" defaultChecked />

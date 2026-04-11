@@ -1,6 +1,24 @@
-import React from 'react'
-import type { LayerState } from '@/types'
+import React, { useRef, useState } from 'react'
+import type { LayerState, BlendMode } from '@/types'
+import { SliderInput } from '@/components/SliderInput/SliderInput'
 import styles from './LayerPanel.module.scss'
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const BLEND_MODES: { value: BlendMode; label: string }[] = [
+  { value: 'normal',      label: 'Normal' },
+  { value: 'multiply',    label: 'Multiply' },
+  { value: 'screen',      label: 'Screen' },
+  { value: 'overlay',     label: 'Overlay' },
+  { value: 'soft-light',  label: 'Soft Light' },
+  { value: 'hard-light',  label: 'Hard Light' },
+  { value: 'darken',      label: 'Darken' },
+  { value: 'lighten',     label: 'Lighten' },
+  { value: 'difference',  label: 'Difference' },
+  { value: 'exclusion',   label: 'Exclusion' },
+  { value: 'color-dodge', label: 'Color Dodge' },
+  { value: 'color-burn',  label: 'Color Burn' },
+]
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -16,12 +34,18 @@ const EyeIcon = ({ visible }: { visible: boolean }): React.JSX.Element =>
     </svg>
   )
 
-const LockIcon = (): React.JSX.Element => (
-  <svg viewBox="0 0 12 14" fill="currentColor" width="10" height="12">
-    <rect x="2" y="6" width="8" height="7" rx="1" />
-    <path d="M4 6V4.5a2 2 0 114 0V6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-  </svg>
-)
+const LockIcon = ({ locked }: { locked: boolean }): React.JSX.Element =>
+  locked ? (
+    <svg viewBox="0 0 12 14" fill="currentColor" width="10" height="12">
+      <rect x="2" y="6" width="8" height="7" rx="1" />
+      <path d="M4 6V4.5a2 2 0 114 0V6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 12 14" fill="none" stroke="currentColor" strokeWidth="1.3" width="10" height="12">
+      <rect x="2" y="6" width="8" height="7" rx="1" />
+      <path d="M4 6V4.5a2 2 0 114 0V6" strokeLinecap="round" />
+    </svg>
+  )
 
 const AddLayerIcon = (): React.JSX.Element => (
   <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" width="12" height="12">
@@ -37,128 +61,129 @@ const DeleteLayerIcon = (): React.JSX.Element => (
   </svg>
 )
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Props ────────────────────────────────────────────────────────────────────
 
 interface LayerPanelProps {
-  layers?: LayerState[]
+  layers: LayerState[]
   activeLayerId?: string
-  onActiveLayerChange?: (id: string) => void
-  onLayerAdd?: () => void
-  onLayerDelete?: (id: string) => void
-  onLayerToggleVisibility?: (id: string) => void
-  onLayerOpacityChange?: (id: string, opacity: number) => void
+  onActiveLayerChange: (id: string) => void
+  onLayerAdd: () => void
+  onLayerDelete: (id: string) => void
+  onLayerToggleVisibility: (id: string) => void
+  onLayerToggleLock: (id: string) => void
+  onLayerOpacityChange: (id: string, opacity: number) => void
+  onLayerBlendChange: (id: string, blendMode: BlendMode) => void
+  onLayerRename: (id: string, name: string) => void
+  onLayersReorder: (layers: LayerState[]) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function LayerPanel({
-  layers = [],
+  layers,
   activeLayerId,
   onActiveLayerChange,
   onLayerAdd,
   onLayerDelete,
   onLayerToggleVisibility,
-  onLayerOpacityChange: _onLayerOpacityChange
+  onLayerToggleLock,
+  onLayerOpacityChange,
+  onLayerBlendChange,
+  onLayerRename,
+  onLayersReorder,
 }: LayerPanelProps): React.JSX.Element {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const dragSrcIdx = useRef<number | null>(null)
+
+  const activeLayer = layers.find((l) => l.id === activeLayerId)
   const canDelete = layers.length > 1
   const displayLayers = [...layers].reverse()
 
+  const opacityValue = activeLayer ? Math.round(activeLayer.opacity * 100) : 100
+  const blendValue: BlendMode = activeLayer?.blendMode ?? 'normal'
+
+  const startEdit = (layer: LayerState, e: React.MouseEvent): void => {
+    e.stopPropagation()
+    setEditingId(layer.id)
+    setEditingName(layer.name)
+  }
+
+  const commitEdit = (): void => {
+    if (editingId && editingName.trim()) onLayerRename(editingId, editingName.trim())
+    setEditingId(null)
+  }
+
+  const handleEditKey = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') commitEdit()
+    else if (e.key === 'Escape') setEditingId(null)
+  }
+
+  const handleDragStart = (displayIdx: number, e: React.DragEvent): void => {
+    dragSrcIdx.current = displayIdx
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent): void => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = (displayIdx: number, e: React.DragEvent): void => {
+    e.preventDefault()
+    const src = dragSrcIdx.current
+    if (src === null || src === displayIdx) return
+    const reordered = [...displayLayers]
+    const [moved] = reordered.splice(src, 1)
+    reordered.splice(displayIdx, 0, moved)
+    onLayersReorder([...reordered].reverse())
+    dragSrcIdx.current = null
+  }
+
   return (
     <div className={styles.panel}>
-      {/* ── Filter / search row ───────────────────────────────────────── */}
-      <div className={styles.filterRow}>
-        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" width="11" height="11" className={styles.searchIcon}>
-          <circle cx="5" cy="5" r="3.5" />
-          <line x1="7.5" y1="7.5" x2="11" y2="11" strokeLinecap="round" />
-        </svg>
-        <select className={styles.kindSelect}>
-          <option>Kind</option>
-          <option>Name</option>
-          <option>Effect</option>
-          <option>Mode</option>
-          <option>Attribute</option>
-          <option>Color</option>
-        </select>
-        <div className={styles.filterIcons}>
-          {/* pixel / adjustment / type / shape / smart icons */}
-          {['⬜', 'A', 'T', '⬟', '☁'].map((ic, i) => (
-            <button key={i} className={styles.filterIcon} title="Filter by type">
-              <span>{ic}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* ── Blend mode + Opacity ──────────────────────────────────────── */}
       <div className={styles.blendRow}>
-        <select className={styles.blendSelect}>
-          <option>Normal</option>
-          <option>Multiply</option>
-          <option>Screen</option>
-          <option>Overlay</option>
-          <option>Soft Light</option>
-          <option>Hard Light</option>
-          <option>Dissolve</option>
-          <option>Darken</option>
-          <option>Lighten</option>
-          <option>Difference</option>
+        <select
+          className={styles.blendSelect}
+          value={blendValue}
+          disabled={!activeLayer}
+          onChange={(e) => activeLayer && onLayerBlendChange(activeLayer.id, e.target.value as BlendMode)}
+        >
+          {BLEND_MODES.map((bm) => (
+            <option key={bm.value} value={bm.value}>{bm.label}</option>
+          ))}
         </select>
         <label className={styles.numLabel}>Opacity:</label>
-        <div className={styles.numField}>
-          <input
-            type="number"
-            className={styles.numInput}
-            min={0} max={100}
-            defaultValue={100}
-          />
-          <span className={styles.numSuffix}>%</span>
-        </div>
+        <SliderInput
+          key={activeLayerId}
+          value={opacityValue}
+          min={0}
+          max={100}
+          step={1}
+          inputWidth={34}
+          suffix="%"
+          disabled={!activeLayer}
+          onChange={(n) => activeLayer && onLayerOpacityChange(activeLayer.id, n / 100)}
+        />
       </div>
 
-      {/* ── Lock icons + Fill ─────────────────────────────────────────── */}
+      {/* ── Lock row ─────────────────────────────────────────────────── */}
       <div className={styles.lockRow}>
         <span className={styles.lockLabel}>Lock:</span>
-        <button className={styles.lockBtn} title="Lock transparent pixels">
-          <svg viewBox="0 0 10 12" fill="currentColor" width="9" height="11">
-            <rect x="1" y="1" width="8" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
-            <path d="M3.5 4.5L4.5 5.5 6.5 3.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-          </svg>
+        <button
+          className={`${styles.lockBtn} ${activeLayer?.locked ? styles.lockBtnActive : ''}`}
+          title={activeLayer?.locked ? 'Unlock layer' : 'Lock layer'}
+          disabled={!activeLayer}
+          onClick={() => activeLayer && onLayerToggleLock(activeLayer.id)}
+        >
+          <LockIcon locked={activeLayer?.locked ?? false} />
         </button>
-        <button className={styles.lockBtn} title="Lock image pixels">
-          <svg viewBox="0 0 12 12" fill="currentColor" width="10" height="10">
-            <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-            <circle cx="6" cy="6" r="1.5" />
-          </svg>
-        </button>
-        <button className={styles.lockBtn} title="Lock position">
-          <svg viewBox="0 0 12 14" fill="currentColor" width="10" height="11">
-            <rect x="2" y="6" width="8" height="7" rx="1" />
-            <path d="M4 6V4.5a2 2 0 114 0V6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-          </svg>
-        </button>
-        <button className={styles.lockBtn} title="Lock all">
-          <svg viewBox="0 0 12 14" fill="currentColor" width="10" height="11">
-            <rect x="2" y="6" width="8" height="7" rx="1" />
-            <path d="M4 6V4.5a2 2 0 114 0V6" fill="none" stroke="currentColor" strokeWidth="1.3" />
-            <path d="M4 9h4" stroke="#fff" strokeWidth="1" />
-          </svg>
-        </button>
-        <div className={styles.lockSpacer} />
-        <label className={styles.numLabel}>Fill:</label>
-        <div className={styles.numField}>
-          <input
-            type="number"
-            className={styles.numInput}
-            min={0} max={100}
-            defaultValue={100}
-          />
-          <span className={styles.numSuffix}>%</span>
-        </div>
       </div>
 
       {/* ── Layer list ────────────────────────────────────────────────── */}
       <ul className={styles.list} role="listbox" aria-label="Layers">
-        {displayLayers.map((layer) => {
+        {displayLayers.map((layer, displayIdx) => {
           const isActive = layer.id === activeLayerId
           return (
             <li
@@ -166,56 +191,58 @@ export function LayerPanel({
               className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
               role="option"
               aria-selected={isActive}
-              onClick={() => onActiveLayerChange?.(layer.id)}
+              draggable
+              onDragStart={(e) => handleDragStart(displayIdx, e)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(displayIdx, e)}
+              onClick={() => onActiveLayerChange(layer.id)}
             >
-              {/* Eye */}
               <button
                 className={styles.eyeBtn}
-                onClick={(e) => { e.stopPropagation(); onLayerToggleVisibility?.(layer.id) }}
+                onClick={(e) => { e.stopPropagation(); onLayerToggleVisibility(layer.id) }}
                 aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
               >
                 <EyeIcon visible={layer.visible} />
               </button>
 
-              {/* Thumbnail */}
               <div className={styles.thumb} aria-hidden="true" />
 
-              {/* Name */}
-              <span className={styles.name}>{layer.name}</span>
+              {editingId === layer.id ? (
+                <input
+                  autoFocus
+                  className={styles.nameInput}
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={commitEdit}
+                  onKeyDown={handleEditKey}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <span
+                  className={styles.name}
+                  onDoubleClick={(e) => startEdit(layer, e)}
+                  title="Double-click to rename"
+                >
+                  {layer.name}
+                </span>
+              )}
 
-              {/* Lock icon (if locked) */}
               {layer.locked && (
-                <span className={styles.lockIcon}><LockIcon /></span>
+                <span className={styles.lockIcon}><LockIcon locked /></span>
               )}
             </li>
           )
         })}
       </ul>
 
-      {/* ── Bottom toolbar ────────────────────────────────────────────── */}
+      {/* ── Footer toolbar ────────────────────────────────────────────── */}
       <div className={styles.footer}>
-        {[
-          'fx',
-          <svg key="mask" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" width="10" height="10"><circle cx="4" cy="6" r="3" /><rect x="5" y="3" width="6" height="6" rx="1" /></svg>,
-          <svg key="adj" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" width="10" height="10"><circle cx="6" cy="6" r="5" /><path d="M6 1v11M1 6h10" /></svg>,
-          <span key="grp" style={{ fontSize: 12 }}>⊞</span>
-        ].map((icon, i) => (
-          <button key={i} className={styles.footerBtn} aria-label="Layer action">
-            {typeof icon === 'string' ? <span className={styles.fxLabel}>{icon}</span> : icon}
-          </button>
-        ))}
-        <div className={styles.footerSpacer} />
-        <button
-          className={styles.footerBtn}
-          onClick={onLayerAdd}
-          aria-label="New layer"
-          title="New layer"
-        >
+        <button className={styles.footerBtn} onClick={onLayerAdd} aria-label="New layer" title="New layer">
           <AddLayerIcon />
         </button>
         <button
           className={styles.footerBtn}
-          onClick={() => activeLayerId && onLayerDelete?.(activeLayerId)}
+          onClick={() => activeLayerId && onLayerDelete(activeLayerId)}
           aria-label="Delete layer"
           title="Delete layer"
           disabled={!canDelete}

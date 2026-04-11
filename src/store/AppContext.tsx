@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, RGBAColor, LayerState } from '@/types'
+import type { AppState, Tool, RGBAColor, LayerState, BlendMode } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -11,7 +11,11 @@ type AppAction =
   | { type: 'REMOVE_LAYER'; payload: string }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
   | { type: 'TOGGLE_LAYER_VISIBILITY'; payload: string }
+  | { type: 'TOGGLE_LAYER_LOCK'; payload: string }
   | { type: 'SET_LAYER_OPACITY'; payload: { id: string; opacity: number } }
+  | { type: 'SET_LAYER_BLEND'; payload: { id: string; blendMode: BlendMode } }
+  | { type: 'RENAME_LAYER'; payload: { id: string; name: string } }
+  | { type: 'REORDER_LAYERS'; payload: LayerState[] }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_HISTORY'; payload: { canUndo: boolean; canRedo: boolean } }
@@ -22,7 +26,7 @@ const initialState: AppState = {
   activeTool: 'pencil',
   primaryColor: { r: 0, g: 0, b: 0, a: 255 },
   secondaryColor: { r: 255, g: 255, b: 255, a: 255 },
-  layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false }],
+  layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
   canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false },
   history: { canUndo: false, canRedo: false }
@@ -70,6 +74,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
         )
       }
 
+    case 'TOGGLE_LAYER_LOCK':
+      return {
+        ...state,
+        layers: state.layers.map((l) =>
+          l.id === action.payload ? { ...l, locked: !l.locked } : l
+        )
+      }
+
     case 'SET_LAYER_OPACITY':
       return {
         ...state,
@@ -77,6 +89,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
           l.id === action.payload.id ? { ...l, opacity: action.payload.opacity } : l
         )
       }
+
+    case 'SET_LAYER_BLEND':
+      return {
+        ...state,
+        layers: state.layers.map((l) =>
+          l.id === action.payload.id ? { ...l, blendMode: action.payload.blendMode } : l
+        )
+      }
+
+    case 'RENAME_LAYER':
+      return {
+        ...state,
+        layers: state.layers.map((l) =>
+          l.id === action.payload.id ? { ...l, name: action.payload.name } : l
+        )
+      }
+
+    case 'REORDER_LAYERS':
+      return { ...state, layers: action.payload }
 
     case 'SET_ZOOM':
       return { ...state, canvas: { ...state.canvas, zoom: action.payload } }

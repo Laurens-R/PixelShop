@@ -48,12 +48,27 @@ export interface Rect extends Point, Size {}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
+export type BlendMode =
+  | 'normal'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'soft-light'
+  | 'hard-light'
+  | 'darken'
+  | 'lighten'
+  | 'difference'
+  | 'exclusion'
+  | 'color-dodge'
+  | 'color-burn'
+
 export interface LayerState {
   id: string
   name: string
   visible: boolean
   opacity: number
   locked: boolean
+  blendMode: BlendMode
 }
 
 export interface CanvasState {

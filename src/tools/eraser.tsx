@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { eraseLine } from './bresenham'
+import { SliderInput } from '@/components/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 function createEraserHandler(): ToolHandler {
@@ -29,10 +30,11 @@ function createEraserHandler(): ToolHandler {
 }
 
 function EraserOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
+  const [size, setSize] = useState(8)
   return (
     <>
       <label className={styles.optLabel}>Size:</label>
-      <input className={styles.optInput} type="number" defaultValue={8} min={1} max={200} style={{ width: 42 }} />
+      <SliderInput value={size} min={1} max={200} inputWidth={42} onChange={setSize} />
       <span className={styles.optSep} />
       <label className={styles.optLabel}>Mode:</label>
       <select className={styles.optSelect}>

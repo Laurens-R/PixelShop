@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { drawLine } from './bresenham'
+import { SliderInput } from '@/components/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 function createPencilHandler(): ToolHandler {
@@ -31,14 +32,15 @@ function createPencilHandler(): ToolHandler {
 }
 
 function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
+  const [size, setSize] = useState(1)
+  const [opacity, setOpacity] = useState(100)
   return (
     <>
       <label className={styles.optLabel}>Size:</label>
-      <input className={styles.optInput} type="number" defaultValue={1} min={1} max={100} style={{ width: 42 }} />
+      <SliderInput value={size} min={1} max={100} inputWidth={42} onChange={setSize} />
       <span className={styles.optSep} />
       <label className={styles.optLabel}>Opacity:</label>
-      <input className={styles.optInput} type="number" defaultValue={100} min={1} max={100} style={{ width: 42 }} />
-      <span className={styles.optText}>%</span>
+      <SliderInput value={opacity} min={1} max={100} suffix="%" inputWidth={42} onChange={setOpacity} />
     </>
   )
 }

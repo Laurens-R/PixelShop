@@ -1,4 +1,5 @@
 export { Canvas } from './Canvas/Canvas'
+export { SliderInput } from './SliderInput/SliderInput'
 export { ColorPicker } from './ColorPicker/ColorPicker'
 export { LayerPanel } from './LayerPanel/LayerPanel'
 export { RightPanel } from './RightPanel/RightPanel'

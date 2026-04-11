@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useWebGL } from '@/hooks/useWebGL'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
@@ -20,8 +20,9 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
     pixelWidth: width,
     pixelHeight: height
   })
-  const [layers, setLayers] = useState<WebGLLayer[]>([])
-  const activeLayerRef = useRef<WebGLLayer | null>(null)
+
+  // Map of layerId → WebGLLayer, preserving pixel data across re-renders
+  const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
 
   // Publish canvas element into shared context
@@ -31,20 +32,59 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
 
   // Initialize first layer after renderer mounts
   useEffect(() => {
-    const layer = createLayer('layer-0', 'Background')
-    if (layer) {
-      layer.data.fill(255) // white, fully opaque
-      rendererRef.current?.flushLayer(layer)
-      setLayers([layer])
-      activeLayerRef.current = layer
-      render([layer])
-    }
-  }, [createLayer, render])
+    const renderer = rendererRef.current
+    if (!renderer) return
+    const firstState = state.layers[0]
+    if (!firstState) return
+    const layer = renderer.createLayer(firstState.id, firstState.name)
+    layer.data.fill(255) // white, fully opaque
+    renderer.flushLayer(layer)
+    glLayersRef.current.set(firstState.id, layer)
+    render(buildOrderedGLLayers())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rendererRef.current])
 
-  // Re-render when layer visibility/opacity changes
+  // Sync WebGL layers whenever AppState layer list changes
   useEffect(() => {
-    if (layers.length > 0) render(layers)
-  }, [state.layers, layers, render])
+    const renderer = rendererRef.current
+    if (!renderer) return
+    const map = glLayersRef.current
+
+    // Create any missing GL layers
+    for (const ls of state.layers) {
+      if (!map.has(ls.id)) {
+        const gl = renderer.createLayer(ls.id, ls.name)
+        map.set(ls.id, gl)
+      }
+    }
+
+    // Destroy removed GL layers
+    const stateIds = new Set(state.layers.map((l) => l.id))
+    for (const [id, gl] of map) {
+      if (!stateIds.has(id)) {
+        renderer.destroyLayer(gl)
+        map.delete(id)
+      }
+    }
+
+    // Sync opacity, visibility, blendMode from AppState → WebGL layer
+    for (const ls of state.layers) {
+      const gl = map.get(ls.id)
+      if (!gl) continue
+      gl.opacity = ls.opacity
+      gl.visible = ls.visible
+      gl.blendMode = ls.blendMode
+    }
+
+    render(buildOrderedGLLayers())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.layers])
+
+  // Build ordered GL layer array matching AppState order (bottom → top)
+  function buildOrderedGLLayers(): WebGLLayer[] {
+    const map = glLayersRef.current
+    return state.layers.map((ls) => map.get(ls.id)).filter((l): l is WebGLLayer => !!l)
+  }
 
   // Reset handler state whenever the active tool changes
   useEffect(() => {
@@ -53,9 +93,20 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
 
   const buildCtx = (): ToolContext | null => {
     const renderer = rendererRef.current
-    const layer = activeLayerRef.current
-    if (!renderer || !layer) return null
-    return { renderer, layer, layers, primaryColor: state.primaryColor, render }
+    if (!renderer) return null
+    const activeId = state.activeLayerId
+    const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
+    if (!activeLayer) return null
+    // Lock guard: don't draw on locked layers
+    const stateMeta = state.layers.find((l) => l.id === activeId)
+    if (stateMeta?.locked) return null
+    return {
+      renderer,
+      layer: activeLayer,
+      layers: buildOrderedGLLayers(),
+      primaryColor: state.primaryColor,
+      render
+    }
   }
 
   const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave } = useCanvas({

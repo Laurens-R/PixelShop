@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState, useId } from 'react'
 import type { RGBAColor } from '@/types'
+import { SliderInput } from '@/components/SliderInput/SliderInput'
 import styles from './ColorPicker.module.scss'
 
 // ─── Color math ───────────────────────────────────────────────────────────────
@@ -238,10 +239,12 @@ export function ColorPicker({
                 style={{ '--ch-end': endColors[i] } as React.CSSProperties}
                 onChange={(e) => onChannelChange(i, parseInt(e.target.value))}
               />
-              <input
-                type="number" min={0} max={255} value={n}
-                className={styles.chNum}
-                onChange={(e) => onChannelChange(i, parseInt(e.target.value) || 0)}
+              <SliderInput
+                min={0}
+                max={255}
+                value={n}
+                inputWidth={34}
+                onChange={(v) => onChannelChange(i, v)}
               />
             </div>
           )
