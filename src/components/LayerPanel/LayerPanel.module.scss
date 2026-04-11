@@ -1,0 +1,223 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: vars.$color-surface;
+}
+
+// ─── Filter row ───────────────────────────────────────────────────────────────
+
+.filterRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: vars.$color-text-muted;
+}
+
+.kindSelect {
+  @include m.ps-dropdown;
+  flex: 1;
+  min-width: 0;
+}
+
+.filterIcons {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.filterIcon {
+  @include m.icon-button(18px);
+  font-size: 9px;
+  border-radius: vars.$radius-sm;
+}
+
+// ─── Blend mode + Opacity ─────────────────────────────────────────────────────
+
+.blendRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.blendSelect {
+  @include m.ps-dropdown;
+  flex: 1;
+  min-width: 0;
+}
+
+// ─── Lock row ─────────────────────────────────────────────────────────────────
+
+.lockRow {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.lockLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+
+.lockBtn {
+  @include m.icon-button(18px);
+  border-radius: vars.$radius-sm;
+}
+
+.lockSpacer {
+  flex: 1;
+}
+
+.numLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-dim;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.numField {
+  display: flex;
+  align-items: center;
+}
+
+.numInput {
+  @include m.ps-input;
+  width: 34px;
+  text-align: right;
+}
+
+.numSuffix {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  margin-left: 1px;
+}
+
+// ─── Layer list ───────────────────────────────────────────────────────────────
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 5px;
+  cursor: pointer;
+  border-bottom: 1px solid vars.$color-border;
+  transition: background-color vars.$transition-fast;
+  min-height: 36px;
+
+  &:hover {
+    background-color: vars.$color-surface-hover;
+  }
+
+  &.itemActive {
+    background-color: #3a6ea8;
+
+    .name {
+      color: #fff;
+    }
+
+    .eyeBtn {
+      color: rgba(255, 255, 255, 0.8);
+    }
+  }
+}
+
+.eyeBtn {
+  @include m.icon-button(18px);
+  flex-shrink: 0;
+  color: vars.$color-text-muted;
+  border-radius: vars.$radius-sm;
+
+  &:hover {
+    color: vars.$color-text;
+  }
+}
+
+.thumb {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: repeating-conic-gradient(
+      vars.$color-checker-light 0% 25%,
+      vars.$color-checker-dark 0% 50%
+    )
+    0 0 / 7px 7px;
+}
+
+.name {
+  flex: 1;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text;
+  font-style: italic;
+
+  @include m.truncate;
+}
+
+.lockIcon {
+  flex-shrink: 0;
+  color: vars.$color-text-muted;
+  display: flex;
+}
+
+// ─── Footer toolbar ───────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px 4px;
+  border-top: 1px solid vars.$color-border;
+  background: vars.$color-surface;
+  flex-shrink: 0;
+}
+
+.footerBtn {
+  @include m.icon-button(24px);
+  color: vars.$color-text-muted;
+  border-radius: vars.$radius-sm;
+
+  &:hover:not(:disabled) {
+    color: vars.$color-text;
+  }
+}
+
+.footerSpacer {
+  flex: 1;
+}
+
+.fxLabel {
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 600;
+  font-family: serif;
+  color: currentColor;
+}
+

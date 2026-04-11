@@ -1,0 +1,161 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: vars.$color-surface;
+}
+
+// ─── FG/BG swatches ───────────────────────────────────────────────────────────
+
+.swatchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatchStack {
+  position: relative;
+  width: 42px;
+  height: 38px;
+  flex-shrink: 0;
+}
+
+.swatch {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 2px solid vars.$color-border-light;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color vars.$transition-fast;
+
+  &:hover {
+    border-color: vars.$color-text-muted;
+  }
+
+  &.swatchSel {
+    border-color: vars.$color-text;
+    z-index: 10 !important;
+  }
+}
+
+.swatchBack {
+  bottom: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.swatchFront {
+  top: 0;
+  left: 0;
+  z-index: 2;
+}
+
+.swatchLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+}
+
+// ─── Gradient area ────────────────────────────────────────────────────────────
+
+.gradientArea {
+  display: flex;
+  gap: 5px;
+  align-items: stretch;
+}
+
+.gradCanvas {
+  flex: 1;
+  display: block;
+  cursor: crosshair;
+  border-radius: vars.$radius-sm;
+  min-width: 0;
+}
+
+.hueCanvas {
+  display: block;
+  cursor: ns-resize;
+  border-radius: vars.$radius-sm;
+  flex-shrink: 0;
+}
+
+// ─── Channel sliders ──────────────────────────────────────────────────────────
+
+.channels {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.channelRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  width: 10px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.chSlider {
+  flex: 1;
+  height: 10px;
+  appearance: none;
+  border-radius: 2px;
+  background: linear-gradient(to right, #000 0%, var(--ch-end, #f00) 100%);
+  cursor: pointer;
+  min-width: 0;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1.5px solid #555;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.chNum {
+  @include m.ps-input;
+  width: 34px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+// ─── Hex input ────────────────────────────────────────────────────────────────
+
+.hexRow {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.hexLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+}
+
+.hexInput {
+  @include m.ps-input;
+  flex: 1;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+

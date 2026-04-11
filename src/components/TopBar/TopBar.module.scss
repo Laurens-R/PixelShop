@@ -1,0 +1,219 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+// ─── Top bar ──────────────────────────────────────────────────────────────────
+
+.topBar {
+  display: flex;
+  align-items: center;
+  height: vars.$topbar-height;
+  background-color: vars.$color-surface;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+  gap: 0;
+  z-index: 110;
+  -webkit-app-region: drag;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0 4px;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  -webkit-app-region: no-drag;
+}
+
+
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
+.logoBtn {
+  @include m.icon-button(28px);
+  color: vars.$color-accent-blue;
+  font-size: 14px;
+  flex-shrink: 0;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-accent-blue-hover;
+  }
+}
+
+.menuDivider {
+  width: 1px;
+  height: 18px;
+  background: vars.$color-border-light;
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+// ─── Menu entries ─────────────────────────────────────────────────────────────
+
+.menuEntry {
+  position: relative;
+}
+
+.menuTrigger {
+  height: 24px;
+  padding: 0 7px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  border-radius: vars.$radius-md;
+  transition: background-color vars.$transition-fast, color vars.$transition-fast;
+  white-space: nowrap;
+
+  &:hover,
+  &.menuOpen {
+    background-color: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background-color: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-lg;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  padding: 3px;
+  list-style: none;
+  z-index: 300;
+}
+
+.dropSep {
+  height: 1px;
+  background: vars.$color-border;
+  margin: 3px 3px;
+}
+
+.dropItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: vars.$font-size-base;
+  color: vars.$color-text;
+  border-radius: vars.$radius-md;
+  gap: 16px;
+  text-align: left;
+  transition: background-color vars.$transition-fast;
+
+  &:hover:not(:disabled) {
+    background-color: vars.$color-accent-blue;
+    color: #fff;
+
+    .dropKbd {
+      color: rgba(255, 255, 255, 0.65);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.dropKbd {
+  font-family: var(--font-mono);
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+}
+
+// ─── Tool options ─────────────────────────────────────────────────────────────
+
+.toolOptions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.optLabel {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.optText {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+}
+
+.optInput {
+  @include m.ps-input;
+  width: 52px;
+  text-align: right;
+}
+
+.optSelect {
+  @include m.ps-dropdown;
+  width: 90px;
+}
+
+.optCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  cursor: pointer;
+  white-space: nowrap;
+
+  input[type='checkbox'] {
+    accent-color: vars.$color-accent-blue;
+    cursor: pointer;
+  }
+}
+
+.optSep {
+  width: 1px;
+  height: 16px;
+  background: vars.$color-border-light;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.optBtn {
+  @include m.ps-input;
+  padding: 1px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}
+
+

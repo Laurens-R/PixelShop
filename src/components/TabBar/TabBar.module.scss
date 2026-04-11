@@ -1,0 +1,72 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  height: vars.$tabbar-height;
+  background-color: vars.$color-surface;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+  gap: 0;
+  padding-left: 2px;
+}
+
+.collapseBtn {
+  @include m.icon-button(20px);
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 8px 0 10px;
+  background: vars.$color-bg;
+  border-right: 1px solid vars.$color-border;
+  cursor: default;
+  position: relative;
+  max-width: 300px;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: vars.$color-text-dim;
+  }
+}
+
+.indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid vars.$color-text-muted;
+  flex-shrink: 0;
+}
+
+.tabName {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+
+  @include m.truncate;
+}
+
+.closeBtn {
+  @include m.icon-button(16px);
+  font-size: 14px;
+  line-height: 1;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+  border-radius: vars.$radius-sm;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+}

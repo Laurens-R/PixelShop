@@ -1,0 +1,26 @@
+.viewport {
+  flex: 1;
+  overflow: auto;
+  background-color: var(--color-canvas-bg);
+}
+
+.viewportInner {
+  display: flex;
+  align-items: safe center;
+  justify-content: safe center;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.canvas {
+  display: block;
+  cursor: crosshair;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.8),
+    0 4px 32px rgba(0, 0, 0, 0.6);
+}
+

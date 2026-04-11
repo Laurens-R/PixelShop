@@ -1,0 +1,71 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 8px;
+  background-color: vars.$color-surface;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.optLabel {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.optText {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+}
+
+.optInput {
+  @include m.ps-input;
+  text-align: right;
+}
+
+.optSelect {
+  @include m.ps-dropdown;
+  width: 90px;
+}
+
+.optCheckLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  cursor: pointer;
+  white-space: nowrap;
+
+  input[type='checkbox'] {
+    accent-color: vars.$color-accent-blue;
+    cursor: pointer;
+  }
+}
+
+.optSep {
+  width: 1px;
+  height: 16px;
+  background: vars.$color-border-light;
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.optBtn {
+  @include m.ps-input;
+  padding: 1px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}

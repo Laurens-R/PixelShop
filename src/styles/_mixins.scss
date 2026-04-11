@@ -1,0 +1,135 @@
+@use 'variables' as vars;
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@mixin flex-column {
+  display: flex;
+  flex-direction: column;
+}
+
+@mixin truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin focus-ring {
+  outline: 1px solid vars.$color-focus;
+  outline-offset: 1px;
+}
+
+@mixin visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@mixin panel-section {
+  padding: vars.$spacing-2 vars.$spacing-2;
+  border-bottom: 1px solid vars.$color-border;
+}
+
+@mixin panel-heading {
+  font-size: vars.$font-size-xs;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: vars.$color-text-muted;
+  margin: 0 0 vars.$spacing-1;
+}
+
+@mixin ps-tabs($active-selector: '&.active') {
+  display: flex;
+  background-color: vars.$color-surface;
+  border-bottom: 1px solid vars.$color-border;
+
+  > button {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: vars.$font-size-sm;
+    color: vars.$color-text-muted;
+    border-bottom: 2px solid transparent;
+    transition: color vars.$transition-fast, border-color vars.$transition-fast;
+
+    &:hover {
+      color: vars.$color-text;
+    }
+
+    &.active {
+      color: vars.$color-text;
+      border-bottom-color: vars.$color-text-dim;
+    }
+
+    &:focus-visible {
+      @include focus-ring;
+    }
+  }
+}
+
+@mixin icon-button($size: 24px) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: $size;
+  height: $size;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-md;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color vars.$transition-base;
+  color: vars.$color-text-dim;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    background-color: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+
+  &:focus-visible {
+    @include focus-ring;
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+@mixin ps-input {
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  padding: 1px 4px;
+  height: 20px;
+
+  &:focus {
+    outline: 1px solid vars.$color-focus;
+    outline-offset: -1px;
+  }
+}
+
+@mixin ps-dropdown {
+  @include ps-input;
+  appearance: none;
+  padding-right: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23aaa'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  cursor: pointer;
+}

@@ -1,0 +1,124 @@
+@use '@/styles/variables' as vars;
+
+.navigator {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 8px 6px;
+}
+
+// ─── Thumbnail ────────────────────────────────────────────────────────────────
+
+.thumbWrap {
+  position: relative;
+  width: 100%;
+  border: 1px solid vars.$color-border;
+  background: #000;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: crosshair;
+  line-height: 0; // remove inline-block gap
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+// Red viewport rectangle overlay (PS-style)
+.viewRect {
+  position: absolute;
+  border: 1px solid #f33;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+// ─── Zoom bar ─────────────────────────────────────────────────────────────────
+
+.zoomBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.zoomBtn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  border: none;
+  color: vars.$color-text-muted;
+  cursor: pointer;
+  border-radius: vars.$radius-sm;
+  padding: 0;
+
+  &:hover {
+    color: vars.$color-text;
+    background: vars.$color-surface-hover;
+  }
+}
+
+.slider {
+  flex: 1;
+  height: 3px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: vars.$color-border-light;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: vars.$color-text-dim;
+    cursor: pointer;
+
+    &:hover {
+      background: vars.$color-text;
+    }
+  }
+
+  &::-moz-range-thumb {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: none;
+    background: vars.$color-text-dim;
+    cursor: pointer;
+  }
+}
+
+.zoomInput {
+  width: 32px;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  padding: 1px 3px;
+  text-align: right;
+  border-radius: vars.$radius-sm;
+  flex-shrink: 0;
+
+  &:focus {
+    outline: none;
+    border-color: vars.$color-focus;
+  }
+}
+
+.zoomPct {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+}

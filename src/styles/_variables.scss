@@ -1,0 +1,64 @@
+// Design tokens — Photoshop-inspired dark theme
+
+// ── Core surfaces ─────────────────────────────────────────────────────────────
+$color-bg:               #3c3c3c;   // workspace background
+$color-surface:          #2d2d2d;   // panels, toolbars, menus
+$color-surface-2:        #323232;   // slightly elevated surface
+$color-surface-selected: #404040;
+$color-surface-hover:    #4a4a4a;
+$color-border:           #191919;
+$color-border-light:     #555555;
+
+// ── Text ──────────────────────────────────────────────────────────────────────
+$color-text:       #d4d4d4;
+$color-text-dim:   #aaaaaa;
+$color-text-muted: #7a7a7a;
+
+// ── Accent / focus ────────────────────────────────────────────────────────────
+$color-accent-blue:       #0699fb;
+$color-accent-blue-hover: #1aa3ff;
+$color-accent:            rgba(6, 153, 251, 0.18);
+$color-accent-border:     rgba(6, 153, 251, 0.45);
+$color-accent-solid:      #0699fb;
+$color-focus:             #0699fb;
+
+// ── Canvas / misc ─────────────────────────────────────────────────────────────
+$color-canvas-bg:     #3a3a3a;
+$color-checker-light: #4d4d4d;
+$color-checker-dark:  #3d3d3d;
+$color-danger:        #c04040;
+
+// ── Typography ────────────────────────────────────────────────────────────────
+$font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+$font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+$font-size-xs:   10px;
+$font-size-sm:   11px;
+$font-size-base: 12px;
+$font-size-md:   12.5px;
+
+// ── Spacing ───────────────────────────────────────────────────────────────────
+$spacing-1: 4px;
+$spacing-2: 8px;
+$spacing-3: 12px;
+$spacing-4: 16px;
+$spacing-5: 20px;
+$spacing-6: 24px;
+
+// ── Borders ───────────────────────────────────────────────────────────────────
+$radius-sm: 2px;
+$radius-md: 3px;
+$radius-lg: 4px;
+$radius-xl: 6px;
+
+// ── Transitions ───────────────────────────────────────────────────────────────
+$transition-fast: 80ms ease;
+$transition-base: 120ms ease;
+
+// ── Layout constants ──────────────────────────────────────────────────────────
+$toolbar-width:      52px;
+$toolbar-btn-size:   24px;
+$topbar-height:      36px;
+$menubar-height:     24px;
+$tabbar-height:      28px;
+$statusbar-height:   34px;
+$right-panel-width: 250px;

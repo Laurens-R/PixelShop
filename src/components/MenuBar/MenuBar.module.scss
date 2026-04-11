@@ -1,0 +1,111 @@
+@use '@/styles/mixins' as m;
+
+.menuBar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 6px;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+  // Allow native window dragging on the bar itself
+  -webkit-app-region: drag;
+}
+
+.entry {
+  position: relative;
+  // Buttons inside must not trigger drag
+  -webkit-app-region: no-drag;
+}
+
+.trigger {
+  height: 26px;
+  padding: 0 9px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text);
+  border-radius: 4px;
+  transition: background-color 100ms ease;
+
+  &:hover,
+  &.open {
+    background-color: var(--color-surface-hover);
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  min-width: 210px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+  list-style: none;
+  z-index: 200;
+}
+
+.separator {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 3px 4px;
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text);
+  border-radius: 5px;
+  text-align: left;
+  gap: 20px;
+  transition: background-color 80ms ease;
+
+  &:hover:not(:disabled) {
+    background-color: var(--color-accent-solid);
+    color: #fff;
+
+    .shortcut {
+      color: rgba(255, 255, 255, 0.7);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.itemLabel {
+  flex: 1;
+}
+
+.shortcut {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: nowrap;
+}
