@@ -1,22 +1,105 @@
 import React from 'react'
-import type { ToolDefinition, ToolHandler, ToolOptionsStyles } from './types'
+import type { WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { WebGLRenderer } from '@/webgl/WebGLRenderer'
+import type { RGBAColor } from '@/types'
+import type { ToolDefinition, ToolHandler, ToolOptionsStyles, ToolContext, ToolPointerPos } from './types'
+
+// ─── Module-level options (read synchronously inside pointer events) ──────────
+
+export const eyedropperOptions = {
+  sampleSize: 1 as 1 | 3 | 5,
+}
+
+// ─── Composited pixel sampling ────────────────────────────────────────────────
+
+function sampleCompositedPixel(
+  layers: WebGLLayer[],
+  renderer: WebGLRenderer,
+  cx: number,
+  cy: number,
+): [number, number, number, number] {
+  // Porter-Duff "over" compositing, bottom-to-top through all visible layers
+  let dstR = 0, dstG = 0, dstB = 0, dstA = 0
+
+  for (const layer of layers) {
+    if (!layer.visible || layer.opacity === 0) continue
+    const [sr, sg, sb, sa] = renderer.sampleCanvasPixel(layer, cx, cy)
+    if (sa === 0) continue
+
+    const srcA = (sa / 255) * layer.opacity
+    const outA = srcA + dstA * (1 - srcA)
+    if (outA === 0) continue
+
+    dstR = (sr * srcA + dstR * dstA * (1 - srcA)) / outA
+    dstG = (sg * srcA + dstG * dstA * (1 - srcA)) / outA
+    dstB = (sb * srcA + dstB * dstA * (1 - srcA)) / outA
+    dstA = outA
+  }
+
+  return [Math.round(dstR), Math.round(dstG), Math.round(dstB), Math.round(dstA * 255)]
+}
+
+function sampleArea(
+  layers: WebGLLayer[],
+  renderer: WebGLRenderer,
+  cx: number,
+  cy: number,
+  sampleSize: 1 | 3 | 5,
+): RGBAColor {
+  const half = Math.floor(sampleSize / 2)
+  let totalR = 0, totalG = 0, totalB = 0, totalA = 0
+  let count = 0
+
+  for (let dy = -half; dy <= half; dy++) {
+    for (let dx = -half; dx <= half; dx++) {
+      const [r, g, b, a] = sampleCompositedPixel(layers, renderer, cx + dx, cy + dy)
+      totalR += r; totalG += g; totalB += b; totalA += a
+      count++
+    }
+  }
+
+  return {
+    r: Math.round(totalR / count),
+    g: Math.round(totalG / count),
+    b: Math.round(totalB / count),
+    a: Math.round(totalA / count),
+  }
+}
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
 
 function createEyedropperHandler(): ToolHandler {
+  function pick(pos: ToolPointerPos, ctx: ToolContext): void {
+    const color = sampleArea(ctx.layers, ctx.renderer, Math.floor(pos.x), Math.floor(pos.y), eyedropperOptions.sampleSize)
+    ctx.setColor(color)
+  }
+
   return {
-    onPointerDown() {},
-    onPointerMove() {},
+    onPointerDown(pos, ctx) { pick(pos, ctx) },
+    onPointerMove(pos, ctx) {
+      // Only sample while button is held (pressure > 0)
+      if (pos.pressure > 0) pick(pos, ctx)
+    },
     onPointerUp() {},
   }
 }
+
+// ─── Options UI ───────────────────────────────────────────────────────────────
 
 function EyedropperOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
   return (
     <>
       <label className={styles.optLabel}>Sample:</label>
-      <select className={styles.optSelect}>
-        <option>Point</option>
-        <option>3×3 Average</option>
-        <option>5×5 Average</option>
+      <select
+        className={styles.optSelect}
+        defaultValue="1"
+        onChange={(e) => {
+          eyedropperOptions.sampleSize = parseInt(e.target.value, 10) as 1 | 3 | 5
+        }}
+      >
+        <option value="1">Point</option>
+        <option value="3">3×3 Average</option>
+        <option value="5">5×5 Average</option>
       </select>
     </>
   )
@@ -26,3 +109,4 @@ export const eyedropperTool: ToolDefinition = {
   createHandler: createEyedropperHandler,
   Options: EyedropperOptions,
 }
+

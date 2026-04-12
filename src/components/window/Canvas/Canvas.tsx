@@ -99,6 +99,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // Saved scroll position, restored when the canvas becomes active again
   const scrollPosRef = useRef({ left: 0, top: 0 })
   const overlayRef = useRef<HTMLCanvasElement>(null)
+  const toolOverlayRef = useRef<HTMLCanvasElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(state.canvas.zoom)
   zoomRef.current = state.canvas.zoom
@@ -558,10 +559,18 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       layer: activeLayer,
       layers: buildOrderedGLLayers(),
       primaryColor: state.primaryColor,
+      secondaryColor: state.secondaryColor,
       render,
       growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
         renderer.growLayerToFit(activeLayer, canvasX, canvasY, extraRadius)
       },
+      setColor: (color) => {
+        dispatch({ type: 'SET_PRIMARY_COLOR', payload: color })
+      },
+      commitStroke: (label: string) => {
+        onStrokeEndRef.current?.(label)
+      },
+      overlayCanvas: toolOverlayRef.current,
     }
   }
 
@@ -577,7 +586,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     onPointerUp: (pos) => {
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onPointerUp(pos, ctx)
-      if (TOOL_REGISTRY[state.activeTool].modifiesPixels && ctx) {
+      const def = TOOL_REGISTRY[state.activeTool]
+      if (def.modifiesPixels && !def.skipAutoHistory && ctx) {
         const label = state.activeTool.charAt(0).toUpperCase() + state.activeTool.slice(1)
         onStrokeEndRef.current?.(label)
       }
@@ -608,6 +618,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerLeave}
             aria-label={`Canvas ${width}\u00d7${height}`}
+          />
+          <canvas
+            ref={toolOverlayRef}
+            className={styles.overlay}
+            width={width}
+            height={height}
           />
           <canvas
             ref={overlayRef}

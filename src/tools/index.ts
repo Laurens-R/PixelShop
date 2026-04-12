@@ -11,6 +11,7 @@ import { eyedropperTool } from './eyedropper'
 import { zoomTool } from './zoom'
 import { cropTool } from './crop'
 import { moveTool } from './move'
+import { gradientTool } from './gradient'
 import { noopTool } from './noop'
 
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
@@ -27,7 +28,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   move:         moveTool,
   crop:         cropTool,
   frame:        noopTool,
-  gradient:     noopTool,
+  gradient:     gradientTool,
   dodge:        noopTool,
   burn:         noopTool,
   text:         noopTool,

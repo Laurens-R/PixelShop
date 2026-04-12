@@ -9,6 +9,7 @@ export interface ToolContext {
   layer: WebGLLayer
   layers: WebGLLayer[]
   primaryColor: RGBAColor
+  secondaryColor: RGBAColor
   render: (layers: WebGLLayer[]) => void
   /**
    * Grow the active layer's buffer if the given canvas-space point (with
@@ -16,6 +17,20 @@ export interface ToolContext {
    * at canvas coords near the edge.
    */
   growLayerToFit: (canvasX: number, canvasY: number, extraRadius?: number) => void
+  /** Set the primary color in app state (used by the eyedropper tool). */
+  setColor: (color: RGBAColor) => void
+  /**
+   * For async tools (e.g. fill): call this after the operation completes to
+   * push a history entry. Tools that use this must also set `skipAutoHistory`
+   * on their ToolDefinition to prevent a duplicate capture on pointer up.
+   */
+  commitStroke: (label: string) => void
+  /**
+   * The overlay 2D canvas drawn on top of the WebGL canvas (used for
+   * live drag previews — e.g. gradient guide line, selection marquee).
+   * May be null if the canvas is not yet mounted.
+   */
+  overlayCanvas: HTMLCanvasElement | null
 }
 
 // ─── Pointer position passed to tool handlers ─────────────────────────────────
@@ -53,6 +68,8 @@ export interface ToolOptionsStyles {
 export interface ToolDefinition {
   createHandler(): ToolHandler
   Options(props: { styles: ToolOptionsStyles }): React.JSX.Element
-  /** True for tools that write pixels; Canvas uses this to trigger history capture. */
+  /** True for tools that write pixels; Canvas uses this to block locked layers and trigger history capture on pointer up. */
   modifiesPixels?: boolean
+  /** Set true for async tools that call ctx.commitStroke() themselves; suppresses the automatic pointer-up capture. */
+  skipAutoHistory?: boolean
 }
