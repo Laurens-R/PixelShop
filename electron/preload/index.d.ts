@@ -13,6 +13,7 @@ declare global {
       savePxshopFile: (path: string, data: string) => Promise<void>
       exportBrowse: (ext: string) => Promise<string | null>
       exportImage: (path: string, base64: string) => Promise<void>
+      readFileBase64: (path: string) => Promise<string>
     }
   }
 }

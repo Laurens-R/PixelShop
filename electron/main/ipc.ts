@@ -30,7 +30,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('dialog:openPxshop', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [{ name: 'PixelShop Document', extensions: ['pxshop'] }]
+      filters: [
+        { name: 'All Supported',       extensions: ['pxshop', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] },
+        { name: 'PixelShop Document',  extensions: ['pxshop'] },
+        { name: 'Images',              extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] },
+        { name: 'All Files',           extensions: ['*'] },
+      ]
     })
     return canceled ? null : filePaths[0]
   })
@@ -53,11 +58,16 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('dialog:exportBrowse', async (_event, ext: string) => {
     const filters =
-      ext === 'png'
-        ? [{ name: 'PNG Image', extensions: ['png'] }]
-        : [{ name: 'JPEG Image', extensions: ['jpg', 'jpeg'] }]
+      ext === 'png'  ? [{ name: 'PNG Image',  extensions: ['png']         }] :
+      ext === 'webp' ? [{ name: 'WebP Image', extensions: ['webp']        }] :
+                       [{ name: 'JPEG Image', extensions: ['jpg', 'jpeg'] }]
     const { canceled, filePath } = await dialog.showSaveDialog({ filters })
     return canceled ? null : filePath
+  })
+
+  ipcMain.handle('file:readFileBase64', async (_event, path: string) => {
+    const buffer = await readFile(path)
+    return buffer.toString('base64')
   })
 
   ipcMain.handle('file:exportImage', async (_event, path: string, base64: string) => {

@@ -5,13 +5,14 @@ import styles from './ExportDialog.module.scss'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ExportFormat = 'png' | 'jpeg'
+export type ExportFormat = 'png' | 'jpeg' | 'webp'
 
 export interface ExportSettings {
   filePath: string
   format: ExportFormat
   jpegQuality: number      // 0–100
   jpegBackground: string   // CSS hex colour
+  webpQuality: number      // 0–100
 }
 
 export interface ExportDialogProps {
@@ -25,8 +26,8 @@ export interface ExportDialogProps {
 /** Replace or append the correct extension based on the chosen format. */
 function applyExtension(filePath: string, format: ExportFormat): string {
   if (!filePath) return filePath
-  const ext = format === 'png' ? '.png' : '.jpg'
-  return filePath.replace(/\.(png|jpe?g)$/i, '') + ext
+  const ext = format === 'png' ? '.png' : format === 'webp' ? '.webp' : '.jpg'
+  return filePath.replace(/\.(png|jpe?g|webp)$/i, '') + ext
 }
 
 /** Convert a CSS hex colour (#rrggbb) to the format expected by <input type="color">. */
@@ -41,6 +42,7 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
   const [format, setFormat]           = useState<ExportFormat>('png')
   const [jpegQuality, setJpegQuality] = useState(92)
   const [jpegBg, setJpegBg]           = useState('#ffffff')
+  const [webpQuality, setWebpQuality] = useState(90)
 
   // Reset state on every open
   useEffect(() => {
@@ -49,6 +51,7 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
       setFormat('png')
       setJpegQuality(92)
       setJpegBg('#ffffff')
+      setWebpQuality(90)
     }
   }, [open])
 
@@ -71,6 +74,7 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
       format,
       jpegQuality: Math.max(1, Math.min(100, Math.round(jpegQuality))),
       jpegBackground: jpegBg,
+      webpQuality: Math.max(1, Math.min(100, Math.round(webpQuality))),
     })
   }, [filePath, format, jpegQuality, jpegBg, onConfirm])
 
@@ -118,6 +122,7 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
             >
               <option value="png">PNG</option>
               <option value="jpeg">JPEG</option>
+              <option value="webp">WebP</option>
             </select>
           </div>
 
@@ -198,6 +203,37 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
                     <span style={{ fontSize: 11, color: 'var(--color-text-muted, #7a7a7a)' }}>
                       for transparency
                     </span>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {format === 'webp' && (
+              <>
+                <p className={styles.sectionTitle}>WEBP OPTIONS</p>
+                <div className={styles.fieldRow}>
+                  <label className={styles.fieldLabel} htmlFor="ex-wquality">Quality</label>
+                  <div className={styles.sliderGroup}>
+                    <input
+                      id="ex-wquality"
+                      type="range"
+                      className={styles.slider}
+                      min={1}
+                      max={100}
+                      value={webpQuality}
+                      onChange={(e) => setWebpQuality(e.target.valueAsNumber)}
+                    />
+                    <input
+                      type="number"
+                      className={styles.sliderValue}
+                      min={1}
+                      max={100}
+                      value={webpQuality}
+                      onChange={(e) => {
+                        const v = e.target.valueAsNumber
+                        if (!isNaN(v)) setWebpQuality(Math.max(1, Math.min(100, v)))
+                      }}
+                    />
                   </div>
                 </div>
               </>

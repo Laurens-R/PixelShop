@@ -14,7 +14,9 @@ const api = {
   exportBrowse: (ext: string): Promise<string | null> =>
     ipcRenderer.invoke('dialog:exportBrowse', ext),
   exportImage: (path: string, base64: string): Promise<void> =>
-    ipcRenderer.invoke('file:exportImage', path, base64)
+    ipcRenderer.invoke('file:exportImage', path, base64),
+  readFileBase64: (path: string): Promise<string> =>
+    ipcRenderer.invoke('file:readFileBase64', path),
 }
 
 if (process.contextIsolated) {

@@ -27,6 +27,7 @@ import { useAppContext } from '@/store/AppContext'
 import type { LayerState, BackgroundFill } from '@/types'
 import { exportPng } from '@/export/exportPng'
 import { exportJpeg } from '@/export/exportJpeg'
+import { exportWebp } from '@/export/exportWebp'
 import styles from './App.module.scss'
 
 // ─── Tab types ────────────────────────────────────────────────────────────────
@@ -53,6 +54,35 @@ interface TabRecord {
 
 function makeTabId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2)}` }
 function fileTitle(p: string): string { return p.split(/[\\/]/).pop() ?? 'Untitled' }
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'])
+const EXT_TO_MIME: Record<string, string> = {
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif':  'image/gif',
+  '.bmp':  'image/bmp',
+}
+function loadImagePixels(dataUrl: string): Promise<{ data: Uint8Array; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const tmp = document.createElement('canvas')
+      tmp.width = img.naturalWidth
+      tmp.height = img.naturalHeight
+      const ctx = tmp.getContext('2d')!
+      ctx.drawImage(img, 0, 0)
+      resolve({
+        data: new Uint8Array(ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight).data.buffer),
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      })
+    }
+    img.onerror = () => reject(new Error('Failed to decode image'))
+    img.src = dataUrl
+  })
+}
 
 const INITIAL_SNAPSHOT: TabSnapshot = {
   canvasWidth: 512, canvasHeight: 512, backgroundFill: 'white',
@@ -309,6 +339,40 @@ function AppContent(): React.JSX.Element {
     const path = await window.api.openPxshopDialog()
     if (!path) return
 
+    // ── Image file import ──────────────────────────────────────────────────
+    const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
+    if (IMAGE_EXTENSIONS.has(ext)) {
+      const base64 = await window.api.readFileBase64(path)
+      const mime = EXT_TO_MIME[ext] ?? 'image/png'
+      const { data, width, height } = await loadImagePixels(`data:${mime};base64,${base64}`)
+      const layerId = 'layer-0'
+      const tmp = document.createElement('canvas')
+      tmp.width = width; tmp.height = height
+      const ctx2d = tmp.getContext('2d')!
+      ctx2d.putImageData(new ImageData(new Uint8ClampedArray(data.buffer as ArrayBuffer), width, height), 0, 0)
+      const layerData = new Map([[layerId, tmp.toDataURL('image/png')]])
+      const layers: LayerState[] = [{ id: layerId, name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }]
+      const title = fileTitle(path)
+      const newSnapshot: TabSnapshot = {
+        canvasWidth: width, canvasHeight: height, backgroundFill: 'transparent',
+        layers, activeLayerId: layerId, zoom: 1,
+      }
+      const snapshot = captureActiveSnapshot()
+      const currentLayerData = captureActiveLayerData()
+      const savedHistory = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+      const newId = makeTabId()
+      const updated: TabRecord[] = [
+        ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: currentLayerData, savedHistory } : t),
+        { id: newId, title, filePath: null, snapshot: newSnapshot, savedLayerData: null, savedHistory: null }
+      ]
+      setTabs(updated)
+      setActiveTabId(newId)
+      historyStore.clear()
+      setPendingLayerData(layerData)
+      dispatch({ type: 'RESTORE_TAB', payload: { width, height, backgroundFill: 'transparent', layers, activeLayerId: layerId, zoom: 1 } })
+      return
+    }
+
     // Already open? Just switch.
     const existing = tabs.find(t => t.filePath === path)
     if (existing) { handleSwitchTab(existing.id); return }
@@ -394,7 +458,34 @@ function AppContent(): React.JSX.Element {
         pixels[i * 4 + 3] = Math.round(pixels[i * 4 + 3] * selectionStore.mask[i] / 255)
       }
     }
-    clipboardStore.current = { data: pixels, width, height }
+    // Compute tight bounding box of non-transparent pixels so the clipboard
+    // data is canvas-size-independent and can be pasted anywhere.
+    let minX = width, minY = height, maxX = -1, maxY = -1
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (pixels[(y * width + x) * 4 + 3] > 0) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+          if (y < minY) minY = y
+          if (y > maxY) maxY = y
+        }
+      }
+    }
+    if (maxX < 0) return // fully transparent — nothing to copy
+    const bboxW = maxX - minX + 1
+    const bboxH = maxY - minY + 1
+    const bboxData = new Uint8Array(bboxW * bboxH * 4)
+    for (let y = 0; y < bboxH; y++) {
+      for (let x = 0; x < bboxW; x++) {
+        const si = ((minY + y) * width + (minX + x)) * 4
+        const di = (y * bboxW + x) * 4
+        bboxData[di]     = pixels[si]
+        bboxData[di + 1] = pixels[si + 1]
+        bboxData[di + 2] = pixels[si + 2]
+        bboxData[di + 3] = pixels[si + 3]
+      }
+    }
+    clipboardStore.current = { data: bboxData, width: bboxW, height: bboxH, offsetX: minX, offsetY: minY }
   }, [state.activeLayerId, state.canvas])
 
   const handleCut = useCallback((): void => {
@@ -419,14 +510,33 @@ function AppContent(): React.JSX.Element {
   const handlePaste = useCallback((): void => {
     const clip = clipboardStore.current
     if (!clip) return
+    const { width: dstW, height: dstH } = state.canvas
+    // Composite the bounding-box clipboard content into a destination-canvas-
+    // sized buffer. This works regardless of source / destination canvas size.
+    const layerData = new Uint8Array(dstW * dstH * 4)
+    const { data: srcData, width: srcW, height: srcH, offsetX, offsetY } = clip
+    for (let sy = 0; sy < srcH; sy++) {
+      const dy = offsetY + sy
+      if (dy < 0 || dy >= dstH) continue
+      for (let sx = 0; sx < srcW; sx++) {
+        const dx = offsetX + sx
+        if (dx < 0 || dx >= dstW) continue
+        const si = (sy * srcW + sx) * 4
+        const di = (dy * dstW + dx) * 4
+        layerData[di]     = srcData[si]
+        layerData[di + 1] = srcData[si + 1]
+        layerData[di + 2] = srcData[si + 2]
+        layerData[di + 3] = srcData[si + 3]
+      }
+    }
     const newId = makeTabId()
-    canvasHandleRef.current?.prepareNewLayer(newId, 'Paste', clip.data)
+    canvasHandleRef.current?.prepareNewLayer(newId, 'Paste', layerData)
     pendingLayerLabelRef.current = 'Paste'
     dispatch({
       type: 'ADD_LAYER',
       payload: { id: newId, name: 'Paste', visible: true, opacity: 1, locked: false, blendMode: 'normal' }
     })
-  }, [dispatch])
+  }, [state.canvas, dispatch])
 
   const handleUndo = useCallback((): void => { historyStore.undo() }, [])
   const handleRedo = useCallback((): void => { historyStore.redo() }, [])
@@ -578,6 +688,8 @@ function AppContent(): React.JSX.Element {
     let dataUrl: string
     if (settings.format === 'png') {
       dataUrl = exportPng(data, width, height)
+    } else if (settings.format === 'webp') {
+      dataUrl = exportWebp(data, width, height, { quality: settings.webpQuality })
     } else {
       dataUrl = exportJpeg(data, width, height, {
         quality: settings.jpegQuality,
