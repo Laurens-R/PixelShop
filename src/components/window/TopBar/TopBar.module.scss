@@ -125,4 +125,25 @@
   }
 }
 
+// ─── Right side ───────────────────────────────────────────────────────────────
+
+.right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
+.debugBtn {
+  @include m.icon-button(26px);
+  color: vars.$color-text-dim;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-accent-blue;
+  }
+}
+
 

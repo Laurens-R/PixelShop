@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
+  openDevTools: (): Promise<void> => ipcRenderer.invoke('debug:openDevTools'),
   openFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
   saveFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:saveFile'),
   openPxshopDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openPxshop'),

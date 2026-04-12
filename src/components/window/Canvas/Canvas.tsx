@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useLayoutEffect, useImperativeHandle, useRef } from 'react'
 import { useWebGL } from '@/hooks/useWebGL'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
@@ -77,7 +77,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   { width, height, initialLayerData, onStrokeEnd, onReady },
   ref
 ) {
-  const { state } = useAppContext()
+  const { state, dispatch } = useAppContext()
   const { canvasElRef } = useCanvasContext()
   const { canvasRef, rendererRef, render } = useWebGL({
     pixelWidth: width,
@@ -88,6 +88,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
   const hasInitializedRef = useRef(false)
   const overlayRef = useRef<HTMLCanvasElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef(state.canvas.zoom)
+  zoomRef.current = state.canvas.zoom
+  const pendingScrollRef = useRef<{ scrollLeft: number; scrollTop: number } | null>(null)
 
   // Keep a ref to the current layer list so the imperative handle can access
   // up-to-date ordering and visibility without being re-created on every render.
@@ -187,6 +191,45 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       render(ordered)
     },
   }), [width, height]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ctrl+scroll → zoom to cursor
+  useEffect(() => {
+    const vp = viewportRef.current
+    if (!vp) return
+    const onWheel = (e: WheelEvent): void => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const rect = vp.getBoundingClientRect()
+      const cursorX = e.clientX - rect.left
+      const cursorY = e.clientY - rect.top
+      const oldZoom = zoomRef.current
+      // Smooth on trackpad (pixel deltaMode), fixed step on mouse wheel
+      const factor = e.deltaMode === 0
+        ? Math.pow(0.998, e.deltaY)
+        : e.deltaY < 0 ? 1.25 : 0.8
+      const newZoom = parseFloat(
+        Math.min(32, Math.max(0.05, oldZoom * factor)).toFixed(4)
+      )
+      pendingScrollRef.current = {
+        scrollLeft: (vp.scrollLeft + cursorX) * (newZoom / oldZoom) - cursorX,
+        scrollTop:  (vp.scrollTop  + cursorY) * (newZoom / oldZoom) - cursorY,
+      }
+      dispatch({ type: 'SET_ZOOM', payload: newZoom })
+    }
+    vp.addEventListener('wheel', onWheel, { passive: false })
+    return () => vp.removeEventListener('wheel', onWheel)
+  }, [dispatch])
+
+  // Apply pending scroll after zoom re-render, before paint
+  useLayoutEffect(() => {
+    const pending = pendingScrollRef.current
+    if (!pending) return
+    pendingScrollRef.current = null
+    const vp = viewportRef.current
+    if (!vp) return
+    vp.scrollLeft = pending.scrollLeft
+    vp.scrollTop  = pending.scrollTop
+  }, [state.canvas.zoom])
 
   // Init selection store dimensions once canvas is sized
   useEffect(() => {
@@ -399,7 +442,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   })
 
   return (
-    <div className={styles.viewport} data-canvas-viewport>
+    <div ref={viewportRef} className={styles.viewport} data-canvas-viewport>
       <div className={styles.viewportInner}>
         <div
           className={styles.canvasWrapper}

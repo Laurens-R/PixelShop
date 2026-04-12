@@ -420,6 +420,7 @@ function AppContent(): React.JSX.Element {
   return (
     <div className={styles.app}>
       <TopBar
+        onDebug={() => window.api.openDevTools()}
         onNew={() => setShowNewImageDialog(true)}
         onOpen={handleOpen}
         onSave={() => handleSave(false)}

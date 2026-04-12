@@ -1,7 +1,11 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 
 export function registerIpcHandlers(): void {
+  ipcMain.handle('debug:openDevTools', (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.webContents.openDevTools()
+  })
+
   ipcMain.handle('dialog:openFile', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
       properties: ['openFile'],

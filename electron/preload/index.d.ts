@@ -4,6 +4,7 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
+      openDevTools: () => Promise<void>
       openFile: () => Promise<string | null>
       saveFile: () => Promise<string | null>
       openPxshopDialog: () => Promise<string | null>
