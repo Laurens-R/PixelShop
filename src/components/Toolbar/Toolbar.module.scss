@@ -92,7 +92,14 @@
   position: absolute;
   width: 24px;
   height: 24px;
-  border: 2px solid vars.$color-border-light;
+  border: 1px solid vars.$color-border-light;
+  border-radius:4px;
+  padding: 0;
+  cursor: pointer;
+
+  &:hover {
+    border-color: vars.$color-text-muted;
+  }
 }
 
 .swatchFg {

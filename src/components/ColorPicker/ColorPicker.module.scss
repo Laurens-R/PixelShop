@@ -28,7 +28,8 @@
   position: absolute;
   width: 26px;
   height: 26px;
-  border: 2px solid vars.$color-border-light;
+  border: 1px solid vars.$color-border-light;
+  border-radius:4px;
   cursor: pointer;
   padding: 0;
   transition: border-color vars.$transition-fast;

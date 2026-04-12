@@ -56,6 +56,19 @@
     border-bottom-color: vars.$color-text-dim;
   }
 
+  &.tabDragOver {
+    border-bottom-color: vars.$color-accent-blue;
+    color: vars.$color-text;
+  }
+
+  &[draggable='true'] {
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
   &:focus-visible {
     @include m.focus-ring;
   }

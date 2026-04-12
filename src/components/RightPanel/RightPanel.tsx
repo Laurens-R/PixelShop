@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import { ColorPicker } from '@/components/ColorPicker/ColorPicker'
 import { LayerPanel } from '@/components/LayerPanel/LayerPanel'
@@ -6,26 +6,75 @@ import { Navigator } from '@/components/Navigator/Navigator'
 import styles from './RightPanel.module.scss'
 
 type ColorTab = 'Color' | 'Swatches' | 'Navigator'
-type LayerTab = 'Layers' | 'Paths' | 'Properties' | 'Info'
-
-const COLOR_TABS: ColorTab[] = ['Color', 'Swatches', 'Navigator']
-const LAYER_TABS: LayerTab[] = ['Layers', 'Paths', 'Properties', 'Info']
+type LayerTab = 'Layers' | 'Info'
 
 export function RightPanel(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
-  const [colorTab, setColorTab] = useState<ColorTab>('Color')
-  const [layerTab, setLayerTab] = useState<LayerTab>('Layers')
+  const [colorTab, setColorTab]   = useState<ColorTab>('Color')
+  const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
+  const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
+  const [layerTabs, setLayerTabs] = useState<LayerTab[]>(['Layers', 'Info'])
+
+  const colorDragSrc = useRef<number | null>(null)
+  const layerDragSrc = useRef<number | null>(null)
+  const [colorDragOver, setColorDragOver] = useState<number | null>(null)
+  const [layerDragOver, setLayerDragOver] = useState<number | null>(null)
+
+  function makeDragHandlers<T extends string>(
+    tabs: T[],
+    setTabs: React.Dispatch<React.SetStateAction<T[]>>,
+    dragSrc: React.MutableRefObject<number | null>,
+    setDragOver: React.Dispatch<React.SetStateAction<number | null>>,
+  ) {
+    return {
+      onDragStart: (idx: number, e: React.DragEvent) => {
+        dragSrc.current = idx
+        e.dataTransfer.effectAllowed = 'move'
+      },
+      onDragOver: (idx: number, e: React.DragEvent) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        setDragOver(idx)
+      },
+      onDragLeave: () => setDragOver(null),
+      onDrop: (idx: number, e: React.DragEvent) => {
+        e.preventDefault()
+        setDragOver(null)
+        const src = dragSrc.current
+        if (src === null || src === idx) return
+        const next = [...tabs]
+        const [moved] = next.splice(src, 1)
+        next.splice(idx, 0, moved)
+        setTabs(next)
+        dragSrc.current = null
+      },
+      onDragEnd: () => { dragSrc.current = null; setDragOver(null) },
+    }
+  }
+
+  const colorDrag = makeDragHandlers(colorTabs, setColorTabs, colorDragSrc, setColorDragOver)
+  const layerDrag = makeDragHandlers(layerTabs, setLayerTabs, layerDragSrc, setLayerDragOver)
 
   return (
     <aside className={styles.panel}>
       {/* ── Color section ───────────────────────────────────────────────── */}
       <div className={styles.section} style={{ flex: '0 0 auto' }}>
         <div className={styles.tabRow}>
-          {COLOR_TABS.map((t) => (
+          {colorTabs.map((t, i) => (
             <button
               key={t}
-              className={`${styles.tab} ${colorTab === t ? styles.tabActive : ''}`}
+              draggable
+              className={[
+                styles.tab,
+                colorTab === t ? styles.tabActive : '',
+                colorDragOver === i ? styles.tabDragOver : '',
+              ].join(' ')}
               onClick={() => setColorTab(t)}
+              onDragStart={(e) => colorDrag.onDragStart(i, e)}
+              onDragOver={(e)  => colorDrag.onDragOver(i, e)}
+              onDragLeave={colorDrag.onDragLeave}
+              onDrop={(e)      => colorDrag.onDrop(i, e)}
+              onDragEnd={colorDrag.onDragEnd}
             >
               {t}
             </button>
@@ -62,11 +111,21 @@ export function RightPanel(): React.JSX.Element {
       {/* ── Layers section ──────────────────────────────────────────────── */}
       <div className={styles.section} style={{ flex: '1 1 0', minHeight: 0 }}>
         <div className={styles.tabRow}>
-          {LAYER_TABS.map((t) => (
+          {layerTabs.map((t, i) => (
             <button
               key={t}
-              className={`${styles.tab} ${layerTab === t ? styles.tabActive : ''}`}
+              draggable
+              className={[
+                styles.tab,
+                layerTab === t ? styles.tabActive : '',
+                layerDragOver === i ? styles.tabDragOver : '',
+              ].join(' ')}
               onClick={() => setLayerTab(t)}
+              onDragStart={(e) => layerDrag.onDragStart(i, e)}
+              onDragOver={(e)  => layerDrag.onDragOver(i, e)}
+              onDragLeave={layerDrag.onDragLeave}
+              onDrop={(e)      => layerDrag.onDrop(i, e)}
+              onDragEnd={layerDrag.onDragEnd}
             >
               {t}
             </button>

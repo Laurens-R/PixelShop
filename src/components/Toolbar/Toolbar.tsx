@@ -1,5 +1,7 @@
-import React from 'react'
-import type { Tool } from '@/types'
+import React, { useState } from 'react'
+import type { Tool, RGBAColor } from '@/types'
+import { useAppContext } from '@/store/AppContext'
+import { ColorPickerDialog } from '@/components/ColorPickerDialog/ColorPickerDialog'
 import styles from './Toolbar.module.scss'
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
@@ -196,7 +198,40 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): React.JSX.Element {
+  const { state, dispatch } = useAppContext()
+  const [dialogOpen, setDialogOpen]     = useState(false)
+  const [dialogTarget, setDialogTarget] = useState<'fg' | 'bg'>('fg')
+
+  const fgColor = state.primaryColor
+  const bgColor = state.secondaryColor
+  const fgStyle = `rgb(${fgColor.r},${fgColor.g},${fgColor.b})`
+  const bgStyle = `rgb(${bgColor.r},${bgColor.g},${bgColor.b})`
+
+  const openPicker = (target: 'fg' | 'bg'): void => {
+    setDialogTarget(target)
+    setDialogOpen(true)
+  }
+
+  const handleConfirm = (color: RGBAColor): void => {
+    dispatch({
+      type: dialogTarget === 'fg' ? 'SET_PRIMARY_COLOR' : 'SET_SECONDARY_COLOR',
+      payload: color,
+    })
+    setDialogOpen(false)
+  }
+
+  const handleSwap = (): void => {
+    dispatch({ type: 'SET_PRIMARY_COLOR',   payload: bgColor })
+    dispatch({ type: 'SET_SECONDARY_COLOR', payload: fgColor })
+  }
+
+  const handleReset = (): void => {
+    dispatch({ type: 'SET_PRIMARY_COLOR',   payload: { r: 0,   g: 0,   b: 0,   a: 255 } })
+    dispatch({ type: 'SET_SECONDARY_COLOR', payload: { r: 255, g: 255, b: 255, a: 255 } })
+  }
+
   return (
+    <>
     <nav className={styles.toolbar} aria-label="Drawing tools">
       <ul className={styles.grid} role="list">
         {TOOL_GRID.map((row, rowIdx) => {
@@ -234,16 +269,37 @@ export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): 
 
       {/* ── Foreground / Background color swatches ───────────────────── */}
       <div className={styles.swatches}>
-        <div className={styles.swatchBg} title="Background color" />
-        <div className={styles.swatchFg} title="Foreground color" />
-        <button className={styles.swatchReset} title="Reset to Default (D)" aria-label="Reset colors to default" />
-        <button className={styles.swatchSwap} title="Swap Colors (X)" aria-label="Swap foreground/background">
+        <button
+          className={styles.swatchBg}
+          style={{ background: bgStyle }}
+          title="Background color (click to edit)"
+          aria-label="Background color"
+          onClick={() => openPicker('bg')}
+        />
+        <button
+          className={styles.swatchFg}
+          style={{ background: fgStyle }}
+          title="Foreground color (click to edit)"
+          aria-label="Foreground color"
+          onClick={() => openPicker('fg')}
+        />
+        <button className={styles.swatchReset} title="Reset to Default (D)" aria-label="Reset colors to default" onClick={handleReset} />
+        <button className={styles.swatchSwap} title="Swap Colors (X)" aria-label="Swap foreground/background" onClick={handleSwap}>
           <svg viewBox="0 0 10 10" fill="currentColor" width="9" height="9">
             <path d="M6.5 1L9 3.5 6.5 6V4.5H2V3h4.5zM3.5 9L1 6.5 3.5 4v1.5H8V7H3.5z" />
           </svg>
         </button>
       </div>
     </nav>
+
+    <ColorPickerDialog
+      open={dialogOpen}
+      title={`Color Picker (${dialogTarget === 'fg' ? 'Foreground' : 'Background'} Color)`}
+      initialColor={dialogTarget === 'fg' ? fgColor : bgColor}
+      onConfirm={handleConfirm}
+      onCancel={() => setDialogOpen(false)}
+    />
+    </>
   )
 }
 

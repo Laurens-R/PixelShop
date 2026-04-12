@@ -26,6 +26,7 @@
   padding: 0 8px 0 10px;
   background: vars.$color-bg;
   border-right: 1px solid vars.$color-border;
+  border-radius: 4px 4px 0 0;
   cursor: default;
   position: relative;
   max-width: 300px;
@@ -39,15 +40,6 @@
     height: 2px;
     background: vars.$color-text-dim;
   }
-}
-
-.indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1px solid vars.$color-text-muted;
-  flex-shrink: 0;
 }
 
 .tabName {

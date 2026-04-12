@@ -8,12 +8,6 @@ export function TabBar(): React.JSX.Element {
 
   return (
     <div className={styles.tabBar}>
-      <button className={styles.collapseBtn} aria-label="Collapse panel">
-        <svg viewBox="0 0 8 8" fill="currentColor" width="8" height="8">
-          <path d="M2 0l4 4-4 4z" />
-        </svg>
-      </button>
-
       <div className={styles.tab} role="tab" aria-selected="true">
         <span className={styles.indicator} />
         <span className={styles.tabName}>Untitled-1.png @ {zoom}% (RGB/8#)</span>
