@@ -1,7 +1,12 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { selectionStore } from '../store/selectionStore'
 import type { SelectionMode } from '../store/selectionStore'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
+
+// ─── Shared options ────────────────────────────────────────────────────────────────
+
+const lassoOptions = { feather: 0, antiAlias: true }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +31,11 @@ function createLassoHandler(): ToolHandler {
 
     onPointerUp({ x, y }: ToolPointerPos, _ctx: ToolContext) {
       points.push({ x, y })
-      selectionStore.setPolygon(points, mode)
+      // feather=0 + antiAlias → 1px Gaussian for sub-pixel smoothing
+      const effectiveFeather = lassoOptions.feather > 0
+        ? lassoOptions.feather
+        : lassoOptions.antiAlias ? 1 : 0
+      selectionStore.setPolygon(points, mode, effectiveFeather)
       points = []
     },
   }
@@ -35,21 +44,25 @@ function createLassoHandler(): ToolHandler {
 // ─── Options UI ───────────────────────────────────────────────────────────────
 
 function LassoOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
+  const [feather, setFeather] = useState(lassoOptions.feather)
+  const [antiAlias, setAntiAlias] = useState(lassoOptions.antiAlias)
   return (
     <>
       <label className={styles.optLabel}>Feather:</label>
-      <input
-        className={styles.optInput}
-        type="number"
-        defaultValue={0}
-        min={0}
-        max={100}
-        style={{ width: 38 }}
+      <SliderInput
+        value={feather} min={0} max={100} inputWidth={38} suffix="px"
+        onChange={v => { lassoOptions.feather = v; setFeather(v) }}
       />
-      <span className={styles.optText}>px</span>
       <span className={styles.optSep} />
       <label className={styles.optCheckLabel}>
-        <input type="checkbox" defaultChecked />
+        <input
+          type="checkbox"
+          checked={antiAlias}
+          onChange={e => {
+            lassoOptions.antiAlias = e.target.checked
+            setAntiAlias(e.target.checked)
+          }}
+        />
         Anti-alias
       </label>
     </>

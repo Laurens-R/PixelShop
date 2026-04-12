@@ -101,11 +101,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // ── Expose handle for save / export / clipboard ────────────────
   useImperativeHandle(ref, () => ({
     exportLayerPng: (layerId: string): string | null => {
+      const renderer = rendererRef.current
       const layer = glLayersRef.current.get(layerId)
-      if (!layer) return null
-      const w = rendererRef.current?.pixelWidth ?? width
-      const h = rendererRef.current?.pixelHeight ?? height
-      return encodePng(layer.data, w, h)
+      if (!renderer || !layer) return null
+      const w = renderer.pixelWidth
+      const h = renderer.pixelHeight
+      return encodePng(renderer.readLayerPixels(layer), w, h)
     },
     exportFlatPixels: (): { data: Uint8Array; width: number; height: number } | null => {
       const renderer = rendererRef.current
@@ -117,9 +118,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
     },
     getLayerPixels: (layerId: string): Uint8Array | null => {
+      const renderer = rendererRef.current
       const layer = glLayersRef.current.get(layerId)
-      if (!layer) return null
-      return layer.data.slice()
+      if (!renderer || !layer) return null
+      return renderer.readLayerPixels(layer)
     },
     prepareNewLayer: (layerId: string, name: string, data: Uint8Array): void => {
       const renderer = rendererRef.current
@@ -143,10 +145,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       if (!renderer || !layer) return
       for (let i = 0; i < mask.length; i++) {
         if (mask[i]) {
-          layer.data[i * 4]     = 0
-          layer.data[i * 4 + 1] = 0
-          layer.data[i * 4 + 2] = 0
-          layer.data[i * 4 + 3] = 0
+          const f = 1 - mask[i] / 255
+          layer.data[i * 4]     = Math.round(layer.data[i * 4]     * f)
+          layer.data[i * 4 + 1] = Math.round(layer.data[i * 4 + 1] * f)
+          layer.data[i * 4 + 2] = Math.round(layer.data[i * 4 + 2] * f)
+          layer.data[i * 4 + 3] = Math.round(layer.data[i * 4 + 3] * f)
         }
       }
       renderer.flushLayer(layer)
@@ -361,8 +364,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const activeId = state.activeLayerId
     const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
     if (!activeLayer) return null
-    const stateMeta = state.layers.find((l) => l.id === activeId)
-    if (stateMeta?.locked) return null
+    // Only block pixel-modifying tools on locked layers.
+    // Selection tools (select, lasso, magic-wand) must work regardless of locking.
+    if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
+      const stateMeta = state.layers.find((l) => l.id === activeId)
+      if (stateMeta?.locked) return null
+    }
     return {
       renderer,
       layer: activeLayer,

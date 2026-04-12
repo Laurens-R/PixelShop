@@ -67,7 +67,7 @@ export class SelectionStore {
 
   // ── Commit operations ───────────────────────────────────────────────────────
 
-  setRect(x1: number, y1: number, x2: number, y2: number, mode: SelectionMode = 'set'): void {
+  setRect(x1: number, y1: number, x2: number, y2: number, mode: SelectionMode = 'set', feather = 0): void {
     const { width: w, height: h } = this
     const lx = Math.max(0, Math.min(x1, x2))
     const ly = Math.max(0, Math.min(y1, y2))
@@ -84,14 +84,15 @@ export class SelectionStore {
 
     const m = new Uint8Array(w * h)
     for (let y = ly; y <= ry; y++) {
-      m.fill(1, y * w + lx, y * w + rx + 1)
+      m.fill(255, y * w + lx, y * w + rx + 1)
     }
+    if (feather > 0) this.applyFeather(m, feather)
 
     this.applyMask(m, mode)
     this.notify()
   }
 
-  setPolygon(points: { x: number; y: number }[], mode: SelectionMode = 'set'): void {
+  setPolygon(points: { x: number; y: number }[], mode: SelectionMode = 'set', feather = 0): void {
     const { width: w, height: h } = this
     this.pending = null
 
@@ -120,9 +121,10 @@ export class SelectionStore {
       for (let k = 0; k + 1 < xs.length; k += 2) {
         const lx2 = Math.max(0, Math.floor(xs[k]))
         const rx2 = Math.min(w - 1, Math.ceil(xs[k + 1]))
-        if (lx2 <= rx2) m.fill(1, y * w + lx2, y * w + rx2 + 1)
+        if (lx2 <= rx2) m.fill(255, y * w + lx2, y * w + rx2 + 1)
       }
     }
+    if (feather > 0) this.applyFeather(m, feather)
 
     this.applyMask(m, mode)
     this.notify()
@@ -162,7 +164,7 @@ export class SelectionStore {
       while (stack.length > 0) {
         const idx = stack.pop()!
         if (diff(idx) > tolerance) continue
-        m[idx] = 1
+        m[idx] = 255
         const x = idx % w
         const y = (idx / w) | 0
         if (x > 0     && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1) }
@@ -173,7 +175,7 @@ export class SelectionStore {
     } else {
       // Non-contiguous: select all pixels within tolerance anywhere on the layer
       for (let i = 0; i < w * h; i++) {
-        if (diff(i) <= tolerance) m[i] = 1
+        if (diff(i) <= tolerance) m[i] = 255
       }
     }
 
@@ -184,14 +186,63 @@ export class SelectionStore {
 
   // ── Internals ───────────────────────────────────────────────────────────────
 
+  /**
+   * In-place separable Gaussian blur on a 0–255 mask.
+   * Feather radius is in pixels; produces soft selection edges.
+   */
+  private applyFeather(mask: Uint8Array, radius: number): void {
+    if (radius <= 0) return
+    const { width: w, height: h } = this
+    const r = Math.round(radius)
+    const kSize = 2 * r + 1
+    const sigma = radius / 3 + 1
+    const twoSigSq = 2 * sigma * sigma
+    const k = new Float32Array(kSize)
+    let kSum = 0
+    for (let i = 0; i < kSize; i++) {
+      const d = i - r
+      k[i] = Math.exp(-(d * d) / twoSigSq)
+      kSum += k[i]
+    }
+    for (let i = 0; i < kSize; i++) k[i] /= kSum
+    const tmp = new Float32Array(w * h)
+    // Horizontal pass: mask → tmp
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v = 0
+        for (let ki = 0; ki < kSize; ki++) {
+          const sx = Math.max(0, Math.min(w - 1, x + ki - r))
+          v += mask[y * w + sx] * k[ki]
+        }
+        tmp[y * w + x] = v
+      }
+    }
+    // Vertical pass: tmp → mask
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v = 0
+        for (let ki = 0; ki < kSize; ki++) {
+          const sy = Math.max(0, Math.min(h - 1, y + ki - r))
+          v += tmp[sy * w + x] * k[ki]
+        }
+        mask[y * w + x] = Math.round(Math.min(255, Math.max(0, v)))
+      }
+    }
+  }
+
   private applyMask(newMask: Uint8Array, mode: SelectionMode): void {
     if (mode === 'set' || !this.mask) {
       this.mask = newMask
     } else if (mode === 'add') {
-      for (let i = 0; i < newMask.length; i++) if (newMask[i]) this.mask[i] = 1
+      // Union: take the stronger selection value
+      for (let i = 0; i < newMask.length; i++) {
+        if (newMask[i] > this.mask[i]) this.mask[i] = newMask[i]
+      }
     } else {
-      // subtract
-      for (let i = 0; i < newMask.length; i++) if (newMask[i]) this.mask[i] = 0
+      // Subtract: reduce by the subtracted strength
+      for (let i = 0; i < this.mask.length; i++) {
+        if (newMask[i]) this.mask[i] = Math.max(0, this.mask[i] - newMask[i])
+      }
       // If the entire mask is now zero, treat as no selection
       let any = false
       for (let i = 0; i < this.mask.length; i++) if (this.mask[i]) { any = true; break }
@@ -210,8 +261,8 @@ export class SelectionStore {
     for (let y = 0; y <= h; y++) {
       let runStart = -1
       for (let x = 0; x <= w; x++) {
-        const above = (y > 0 && x < w) ? mask[(y - 1) * w + x] : 0
-        const below = (y < h && x < w) ? mask[y       * w + x] : 0
+        const above = (y > 0 && x < w) ? (mask[(y - 1) * w + x] > 127 ? 1 : 0) : 0
+        const below = (y < h && x < w) ? (mask[y       * w + x] > 127 ? 1 : 0) : 0
         const boundary = above !== below
         if (boundary && runStart < 0) {
           runStart = x
@@ -226,8 +277,8 @@ export class SelectionStore {
     for (let x = 0; x <= w; x++) {
       let runStart = -1
       for (let y = 0; y <= h; y++) {
-        const left  = (x > 0 && y < h) ? mask[y * w + x - 1] : 0
-        const right = (x < w && y < h) ? mask[y * w + x    ] : 0
+        const left  = (x > 0 && y < h) ? (mask[y * w + x - 1] > 127 ? 1 : 0) : 0
+        const right = (x < w && y < h) ? (mask[y * w + x    ] > 127 ? 1 : 0) : 0
         const boundary = left !== right
         if (boundary && runStart < 0) {
           runStart = y

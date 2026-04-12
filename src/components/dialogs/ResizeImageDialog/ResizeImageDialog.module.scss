@@ -1,0 +1,125 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 14px;
+  gap: 0;
+}
+
+.currentSize {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+// ─── Form rows ────────────────────────────────────────────────────────────────
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+
+.fieldLabel {
+  width: 72px;
+  flex-shrink: 0;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  text-align: right;
+}
+
+// ─── Constrain aspect-ratio row ───────────────────────────────────────────────
+
+.constrainRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 4px;
+  padding-left: 82px; // aligns with the input column
+}
+
+.chainLeft,
+.chainRight {
+  flex: 0 0 14px;
+  height: 1px;
+  background: vars.$color-border-light;
+}
+
+.constrainLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-dim;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.constrainCheck {
+  accent-color: vars.$color-accent-blue;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.aspectHint {
+  color: vars.$color-text-muted;
+  font-size: vars.$font-size-xs;
+}
+
+// ─── Divider ──────────────────────────────────────────────────────────────────
+
+.divider {
+  border: none;
+  border-top: 1px solid vars.$color-border;
+  margin: 10px 0 10px;
+}
+
+// ─── Resample dropdown ────────────────────────────────────────────────────────
+
+.select {
+  flex: 1;
+  padding: 4px 24px 4px 7px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237a7a7a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  cursor: pointer;
+
+  &:focus {
+    outline: 1px solid vars.$color-accent-solid;
+    outline-offset: 0;
+  }
+
+  option {
+    background: vars.$color-surface;
+  }
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid vars.$color-border;
+  flex-shrink: 0;
+
+  button {
+    width: auto;
+    padding: 5px 20px;
+  }
+}

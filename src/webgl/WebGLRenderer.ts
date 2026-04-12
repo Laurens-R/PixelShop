@@ -267,13 +267,31 @@ export class WebGLRenderer {
 
   // ─── Flatten / export ──────────────────────────────────────────────────────
 
+  // ─── Pixel read API ────────────────────────────────────────────────────────
+  //
+  // COORDINATE CONVENTION: all methods below return (and accept) pixel data in
+  // top-to-bottom, left-to-right order — index 0 = top-left pixel.  This is
+  // the same convention used by ImageData, canvas 2d, and the CPU-side
+  // layer.data buffers.
+  //
+  // Why no flip needed from readPixels:
+  //   IMAGE_VERT renders to the FBO without a Y-flip, so FBO raster row 0
+  //   (bottom) receives the data from layer.data row 0 (= image top).
+  //   gl.readPixels reads from raster row 0 upward, so output row 0 = image
+  //   top.  An extra flip would invert a correct result, which is the bug we
+  //   are explicitly NOT doing here.
+
   /**
-   * Composite `layers` without the checkerboard and return the raw RGBA pixels
-   * (top-row-first, suitable for ImageData / canvas export).
-   *
-   * This runs the same ping-pong compositing used by `render()` but writes
-   * into the existing framebuffers and reads back via `readPixels`.  WebGL
-   * stores rows bottom-up, so the result is flipped before returning.
+   * Return a copy of a single layer's raw RGBA pixels in top-to-bottom order.
+   * Cheap — just slices the CPU-side buffer without any GL round-trip.
+   */
+  readLayerPixels(layer: WebGLLayer): Uint8Array {
+    return layer.data.slice()
+  }
+
+  /**
+   * Composite `layers` (respecting visibility and opacity) and return the
+   * merged RGBA pixels in top-to-bottom order, suitable for ImageData / export.
    */
   readFlattenedPixels(layers: WebGLLayer[]): Uint8Array {
     const { gl, pixelWidth: w, pixelHeight: h } = this
@@ -297,21 +315,11 @@ export class WebGLRenderer {
     }
 
     // Read back from the framebuffer that holds the final composite.
+    // No vertical flip — see coordinate convention note above.
     gl.bindFramebuffer(gl.FRAMEBUFFER, srcFb)
     const pixels = new Uint8Array(w * h * 4)
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-
-    // WebGL rows are stored bottom-up — flip vertically.
-    const rowBytes = w * 4
-    const tmp = new Uint8Array(rowBytes)
-    for (let y = 0; y < Math.floor(h / 2); y++) {
-      const topOff = y * rowBytes
-      const botOff = (h - 1 - y) * rowBytes
-      tmp.set(pixels.subarray(topOff, topOff + rowBytes))
-      pixels.copyWithin(topOff, botOff, botOff + rowBytes)
-      pixels.set(tmp, botOff)
-    }
 
     return pixels
   }

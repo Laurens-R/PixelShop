@@ -16,6 +16,9 @@ import { StatusBar } from '@/components/window/StatusBar/StatusBar'
 import { NewImageDialog } from '@/components/dialogs/NewImageDialog/NewImageDialog'
 import { ExportDialog } from '@/components/dialogs/ExportDialog/ExportDialog'
 import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
+import { ResizeImageDialog } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
+import type { ResizeImageSettings } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
+import { resizeBilinear, resizeNearest } from '@/wasm'
 import { useAppContext } from '@/store/AppContext'
 import type { LayerState, BackgroundFill } from '@/types'
 import { exportPng } from '@/export/exportPng'
@@ -131,6 +134,7 @@ function AppContent(): React.JSX.Element {
   const [untitledCounter, setUntitledCounter] = useState(1)
   const [showNewImageDialog, setShowNewImageDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
+  const [showResizeDialog, setShowResizeDialog] = useState(false)
   const [pendingLayerData, setPendingLayerData] = useState<Map<string, string> | null>(null)
 
   const initialTabId = useRef(makeTabId()).current
@@ -307,10 +311,10 @@ function AppContent(): React.JSX.Element {
     const pixels = canvasHandleRef.current?.getLayerPixels(activeId)
     if (!pixels) return
     const { width, height } = state.canvas
-    // Apply mask: zero out unselected pixels
+    // Apply mask: scale alpha by selection strength (0–255), supports feathered edges
     if (selectionStore.mask) {
       for (let i = 0; i < selectionStore.mask.length; i++) {
-        if (!selectionStore.mask[i]) pixels[i * 4 + 3] = 0
+        pixels[i * 4 + 3] = Math.round(pixels[i * 4 + 3] * selectionStore.mask[i] / 255)
       }
     }
     clipboardStore.current = { data: pixels, width, height }
@@ -321,7 +325,7 @@ function AppContent(): React.JSX.Element {
     if (!activeId) return
     handleCopy()
     const totalPixels = state.canvas.width * state.canvas.height
-    const mask = selectionStore.mask ?? new Uint8Array(totalPixels).fill(1)
+    const mask = selectionStore.mask ?? new Uint8Array(totalPixels).fill(255)
     canvasHandleRef.current?.clearLayerPixels(activeId, mask)
     captureHistory('Cut')
   }, [state.activeLayerId, state.canvas, handleCopy, captureHistory])
@@ -341,10 +345,43 @@ function AppContent(): React.JSX.Element {
   const handleUndo = useCallback((): void => { historyStore.undo() }, [])
   const handleRedo = useCallback((): void => { historyStore.redo() }, [])
 
+  const handleResizeImage = useCallback(async (settings: ResizeImageSettings): Promise<void> => {
+    setShowResizeDialog(false)
+    const { width: newW, height: newH, filter } = settings
+    const oldW = state.canvas.width
+    const oldH = state.canvas.height
+    if (newW === oldW && newH === oldH) return
+
+    const resizeFn = filter === 'nearest' ? resizeNearest : resizeBilinear
+    const handle = canvasHandleRef.current
+    if (!handle) return
+
+    try {
+      // Resize every layer's pixel data and encode to PNG in one pass
+      const layerPixels = handle.captureAllLayerPixels()
+      const encoded = new Map<string, string>()
+      for (const [id, pixels] of layerPixels) {
+        const resized = await resizeFn(pixels, oldW, oldH, newW, newH)
+        const tmp = document.createElement('canvas')
+        tmp.width = newW; tmp.height = newH
+        const ctx2d = tmp.getContext('2d')!
+        ctx2d.putImageData(new ImageData(new Uint8ClampedArray(resized.buffer as ArrayBuffer), newW, newH), 0, 0)
+        encoded.set(id, tmp.toDataURL('image/png'))
+      }
+
+      // Set pendingLayerData BEFORE dispatching so Canvas reads it on remount
+      setPendingLayerData(encoded)
+      dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
+    } catch (err) {
+      console.error('[Resize] Failed to resize image:', err)
+    }
+  }, [state.canvas.width, state.canvas.height, dispatch])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!e.ctrlKey) return
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'Escape') { selectionStore.clear(); return }
+      if (!e.ctrlKey) return
       if (e.key === 'z') { e.preventDefault(); handleUndo() }
       else if (e.key === 'y') { e.preventDefault(); handleRedo() }
       else if (e.key === 'c') { e.preventDefault(); handleCopy() }
@@ -393,6 +430,7 @@ function AppContent(): React.JSX.Element {
         onCopy={handleCopy}
         onCut={handleCut}
         onPaste={handlePaste}
+        onResizeImage={() => setShowResizeDialog(true)}
       />
       <ToolOptionsBar />
       <TabBar
@@ -434,6 +472,14 @@ function AppContent(): React.JSX.Element {
         open={showExportDialog}
         onCancel={() => setShowExportDialog(false)}
         onConfirm={handleExportConfirm}
+      />
+
+      <ResizeImageDialog
+        open={showResizeDialog}
+        currentWidth={state.canvas.width}
+        currentHeight={state.canvas.height}
+        onCancel={() => setShowResizeDialog(false)}
+        onConfirm={handleResizeImage}
       />
     </div>
   )

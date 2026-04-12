@@ -17,9 +17,10 @@ interface TopBarProps {
   onCut?: () => void
   onCopy?: () => void
   onPaste?: () => void
+  onResizeImage?: () => void
 }
 
-export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste }: TopBarProps): React.JSX.Element {
+export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onResizeImage }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -42,7 +43,9 @@ export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRe
         { separator: true, label: '' },
         { label: 'Cut',   shortcut: 'Ctrl+X', action: onCut },
         { label: 'Copy',  shortcut: 'Ctrl+C', action: onCopy },
-        { label: 'Paste', shortcut: 'Ctrl+V', action: onPaste }
+        { label: 'Paste', shortcut: 'Ctrl+V', action: onPaste },
+        { separator: true, label: '' },
+        { label: 'Image Size…', action: onResizeImage },
       ]
     },
     {
@@ -70,7 +73,7 @@ export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRe
       label: 'Help',
       items: [{ label: 'About PixelShop' }, { label: 'Keyboard Shortcuts' }]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onResizeImage])
 
   return (
     <div className={styles.topBar}>

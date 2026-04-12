@@ -28,7 +28,7 @@ if(EMSCRIPTEN)
     "-sMODULARIZE=1"
     "-sEXPORT_ES6=1"
     "-sEXPORT_NAME=createPixelOps"
-    "-sEXPORTED_FUNCTIONS=_malloc,_free,_pixelops_flood_fill,_pixelops_gaussian_blur,_pixelops_convolve,_pixelops_resize_bilinear,_pixelops_dither_floyd_steinberg,_pixelops_dither_bayer,_pixelops_quantize"
+    "-sEXPORTED_FUNCTIONS=_malloc,_free,_pixelops_flood_fill,_pixelops_gaussian_blur,_pixelops_convolve,_pixelops_resize_bilinear,_pixelops_resize_nearest,_pixelops_dither_floyd_steinberg,_pixelops_dither_bayer,_pixelops_quantize"
     "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32"
     "-sALLOW_MEMORY_GROWTH=1"
     "-O2"

@@ -26,6 +26,7 @@ type AppAction =
   | { type: 'OPEN_FILE'; payload: { width: number; height: number; layers: LayerState[]; activeLayerId: string | null } }
   | { type: 'RESTORE_TAB'; payload: { width: number; height: number; backgroundFill: BackgroundFill; layers: LayerState[]; activeLayerId: string | null; zoom: number } }
   | { type: 'RESTORE_LAYERS'; payload: { layers: LayerState[]; activeLayerId: string | null } }
+  | { type: 'RESIZE_CANVAS'; payload: { width: number; height: number } }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -199,6 +200,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: action.payload.layers,
         activeLayerId: action.payload.activeLayerId,
+      }
+
+    case 'RESIZE_CANVAS':
+      return {
+        ...state,
+        canvas: {
+          ...state.canvas,
+          width: action.payload.width,
+          height: action.payload.height,
+          key: state.canvas.key + 1
+        }
       }
 
     case 'RESTORE_TAB':

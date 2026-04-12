@@ -1,11 +1,60 @@
 import React, { useState } from 'react'
 import { selectionStore } from '../store/selectionStore'
 import type { SelectionMode } from '../store/selectionStore'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Shared options ───────────────────────────────────────────────────────────
 
-const selectOptions = { feather: 0, style: 'normal' as 'normal' | 'fixed-ratio' | 'fixed-size' }
+const selectOptions = {
+  feather: 0,
+  style: 'normal' as 'normal' | 'fixed-ratio' | 'fixed-size',
+  fixedW: 100,
+  fixedH: 75,
+  ratioW: 4,
+  ratioH: 3,
+}
+
+// ─── Helper: constrain end point to the active style ─────────────────────────
+
+function constrainEnd(startX: number, startY: number, rawX: number, rawY: number): { x2: number; y2: number } {
+  const dx = rawX - startX
+  const dy = rawY - startY
+
+  if (selectOptions.style === 'fixed-size') {
+    // Snap to exactly fixed W×H in the drag direction
+    const signX = dx >= 0 ? 1 : -1
+    const signY = dy >= 0 ? 1 : -1
+    return {
+      x2: startX + signX * selectOptions.fixedW,
+      y2: startY + signY * selectOptions.fixedH,
+    }
+  }
+
+  if (selectOptions.style === 'fixed-ratio') {
+    const rw = selectOptions.ratioW || 1
+    const rh = selectOptions.ratioH || 1
+    // Pick the dominant axis and scale the other to match the ratio
+    const absDx = Math.abs(dx)
+    const absDy = Math.abs(dy)
+    const signX = dx >= 0 ? 1 : -1
+    const signY = dy >= 0 ? 1 : -1
+    if (absDx / rw >= absDy / rh) {
+      // Width leads
+      const w = absDx
+      const h = (w / rw) * rh
+      return { x2: startX + signX * w, y2: startY + signY * h }
+    } else {
+      // Height leads
+      const h = absDy
+      const w = (h / rh) * rw
+      return { x2: startX + signX * w, y2: startY + signY * h }
+    }
+  }
+
+  // normal — unconstrained
+  return { x2: rawX, y2: rawY }
+}
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -19,15 +68,19 @@ function createSelectHandler(): ToolHandler {
       startX = x
       startY = y
       mode = altKey ? 'subtract' : shiftKey ? 'add' : 'set'
-      selectionStore.setPending({ type: 'rect', x1: x, y1: y, x2: x, y2: y })
+      // Apply constraint immediately so fixed-size shows the correct shape on click, not a dot
+      const { x2, y2 } = constrainEnd(x, y, x, y)
+      selectionStore.setPending({ type: 'rect', x1: x, y1: y, x2, y2 })
     },
 
     onPointerMove({ x, y }: ToolPointerPos, _ctx: ToolContext) {
-      selectionStore.setPending({ type: 'rect', x1: startX, y1: startY, x2: x, y2: y })
+      const { x2, y2 } = constrainEnd(startX, startY, x, y)
+      selectionStore.setPending({ type: 'rect', x1: startX, y1: startY, x2, y2 })
     },
 
     onPointerUp({ x, y }: ToolPointerPos, _ctx: ToolContext) {
-      selectionStore.setRect(startX, startY, x, y, mode)
+      const { x2, y2 } = constrainEnd(startX, startY, x, y)
+      selectionStore.setRect(startX, startY, x2, y2, mode, selectOptions.feather)
     },
   }
 }
@@ -35,21 +88,20 @@ function createSelectHandler(): ToolHandler {
 // ─── Options UI ───────────────────────────────────────────────────────────────
 
 function SelectOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
-  const [style, setStyle] = useState(selectOptions.style)
+  const [feather, setFeather]   = useState(selectOptions.feather)
+  const [style, setStyle]       = useState(selectOptions.style)
+  const [fixedW, setFixedW]     = useState(selectOptions.fixedW)  // px
+  const [fixedH, setFixedH]     = useState(selectOptions.fixedH)  // px
+  const [ratioW, setRatioW]     = useState(selectOptions.ratioW)   // ratio numerator
+  const [ratioH, setRatioH]     = useState(selectOptions.ratioH)   // ratio denominator
 
   return (
     <>
       <label className={styles.optLabel}>Feather:</label>
-      <input
-        className={styles.optInput}
-        type="number"
-        defaultValue={selectOptions.feather}
-        min={0}
-        max={100}
-        style={{ width: 38 }}
-        onChange={e => { selectOptions.feather = Number(e.target.value) }}
+      <SliderInput
+        value={feather} min={0} max={100} inputWidth={38} suffix="px"
+        onChange={v => { selectOptions.feather = v; setFeather(v) }}
       />
-      <span className={styles.optText}>px</span>
       <span className={styles.optSep} />
       <label className={styles.optLabel}>Style:</label>
       <select
@@ -57,13 +109,45 @@ function SelectOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
         value={style}
         onChange={e => {
           selectOptions.style = e.target.value as typeof selectOptions.style
-          setStyle(e.target.value as typeof selectOptions.style)
+          setStyle(selectOptions.style)
         }}
       >
         <option value="normal">Normal</option>
         <option value="fixed-ratio">Fixed Ratio</option>
         <option value="fixed-size">Fixed Size</option>
       </select>
+
+      {style === 'fixed-size' && (
+        <>
+          <span className={styles.optSep} />
+          <label className={styles.optLabel}>W:</label>
+          <SliderInput
+            value={fixedW} min={1} max={4096} inputWidth={46} suffix="px"
+            onChange={v => { selectOptions.fixedW = v; setFixedW(v) }}
+          />
+          <span className={styles.optText}>×</span>
+          <SliderInput
+            value={fixedH} min={1} max={4096} inputWidth={46} suffix="px"
+            onChange={v => { selectOptions.fixedH = v; setFixedH(v) }}
+          />
+        </>
+      )}
+
+      {style === 'fixed-ratio' && (
+        <>
+          <span className={styles.optSep} />
+          <label className={styles.optLabel}>Ratio:</label>
+          <SliderInput
+            value={ratioW} min={1} max={999} inputWidth={38}
+            onChange={v => { selectOptions.ratioW = v; setRatioW(v) }}
+          />
+          <span className={styles.optText}>:</span>
+          <SliderInput
+            value={ratioH} min={1} max={999} inputWidth={38}
+            onChange={v => { selectOptions.ratioH = v; setRatioH(v) }}
+          />
+        </>
+      )}
     </>
   )
 }
