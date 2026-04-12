@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AppProvider } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
 import { selectionStore } from '@/store/selectionStore'
@@ -50,6 +50,8 @@ interface TabRecord {
   savedLayerData: Map<string, string> | null
   /** History stack — null while tab is active (historyStore holds the live data) */
   savedHistory: { entries: HistoryEntry[]; currentIndex: number } | null
+  /** Incremented to force this tab’s Canvas to remount (resize / crop). */
+  canvasKey: number
 }
 
 function makeTabId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2)}` }
@@ -94,7 +96,31 @@ const INITIAL_SNAPSHOT: TabSnapshot = {
 
 function AppContent(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
-  const canvasHandleRef = useRef<CanvasHandle>(null)
+
+  // ── Per-tab Canvas handle map — avoids ref-null races on tab close/switch ───
+  const canvasHandlesRef = useRef(new Map<string, CanvasHandle>())
+  const canvasRefCallbacksRef = useRef(new Map<string, (h: CanvasHandle | null) => void>())
+  // Stable proxy — always returns the ACTIVE tab’s canvas handle
+  const activeTabIdRef = useRef('')
+  const canvasHandleRef = useMemo(() => ({
+    get current(): CanvasHandle | null {
+      return canvasHandlesRef.current.get(activeTabIdRef.current) ?? null
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [])
+  /** Returns a stable callback ref for a given tab id. */
+  function tabCanvasRef(tabId: string): (h: CanvasHandle | null) => void {
+    if (!canvasRefCallbacksRef.current.has(tabId)) {
+      canvasRefCallbacksRef.current.set(tabId, (h) => {
+        if (h) canvasHandlesRef.current.set(tabId, h)
+        else   canvasHandlesRef.current.delete(tabId)
+      })
+    }
+    return canvasRefCallbacksRef.current.get(tabId)!
+  }
+
+  // A ref for setTabs so async closures (onJumpTo) can call it without stale deps
+  const setTabsRef = useRef<React.Dispatch<React.SetStateAction<TabRecord[]>>>(() => {})
 
   // ── History ─────────────────────────────────────────────────────────────
   const stateRef = useRef(state)
@@ -149,9 +175,7 @@ function AppContent(): React.JSX.Element {
       const currentH = stateRef.current.canvas.height
 
       if (entry.canvasWidth !== currentW || entry.canvasHeight !== currentH) {
-        // The target state has different canvas dimensions — we must remount the
-        // Canvas (same path as resize/crop). Encode the snapshot pixels as PNGs
-        // so the new Canvas initializer can load them.
+        // The target state has different canvas dimensions — must remount the Canvas.
         const encoded = new Map<string, string>()
         for (const [id, pixels] of entry.layerPixels) {
           const tmp = document.createElement('canvas')
@@ -163,11 +187,17 @@ function AppContent(): React.JSX.Element {
           )
           encoded.set(id, tmp.toDataURL('image/png'))
         }
-        // Suppress the onReady 'Initial State' capture — history is already correct.
         suppressReadyCaptureRef.current = true
         setPendingLayerData(encoded)
+        // Increment the active tab's canvasKey to trigger Canvas remount
+        const jumpTabId = activeTabIdRef.current
+        setTabsRef.current(prev => prev.map(t =>
+          t.id === jumpTabId
+            ? { ...t, canvasKey: t.canvasKey + 1, snapshot: { ...t.snapshot, canvasWidth: entry.canvasWidth, canvasHeight: entry.canvasHeight } }
+            : t
+        ))
         dispatch({
-          type: 'RESTORE_TAB',
+          type: 'SWITCH_TAB',
           payload: {
             width: entry.canvasWidth,
             height: entry.canvasHeight,
@@ -229,8 +259,12 @@ function AppContent(): React.JSX.Element {
     snapshot: INITIAL_SNAPSHOT,
     savedLayerData: null,
     savedHistory: null,
+    canvasKey: 1,
   }])
   const [activeTabId, setActiveTabId] = useState(initialTabId)
+  // Keep refs in sync each render so async closures always see fresh values
+  activeTabIdRef.current = activeTabId
+  setTabsRef.current = setTabs
 
   // ── Helpers ───────────────────────────────────────────────────────
   const captureActiveSnapshot = useCallback((): TabSnapshot => ({
@@ -255,19 +289,14 @@ function AppContent(): React.JSX.Element {
   const switchToTab = useCallback((toId: string, tabs_: TabRecord[]): void => {
     const toTab = tabs_.find(t => t.id === toId)
     if (!toTab) return
-    const data = toTab.savedLayerData
-    setPendingLayerData(data)
-    setActiveTabId(toId)
-    // Restore this tab's history (suppress the onReady 'Initial State' push if
-    // there are already entries to restore)
     if (toTab.savedHistory && toTab.savedHistory.entries.length > 0) {
-      suppressReadyCaptureRef.current = true
       historyStore.restore(toTab.savedHistory.entries, toTab.savedHistory.currentIndex)
     } else {
       historyStore.clear()
     }
+    setActiveTabId(toId)
     dispatch({
-      type: 'RESTORE_TAB',
+      type: 'SWITCH_TAB',
       payload: {
         width: toTab.snapshot.canvasWidth,
         height: toTab.snapshot.canvasHeight,
@@ -282,17 +311,16 @@ function AppContent(): React.JSX.Element {
   const handleSwitchTab = useCallback((toId: string): void => {
     if (toId === activeTabId) return
     const snapshot = captureActiveSnapshot()
-    const layerData = captureActiveLayerData()
     const savedHistory = {
       entries: historyStore.entries.slice(),
       currentIndex: historyStore.currentIndex,
     }
     const updated = tabs.map(t =>
-      t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData, savedHistory } : t
+      t.id === activeTabId ? { ...t, snapshot, savedHistory } : t
     )
     setTabs(updated)
     switchToTab(toId, updated)
-  }, [activeTabId, tabs, captureActiveSnapshot, captureActiveLayerData, switchToTab])
+  }, [activeTabId, tabs, captureActiveSnapshot, switchToTab])
 
   // ── Close tab ─────────────────────────────────────────────────────
   const handleCloseTab = useCallback((tabId: string): void => {
@@ -309,7 +337,6 @@ function AppContent(): React.JSX.Element {
   // ── New ───────────────────────────────────────────────────────────
   const handleNewConfirm = useCallback(({ width, height, backgroundFill }: { width: number; height: number; backgroundFill: BackgroundFill }): void => {
     const snapshot = captureActiveSnapshot()
-    const layerData = captureActiveLayerData()
     const savedHistory = {
       entries: historyStore.entries.slice(),
       currentIndex: historyStore.currentIndex,
@@ -323,8 +350,8 @@ function AppContent(): React.JSX.Element {
       activeLayerId: 'layer-0', zoom: 1,
     }
     const updated: TabRecord[] = [
-      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData, savedHistory } : t),
-      { id: newId, title: `Untitled-${n + 1}`, filePath: null, snapshot: newSnapshot, savedLayerData: null, savedHistory: null }
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t),
+      { id: newId, title: `Untitled-${n + 1}`, filePath: null, snapshot: newSnapshot, savedLayerData: null, savedHistory: null, canvasKey: 1 }
     ]
     setTabs(updated)
     setActiveTabId(newId)
@@ -332,7 +359,7 @@ function AppContent(): React.JSX.Element {
     setPendingLayerData(null)
     dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
     setShowNewImageDialog(false)
-  }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, captureActiveLayerData, dispatch])
+  }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, dispatch])
 
   // ── Open ──────────────────────────────────────────────────────────
   const handleOpen = useCallback(async (): Promise<void> => {
@@ -358,18 +385,17 @@ function AppContent(): React.JSX.Element {
         layers, activeLayerId: layerId, zoom: 1,
       }
       const snapshot = captureActiveSnapshot()
-      const currentLayerData = captureActiveLayerData()
       const savedHistory = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
       const newId = makeTabId()
       const updated: TabRecord[] = [
-        ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: currentLayerData, savedHistory } : t),
-        { id: newId, title, filePath: null, snapshot: newSnapshot, savedLayerData: null, savedHistory: null }
+        ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t),
+        { id: newId, title, filePath: null, snapshot: newSnapshot, savedLayerData: layerData, savedHistory: null, canvasKey: 1 }
       ]
       setTabs(updated)
       setActiveTabId(newId)
       historyStore.clear()
-      setPendingLayerData(layerData)
-      dispatch({ type: 'RESTORE_TAB', payload: { width, height, backgroundFill: 'transparent', layers, activeLayerId: layerId, zoom: 1 } })
+      setPendingLayerData(null)
+      dispatch({ type: 'SWITCH_TAB', payload: { width, height, backgroundFill: 'transparent', layers, activeLayerId: layerId, zoom: 1 } })
       return
     }
 
@@ -398,22 +424,21 @@ function AppContent(): React.JSX.Element {
     }
 
     const snapshot = captureActiveSnapshot()
-    const currentLayerData = captureActiveLayerData()
     const savedHistory = {
       entries: historyStore.entries.slice(),
       currentIndex: historyStore.currentIndex,
     }
     const newId = makeTabId()
     const updated: TabRecord[] = [
-      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: currentLayerData, savedHistory } : t),
-      { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: null, savedHistory: null }
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t),
+      { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: layerData, savedHistory: null, canvasKey: 1 }
     ]
     setTabs(updated)
     setActiveTabId(newId)
     historyStore.clear()
-    setPendingLayerData(layerData)
+    setPendingLayerData(null)
     dispatch({
-      type: 'RESTORE_TAB',
+      type: 'SWITCH_TAB',
       payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 }
     })
   }, [tabs, activeTabId, captureActiveSnapshot, captureActiveLayerData, handleSwitchTab, dispatch])
@@ -567,7 +592,13 @@ function AppContent(): React.JSX.Element {
 
       // Capture pre-op state so the user can undo this resize
       captureHistory('Before Resize Image')
-      // Set pendingLayerData BEFORE dispatching so Canvas reads it on remount
+      // Increment canvasKey to trigger Canvas remount with the new dimensions
+      const resizeTabId = activeTabId
+      setTabs(prev => prev.map(t =>
+        t.id === resizeTabId
+          ? { ...t, canvasKey: t.canvasKey + 1, snapshot: { ...t.snapshot, canvasWidth: newW, canvasHeight: newH } }
+          : t
+      ))
       setPendingLayerData(encoded)
       pendingLayerLabelRef.current = 'Resize Image'
       dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
@@ -613,6 +644,13 @@ function AppContent(): React.JSX.Element {
 
     // Capture pre-op state so the user can undo this resize
     captureHistory('Before Resize Canvas')
+    // Increment canvasKey to trigger Canvas remount with the new dimensions
+    const resizeCanvasTabId = activeTabId
+    setTabs(prev => prev.map(t =>
+      t.id === resizeCanvasTabId
+        ? { ...t, canvasKey: t.canvasKey + 1, snapshot: { ...t.snapshot, canvasWidth: newW, canvasHeight: newH } }
+        : t
+    ))
     setPendingLayerData(encoded)
     pendingLayerLabelRef.current = 'Resize Canvas'
     dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
@@ -652,6 +690,13 @@ function AppContent(): React.JSX.Element {
     cropStore.clear()
     // Capture pre-op state so the user can undo this crop
     captureHistory('Before Crop')
+    // Increment canvasKey to trigger Canvas remount with the new dimensions
+    const cropTabId = activeTabId
+    setTabs(prev => prev.map(t =>
+      t.id === cropTabId
+        ? { ...t, canvasKey: t.canvasKey + 1, snapshot: { ...t.snapshot, canvasWidth: cropW, canvasHeight: cropH } }
+        : t
+    ))
     setPendingLayerData(encoded)
     pendingLayerLabelRef.current = 'Crop'
     dispatch({ type: 'RESIZE_CANVAS', payload: { width: cropW, height: cropH } })
@@ -738,18 +783,34 @@ function AppContent(): React.JSX.Element {
           onToolChange={(tool) => dispatch({ type: 'SET_TOOL', payload: tool })}
         />
         <main className={styles.canvasArea}>
-          <Canvas
-            key={state.canvas.key}
-            ref={canvasHandleRef}
-            width={state.canvas.width}
-            height={state.canvas.height}
-            initialLayerData={pendingLayerData ?? undefined}
-            onStrokeEnd={captureHistory}
-            onReady={() => {
-              captureHistory(pendingLayerLabelRef.current ?? 'Initial State')
-              pendingLayerLabelRef.current = null
-            }}
-          />
+          {tabs.map(tab => {
+            const tabActive = tab.id === activeTabId
+            return (
+              <div
+                key={tab.id}
+                style={tabActive
+                  ? { display: 'flex', flex: 1, overflow: 'hidden' }
+                  : { position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none' }
+                }
+              >
+                <Canvas
+                  key={`${tab.id}-${tab.canvasKey}`}
+                  ref={tabCanvasRef(tab.id)}
+                  width={tab.snapshot.canvasWidth}
+                  height={tab.snapshot.canvasHeight}
+                  initialLayerData={tabActive && pendingLayerData ? pendingLayerData : tab.savedLayerData ?? undefined}
+                  isActive={tabActive}
+                  onStrokeEnd={captureHistory}
+                  onReady={() => {
+                    setPendingLayerData(null)
+                    setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, savedLayerData: null } : t))
+                    captureHistory(pendingLayerLabelRef.current ?? 'Initial State')
+                    pendingLayerLabelRef.current = null
+                  }}
+                />
+              </div>
+            )
+          })}
         </main>
         <RightPanel />
       </div>

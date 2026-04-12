@@ -25,6 +25,7 @@ type AppAction =
   | { type: 'NEW_CANVAS'; payload: { width: number; height: number; backgroundFill: BackgroundFill } }
   | { type: 'OPEN_FILE'; payload: { width: number; height: number; layers: LayerState[]; activeLayerId: string | null } }
   | { type: 'RESTORE_TAB'; payload: { width: number; height: number; backgroundFill: BackgroundFill; layers: LayerState[]; activeLayerId: string | null; zoom: number } }
+  | { type: 'SWITCH_TAB';   payload: { width: number; height: number; backgroundFill: BackgroundFill; layers: LayerState[]; activeLayerId: string | null; zoom: number } }
   | { type: 'RESTORE_LAYERS'; payload: { layers: LayerState[]; activeLayerId: string | null } }
   | { type: 'RESIZE_CANVAS'; payload: { width: number; height: number } }
 
@@ -209,7 +210,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
           ...state.canvas,
           width: action.payload.width,
           height: action.payload.height,
-          key: state.canvas.key + 1
+          // canvas.key intentionally NOT incremented — per-tab canvasKey handles remounting
         }
       }
 
@@ -229,6 +230,22 @@ function appReducer(state: AppState, action: AppAction): AppState {
           key: state.canvas.key + 1
         },
         history: { canUndo: false, canRedo: false }
+      }
+
+    case 'SWITCH_TAB':
+      // Same as RESTORE_TAB but does NOT increment canvas.key and does NOT reset history.
+      // Used for fast tab switching where the Canvas stays mounted.
+      return {
+        ...state,
+        layers: action.payload.layers,
+        activeLayerId: action.payload.activeLayerId,
+        canvas: {
+          ...state.canvas,
+          width: action.payload.width,
+          height: action.payload.height,
+          backgroundFill: action.payload.backgroundFill,
+          zoom: action.payload.zoom,
+        },
       }
 
     default:

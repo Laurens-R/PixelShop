@@ -72,10 +72,12 @@ interface CanvasProps {
   onStrokeEnd?: (label: string) => void
   /** Called once after the canvas has finished its first initialization render. */
   onReady?: () => void
+  /** When false the canvas is hidden and all interactive effects are suspended. Default true. */
+  isActive?: boolean
 }
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
-  { width, height, initialLayerData, onStrokeEnd, onReady },
+  { width, height, initialLayerData, onStrokeEnd, onReady, isActive = true },
   ref
 ) {
   const { state, dispatch } = useAppContext()
@@ -88,6 +90,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
   const hasInitializedRef = useRef(false)
+  // Track isActive in a ref so async init can read the current value
+  const isActiveRef = useRef(isActive)
+  isActiveRef.current = isActive
+  // Saved scroll position, restored when the canvas becomes active again
+  const scrollPosRef = useRef({ left: 0, top: 0 })
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(state.canvas.zoom)
@@ -195,6 +202,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   // Ctrl+scroll → zoom to cursor
   useEffect(() => {
+    if (!isActive) return
     const vp = viewportRef.current
     if (!vp) return
     const onWheel = (e: WheelEvent): void => {
@@ -219,7 +227,27 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     }
     vp.addEventListener('wheel', onWheel, { passive: false })
     return () => vp.removeEventListener('wheel', onWheel)
-  }, [dispatch])
+  }, [dispatch, isActive])
+
+  // Continuously track scroll position — only while active so browser-triggered
+  // scroll resets (on visibility change) don't overwrite the saved position.
+  useEffect(() => {
+    const vp = viewportRef.current
+    if (!vp) return
+    const onScroll = (): void => {
+      if (isActiveRef.current) {
+        scrollPosRef.current = { left: vp.scrollLeft, top: vp.scrollTop }
+      }
+    }
+    vp.addEventListener('scroll', onScroll, { passive: true })
+    return () => vp.removeEventListener('scroll', onScroll)
+  }, [])
+  // Restore scroll before paint when becoming active (layout change may have reset it)
+  useLayoutEffect(() => {
+    if (!isActive) return
+    const vp = viewportRef.current
+    if (vp) { vp.scrollLeft = scrollPosRef.current.left; vp.scrollTop = scrollPosRef.current.top }
+  }, [isActive])
 
   // Apply pending scroll after zoom re-render, before paint
   useLayoutEffect(() => {
@@ -234,12 +262,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   // Init selection store dimensions once canvas is sized
   useEffect(() => {
+    if (!isActive) return
     selectionStore.setDimensions(width, height)
     return () => { selectionStore.clear() }
-  }, [width, height])
+  }, [width, height, isActive])
 
-  // Marching-ants RAF loop — mounted once
+  // Marching-ants RAF loop — active only while this canvas is visible
   useEffect(() => {
+    if (!isActive) return
     let rafId: number
     let dashOffset = 0
 
@@ -327,10 +357,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     rafId = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(rafId)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [isActive])
 
-  // Publish canvas element into shared context
+  // Publish canvas element into shared context (active canvas only)
   useEffect(() => {
+    if (!isActive) return
     canvasElRef.current = canvasRef.current
   })
 
@@ -375,7 +406,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         glLayersRef.current.set(ls.id, layer)
       }
       render(buildOrderedGLLayers())
-      onReadyRef.current?.()
+      if (isActiveRef.current) {
+        onReadyRef.current?.()
+      }
     }
 
     init()
@@ -384,6 +417,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   // Sync WebGL layers whenever AppState layer list changes
   useEffect(() => {
+    if (!isActive) return
     const renderer = rendererRef.current
     if (!renderer) return
     const map = glLayersRef.current
@@ -413,7 +447,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
     render(buildOrderedGLLayers())
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.layers])
+  }, [state.layers, isActive])
 
   function buildOrderedGLLayers(): WebGLLayer[] {
     const map = glLayersRef.current
@@ -421,12 +455,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   }
 
   useEffect(() => {
+    if (!isActive) return
     const sel = state.activeTool
     if (sel !== 'select' && sel !== 'lasso' && sel !== 'magic-wand') {
       selectionStore.setPending(null)
     }
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
-  }, [state.activeTool])
+  }, [state.activeTool, isActive])
 
   const buildCtx = (): ToolContext | null => {
     const renderer = rendererRef.current
