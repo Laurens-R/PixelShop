@@ -26,6 +26,7 @@ function createDodgeBurnHandler(opts: typeof dodgeOptions, sign: 1 | -1): () => 
   return function (): ToolHandler {
     let lastPos: { x: number; y: number } | null = null
     let touched: Map<number, number> | null = null
+    let origData: Map<number, readonly [number, number, number, number]> | null = null
 
     function stamp(
       x0: number, y0: number, x1: number, y1: number,
@@ -45,6 +46,7 @@ function createDodgeBurnHandler(opts: typeof dodgeOptions, sign: 1 | -1): () => 
         opts.antiAlias,
         touched ?? undefined,
         sel,
+        origData ?? undefined,
       )
       renderer.flushLayer(layer)
       render(layers)
@@ -53,6 +55,7 @@ function createDodgeBurnHandler(opts: typeof dodgeOptions, sign: 1 | -1): () => 
     return {
       onPointerDown({ x, y }: ToolPointerPos, ctx: ToolContext) {
         touched = new Map()
+        origData = new Map()
         lastPos = null
         stamp(x, y, x, y, ctx)
         lastPos = { x, y }
@@ -67,6 +70,7 @@ function createDodgeBurnHandler(opts: typeof dodgeOptions, sign: 1 | -1): () => 
       onPointerUp() {
         lastPos = null
         touched = null
+        origData = null
       },
     }
   }

@@ -510,38 +510,67 @@ function toneWeight(luminance: number, range: DodgeBurnRange): number {
   }
 }
 
+/**
+ * Apply dodge/burn to one pixel.
+ *
+ * `exposure`  — signed magnitude, positive=dodge, negative=burn (0–1 scale)
+ * `coverage`  — 0–1 SDF or stamp value for this hit
+ * `touched`   — MAX coverage reached for each pixel key across all segments of the stroke
+ * `origData`  — caches each pixel's ORIGINAL rgba on first touch so that all subsequent
+ *               coverage updates apply their factor against the unmodified value.
+ *               Without this, sequential delta updates compound multiplicatively and produce
+ *               visible luminance rings at segment junctions.
+ */
 function dodgeBurnPixelOp(
   renderer: WebGLRenderer,
   layer: WebGLLayer,
   canvasX: number,
   canvasY: number,
-  /** positive = dodge (lighten), negative = burn (darken) */
-  exposure: number,  // e.g. +0.3 dodge, –0.3 burn
+  exposure: number,
+  coverage: number,
   range: DodgeBurnRange,
   touched?: Map<number, number>,
   sel?: SelMask,
+  origData?: Map<number, readonly [number, number, number, number]>,
 ): void {
   if (sel && sel.mask[canvasY * sel.width + canvasX] === 0) return
   const lx = canvasX - layer.offsetX
   const ly = canvasY - layer.offsetY
   if (lx < 0 || lx >= layer.layerWidth || ly < 0 || ly >= layer.layerHeight) return
 
+  let maxCoverage = coverage
   if (touched !== undefined) {
     const key = canvasY * renderer.pixelWidth + canvasX
-    if (touched.has(key)) return
-    touched.set(key, 1)
+    const prev = touched.get(key) ?? 0
+    if (prev >= coverage) return    // already at or beyond this coverage level — no change
+    touched.set(key, coverage)
+    maxCoverage = coverage          // apply full factor against original value (not delta)
   }
 
-  const [r, g, b, a] = renderer.samplePixel(layer, lx, ly)
+  if (maxCoverage <= 0) return
+
+  // Use the pixel's ORIGINAL value (cached on first touch) so each coverage update
+  // is computed from the same baseline — avoids multiplicative compounding.
+  const key = canvasY * renderer.pixelWidth + canvasX
+  let r: number, g: number, b: number, a: number
+  if (origData) {
+    let orig = origData.get(key)
+    if (!orig) {
+      orig = renderer.samplePixel(layer, lx, ly)
+      origData.set(key, orig)
+    }
+    ;[r, g, b, a] = orig
+  } else {
+    ;[r, g, b, a] = renderer.samplePixel(layer, lx, ly)
+  }
   if (a === 0) return
 
-  // sRGB → linear for luminance calculation
   const rl = r / 255, gl = g / 255, bl = b / 255
   const lum = 0.2126 * rl + 0.7152 * gl + 0.0722 * bl
   const weight = toneWeight(lum, range)
   if (weight <= 0) return
 
-  const factor = 1 + exposure * weight
+  const factor = 1 + exposure * maxCoverage * weight
   renderer.drawPixel(
     layer, lx, ly,
     Math.max(0, Math.min(255, Math.round(r * factor))),
@@ -560,13 +589,14 @@ function dodgeBurnStampCircle(
   range: DodgeBurnRange,
   touched?: Map<number, number>,
   sel?: SelMask,
+  origData?: Map<number, readonly [number, number, number, number]>,
 ): void {
   const radius = size / 2
   const iRadius = Math.ceil(radius)
   for (let dy = -iRadius; dy <= iRadius; dy++) {
     for (let dx = -iRadius; dx <= iRadius; dx++) {
       if (dx * dx + dy * dy <= radius * radius) {
-        dodgeBurnPixelOp(renderer, layer, cx + dx, cy + dy, exposure, range, touched, sel)
+        dodgeBurnPixelOp(renderer, layer, cx + dx, cy + dy, exposure, 1, range, touched, sel, origData)
       }
     }
   }
@@ -582,6 +612,7 @@ function dodgeBurnAASegment(
   range: DodgeBurnRange,
   touched?: Map<number, number>,
   sel?: SelMask,
+  origData?: Map<number, readonly [number, number, number, number]>,
 ): void {
   const radius = size / 2
   const pad = Math.ceil(radius) + 1
@@ -603,7 +634,7 @@ function dodgeBurnAASegment(
       }
       const coverage = Math.max(0, Math.min(1, radius + 0.5 - dist))
       if (coverage > 0) {
-        dodgeBurnPixelOp(renderer, layer, px, py, exposure * coverage, range, touched, sel)
+        dodgeBurnPixelOp(renderer, layer, px, py, exposure, coverage, range, touched, sel, origData)
       }
     }
   }
@@ -614,6 +645,10 @@ function dodgeBurnAASegment(
  *
  * exposure > 0 = dodge, exposure < 0 = burn.
  * exposure magnitude is 0–1 (maps to 0–100% in the UI).
+ *
+ * Pass the same `touched` and `origData` maps for every segment in a stroke so that
+ * pixels which span multiple segment capsules are rendered from their original values
+ * at the highest coverage reached — producing seamless, artifact-free strokes.
  */
 export function dodgeBurnThickLine(
   renderer: WebGLRenderer,
@@ -626,26 +661,24 @@ export function dodgeBurnThickLine(
   antiAlias = false,
   touched?: Map<number, number>,
   sel?: SelMask,
+  origData?: Map<number, readonly [number, number, number, number]>,
 ): void {
   if (antiAlias) {
-    // Don't pass `touched` in AA paths — the capsule SDF gradient must be able to
-    // process pixels that were edge-touched by the previous segment's capsule.
-    // Without this, pixels near segment seams are blocked and visible circle artifacts appear.
     if (size <= 1) {
       wuLine(x0, y0, x1, y1, (x, y, coverage) => {
-        dodgeBurnPixelOp(renderer, layer, x, y, exposure * coverage, range, undefined, sel)
+        dodgeBurnPixelOp(renderer, layer, x, y, exposure, coverage, range, touched, sel, origData)
       })
     } else {
-      dodgeBurnAASegment(renderer, layer, x0, y0, x1, y1, size, exposure, range, undefined, sel)
+      dodgeBurnAASegment(renderer, layer, x0, y0, x1, y1, size, exposure, range, touched, sel, origData)
     }
   } else {
     if (size <= 1) {
       bresenham(x0, y0, x1, y1, (x, y) => {
-        dodgeBurnPixelOp(renderer, layer, x, y, exposure, range, touched, sel)
+        dodgeBurnPixelOp(renderer, layer, x, y, exposure, 1, range, touched, sel, origData)
       })
     } else {
       bresenham(x0, y0, x1, y1, (cx, cy) => {
-        dodgeBurnStampCircle(renderer, layer, cx, cy, size, exposure, range, touched, sel)
+        dodgeBurnStampCircle(renderer, layer, cx, cy, size, exposure, range, touched, sel, origData)
       })
     }
   }
