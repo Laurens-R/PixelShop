@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
-import { selectionStore } from './selectionStore'
-import type { SelectionMode } from './selectionStore'
+import { selectionStore } from '../store/selectionStore'
+import type { SelectionMode } from '../store/selectionStore'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Shared options ───────────────────────────────────────────────────────────

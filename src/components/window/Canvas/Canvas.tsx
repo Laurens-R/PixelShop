@@ -6,10 +6,10 @@ import { useCanvasContext } from '@/store/CanvasContext'
 import type { WebGLLayer } from '@/webgl/WebGLRenderer'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
-import { selectionStore } from '@/tools/selectionStore'
+import { selectionStore } from '@/store/selectionStore'
 import styles from './Canvas.module.scss'
 
-// ─── Public handle (for save / export) ──────────────────────────────────────
+// ─── Public handle (for save / export / clipboard) ─────────────────────────
 
 export interface CanvasHandle {
   /** Encode a layer's pixel data to a PNG data-URL synchronously. */
@@ -20,6 +20,15 @@ export interface CanvasHandle {
    * Returns null when the renderer is not yet initialised.
    */
   exportFlatPixels: () => { data: Uint8Array; width: number; height: number } | null
+  /** Return a copy of a layer's raw RGBA pixel data. */
+  getLayerPixels: (layerId: string) => Uint8Array | null
+  /**
+   * Create a new GL layer, fill it with data, and render.
+   * Call BEFORE dispatching ADD_LAYER so the sync effect is a no-op.
+   */
+  prepareNewLayer: (layerId: string, name: string, data: Uint8Array) => void
+  /** Zero out every pixel in a layer that is covered by the selection mask, then flush+render. */
+  clearLayerPixels: (layerId: string, mask: Uint8Array) => void
 }
 
 // ─── PNG helpers ──────────────────────────────────────────────────────────────
@@ -77,7 +86,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const layersStateRef = useRef(state.layers)
   layersStateRef.current = state.layers
 
-  // ── Expose handle for save / export ─────────────────────────────
+  // ── Expose handle for save / export / clipboard ────────────────
   useImperativeHandle(ref, () => ({
     exportLayerPng: (layerId: string): string | null => {
       const layer = glLayersRef.current.get(layerId)
@@ -94,8 +103,48 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         .filter((l): l is WebGLLayer => l !== undefined)
       const data = renderer.readFlattenedPixels(glLayers)
       return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
-    }
-  }), [width, height])
+    },
+    getLayerPixels: (layerId: string): Uint8Array | null => {
+      const layer = glLayersRef.current.get(layerId)
+      if (!layer) return null
+      return layer.data.slice()
+    },
+    prepareNewLayer: (layerId: string, name: string, data: Uint8Array): void => {
+      const renderer = rendererRef.current
+      if (!renderer) return
+      const layer = renderer.createLayer(layerId, name)
+      layer.data.set(data)
+      renderer.flushLayer(layer)
+      glLayersRef.current.set(layerId, layer)
+      // Render with current layers + new one
+      const ordered = [
+        ...layersStateRef.current
+          .map((l) => glLayersRef.current.get(l.id))
+          .filter((l): l is WebGLLayer => !!l),
+        layer,
+      ]
+      render(ordered)
+    },
+    clearLayerPixels: (layerId: string, mask: Uint8Array): void => {
+      const renderer = rendererRef.current
+      const layer = glLayersRef.current.get(layerId)
+      if (!renderer || !layer) return
+      for (let i = 0; i < mask.length; i++) {
+        if (mask[i]) {
+          layer.data[i * 4]     = 0
+          layer.data[i * 4 + 1] = 0
+          layer.data[i * 4 + 2] = 0
+          layer.data[i * 4 + 3] = 0
+        }
+      }
+      renderer.flushLayer(layer)
+      // Use layersStateRef so we get the current layer order, not a stale closure
+      const ordered = layersStateRef.current
+        .map((l) => glLayersRef.current.get(l.id))
+        .filter((l): l is WebGLLayer => !!l)
+      render(ordered)
+    },
+  }), [width, height]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Init selection store dimensions once canvas is sized
   useEffect(() => {

@@ -1,6 +1,8 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AppProvider } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
+import { selectionStore } from '@/store/selectionStore'
+import { clipboardStore } from '@/store/clipboardStore'
 import { TopBar } from '@/components/window/TopBar/TopBar'
 import { ToolOptionsBar } from '@/components/window/ToolOptionsBar/ToolOptionsBar'
 import { TabBar } from '@/components/window/TabBar/TabBar'
@@ -226,6 +228,54 @@ function AppContent(): React.JSX.Element {
     setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, filePath: path, title } : t))
   }, [tabs, activeTabId, state])
 
+  // ── Clipboard ──────────────────────────────────────────────────────
+  const handleCopy = useCallback((): void => {
+    const activeId = state.activeLayerId
+    if (!activeId) return
+    const pixels = canvasHandleRef.current?.getLayerPixels(activeId)
+    if (!pixels) return
+    const { width, height } = state.canvas
+    // Apply mask: zero out unselected pixels
+    if (selectionStore.mask) {
+      for (let i = 0; i < selectionStore.mask.length; i++) {
+        if (!selectionStore.mask[i]) pixels[i * 4 + 3] = 0
+      }
+    }
+    clipboardStore.current = { data: pixels, width, height }
+  }, [state.activeLayerId, state.canvas])
+
+  const handleCut = useCallback((): void => {
+    const activeId = state.activeLayerId
+    if (!activeId) return
+    handleCopy()
+    const totalPixels = state.canvas.width * state.canvas.height
+    const mask = selectionStore.mask ?? new Uint8Array(totalPixels).fill(1)
+    canvasHandleRef.current?.clearLayerPixels(activeId, mask)
+  }, [state.activeLayerId, state.canvas, handleCopy])
+
+  const handlePaste = useCallback((): void => {
+    const clip = clipboardStore.current
+    if (!clip) return
+    const newId = makeTabId()
+    canvasHandleRef.current?.prepareNewLayer(newId, 'Paste', clip.data)
+    dispatch({
+      type: 'ADD_LAYER',
+      payload: { id: newId, name: 'Paste', visible: true, opacity: 1, locked: false, blendMode: 'normal' }
+    })
+  }, [dispatch])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!e.ctrlKey) return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'c') { e.preventDefault(); handleCopy() }
+      else if (e.key === 'x') { e.preventDefault(); handleCut() }
+      else if (e.key === 'v') { e.preventDefault(); handlePaste() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [handleCopy, handleCut, handlePaste])
+
   // ── Export ────────────────────────────────────────────────────────
   const handleExportConfirm = useCallback(async (settings: ExportSettings): Promise<void> => {
     setShowExportDialog(false)
@@ -259,6 +309,9 @@ function AppContent(): React.JSX.Element {
         onSave={() => handleSave(false)}
         onSaveAs={() => handleSave(true)}
         onExport={() => setShowExportDialog(true)}
+        onCopy={handleCopy}
+        onCut={handleCut}
+        onPaste={handlePaste}
       />
       <ToolOptionsBar />
       <TabBar
