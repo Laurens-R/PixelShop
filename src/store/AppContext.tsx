@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, RGBAColor, LayerState, BlendMode } from '@/types'
+import type { AppState, Tool, RGBAColor, LayerState, BlendMode, BackgroundFill } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -7,6 +7,8 @@ type AppAction =
   | { type: 'SET_TOOL'; payload: Tool }
   | { type: 'SET_PRIMARY_COLOR'; payload: RGBAColor }
   | { type: 'SET_SECONDARY_COLOR'; payload: RGBAColor }
+  | { type: 'ADD_SWATCH'; payload: RGBAColor }
+  | { type: 'REMOVE_SWATCH'; payload: number }
   | { type: 'ADD_LAYER'; payload: LayerState }
   | { type: 'REMOVE_LAYER'; payload: string }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
@@ -19,16 +21,39 @@ type AppAction =
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_HISTORY'; payload: { canUndo: boolean; canRedo: boolean } }
+  | { type: 'NEW_CANVAS'; payload: { width: number; height: number; backgroundFill: BackgroundFill } }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
+
+const DEFAULT_SWATCHES: RGBAColor[] = [
+  { r: 0,   g: 0,   b: 0,   a: 255 },
+  { r: 255, g: 255, b: 255, a: 255 },
+  { r: 192, g: 192, b: 192, a: 255 },
+  { r: 128, g: 128, b: 128, a: 255 },
+  { r: 255, g: 0,   b: 0,   a: 255 },
+  { r: 128, g: 0,   b: 0,   a: 255 },
+  { r: 255, g: 255, b: 0,   a: 255 },
+  { r: 128, g: 128, b: 0,   a: 255 },
+  { r: 0,   g: 255, b: 0,   a: 255 },
+  { r: 0,   g: 128, b: 0,   a: 255 },
+  { r: 0,   g: 255, b: 255, a: 255 },
+  { r: 0,   g: 128, b: 128, a: 255 },
+  { r: 0,   g: 0,   b: 255, a: 255 },
+  { r: 0,   g: 0,   b: 128, a: 255 },
+  { r: 255, g: 0,   b: 255, a: 255 },
+  { r: 128, g: 0,   b: 128, a: 255 },
+  { r: 255, g: 128, b: 0,   a: 255 },
+  { r: 255, g: 200, b: 150, a: 255 },
+]
 
 const initialState: AppState = {
   activeTool: 'pencil',
   primaryColor: { r: 0, g: 0, b: 0, a: 255 },
   secondaryColor: { r: 255, g: 255, b: 255, a: 255 },
+  swatches: DEFAULT_SWATCHES,
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
-  canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false },
+  canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, backgroundFill: 'white', key: 0 },
   history: { canUndo: false, canRedo: false }
 }
 
@@ -44,6 +69,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_SECONDARY_COLOR':
       return { ...state, secondaryColor: action.payload }
+
+    case 'ADD_SWATCH':
+      return { ...state, swatches: [...state.swatches, action.payload] }
+
+    case 'REMOVE_SWATCH': {
+      const next = state.swatches.filter((_, i) => i !== action.payload)
+      return { ...state, swatches: next }
+    }
 
     case 'ADD_LAYER':
       return {
@@ -117,6 +150,24 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_HISTORY':
       return { ...state, history: action.payload }
+
+    case 'NEW_CANVAS':
+      return {
+        ...state,
+        layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
+        activeLayerId: 'layer-0',
+        canvas: {
+          ...state.canvas,
+          width: action.payload.width,
+          height: action.payload.height,
+          backgroundFill: action.payload.backgroundFill,
+          zoom: 1,
+          panX: 0,
+          panY: 0,
+          key: state.canvas.key + 1
+        },
+        history: { canUndo: false, canRedo: false }
+      }
 
     default:
       return state

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { AppProvider } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
 import { TopBar } from '@/components/TopBar/TopBar'
@@ -8,16 +8,18 @@ import { Toolbar } from '@/components/Toolbar/Toolbar'
 import { Canvas } from '@/components/Canvas/Canvas'
 import { RightPanel } from '@/components/RightPanel/RightPanel'
 import { StatusBar } from '@/components/StatusBar/StatusBar'
+import { NewImageDialog } from '@/components/NewImageDialog/NewImageDialog'
 import { useAppContext } from '@/store/AppContext'
 import styles from './App.module.scss'
 
 function AppContent(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
+  const [showNewImageDialog, setShowNewImageDialog] = useState(false)
 
   return (
     <div className={styles.app}>
       {/* ── Chrome rows ───────────────────────────────────────────────── */}
-      <TopBar />
+      <TopBar onNew={() => setShowNewImageDialog(true)} />
       <ToolOptionsBar />
       <TabBar />
 
@@ -31,7 +33,11 @@ function AppContent(): React.JSX.Element {
 
         {/* Center: canvas */}
         <main className={styles.canvasArea}>
-          <Canvas width={state.canvas.width} height={state.canvas.height} />
+          <Canvas
+            key={state.canvas.key}
+            width={state.canvas.width}
+            height={state.canvas.height}
+          />
         </main>
 
         {/* Right: color + layers */}
@@ -40,6 +46,16 @@ function AppContent(): React.JSX.Element {
 
       {/* ── Status bar ────────────────────────────────────────────────── */}
       <StatusBar />
+
+      {/* ── Dialogs ─────────────────────────────────────────────────── */}
+      <NewImageDialog
+        open={showNewImageDialog}
+        onCancel={() => setShowNewImageDialog(false)}
+        onConfirm={({ width, height, backgroundFill }) => {
+          dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
+          setShowNewImageDialog(false)
+        }}
+      />
     </div>
   )
 }

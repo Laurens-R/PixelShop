@@ -90,3 +90,41 @@
   color: vars.$color-text-muted;
   text-align: center;
 }
+
+// ─── Swatches tab ─────────────────────────────────────────────────────────────
+
+.swatchesPanel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+}
+
+.swatchCell {
+  width: 18px;
+  height: 18px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color vars.$transition-fast, transform vars.$transition-fast;
+
+  &:hover {
+    border-color: vars.$color-text;
+    transform: scale(1.15);
+    z-index: 1;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.swatchesEmpty {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  padding: 4px;
+  text-align: center;
+  width: 100%;
+}

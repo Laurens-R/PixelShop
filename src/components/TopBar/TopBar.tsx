@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import styles from './TopBar.module.scss'
 
-// ─── Menu definitions (same as old MenuBar, embedded here) ────────────────────
+// ─── Menu definitions ─────────────────────────────────────────────────────────
 
 interface MenuItemDef {
   label: string
@@ -15,20 +15,9 @@ interface MenuDef {
   items: MenuItemDef[]
 }
 
-const MENUS: MenuDef[] = [
-  {
-    label: 'File',
-    items: [
-      { label: 'New…', shortcut: 'Ctrl+N' },
-      { label: 'Open…', shortcut: 'Ctrl+O' },
-      { separator: true, label: '' },
-      { label: 'Save', shortcut: 'Ctrl+S' },
-      { label: 'Save As…', shortcut: 'Ctrl+Shift+S' },
-      { label: 'Export As…', shortcut: 'Ctrl+E' },
-      { separator: true, label: '' },
-      { label: 'Quit', shortcut: 'Ctrl+Q' }
-    ]
-  },
+// Static part of MENUS — File items are built inside the component so actions
+// can close over props. The rest never change.
+const STATIC_MENUS_TAIL: MenuDef[] = [
   {
     label: 'Edit',
     items: [
@@ -70,11 +59,32 @@ const MENUS: MenuDef[] = [
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
 
-export function TopBar(): React.JSX.Element {
+interface TopBarProps {
+  onNew?: () => void
+}
+
+export function TopBar({ onNew }: TopBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
 
   const close = useCallback(() => setOpenMenu(null), [])
+
+  const menus = useMemo((): MenuDef[] => [
+    {
+      label: 'File',
+      items: [
+        { label: 'New…',       shortcut: 'Ctrl+N',       action: onNew },
+        { label: 'Open…',      shortcut: 'Ctrl+O' },
+        { separator: true, label: '' },
+        { label: 'Save',       shortcut: 'Ctrl+S' },
+        { label: 'Save As…',   shortcut: 'Ctrl+Shift+S' },
+        { label: 'Export As…', shortcut: 'Ctrl+E' },
+        { separator: true, label: '' },
+        { label: 'Quit',       shortcut: 'Ctrl+Q' }
+      ]
+    },
+    ...STATIC_MENUS_TAIL
+  ], [onNew])
 
   useEffect(() => {
     const down = (e: MouseEvent): void => {
@@ -108,7 +118,7 @@ export function TopBar(): React.JSX.Element {
         <div className={styles.menuDivider} />
 
         {/* File/Edit/View menus */}
-        {MENUS.map((menu) => (
+        {menus.map((menu) => (
           <div key={menu.label} className={styles.menuEntry}>
             <button
               className={`${styles.menuTrigger} ${openMenu === menu.label ? styles.menuOpen : ''}`}

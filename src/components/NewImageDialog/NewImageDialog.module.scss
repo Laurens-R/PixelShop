@@ -1,0 +1,325 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+// ─── Backdrop ─────────────────────────────────────────────────────────────────
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+// ─── Dialog shell ─────────────────────────────────────────────────────────────
+
+.dialog {
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-xl;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  overflow: hidden;
+  width: 560px;
+  max-height: 90vh;
+}
+
+.titleBar {
+  padding: 8px 14px;
+  background: vars.$color-surface-2;
+  border-bottom: 1px solid vars.$color-border;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text;
+  text-align: center;
+  letter-spacing: 0.01em;
+  flex-shrink: 0;
+}
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+.body {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// ─── Presets panel (left) ─────────────────────────────────────────────────────
+
+.presetsPanel {
+  width: 278px;
+  flex-shrink: 0;
+  padding: 14px 14px 10px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sectionTitle {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  letter-spacing: 0.08em;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.presetsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.presetCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px 8px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-md;
+  background: vars.$color-surface-2;
+  color: vars.$color-text-muted;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color vars.$transition-fast, border-color vars.$transition-fast, color vars.$transition-fast;
+
+  svg {
+    width: 28px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.presetSelected {
+  background: vars.$color-surface-selected;
+  border-color: vars.$color-accent-solid;
+  color: vars.$color-text;
+}
+
+.presetDims {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.presetSub {
+  font-size: 9px;
+  color: vars.$color-text-muted;
+  line-height: 1;
+}
+
+// ─── Divider ──────────────────────────────────────────────────────────────────
+
+.divider {
+  width: 1px;
+  background: vars.$color-border;
+  flex-shrink: 0;
+  margin: 8px 0;
+}
+
+// ─── Details panel (right) ────────────────────────────────────────────────────
+
+.detailsPanel {
+  flex: 1;
+  padding: 14px 18px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.sizePreview {
+  font-size: vars.$font-size-md;
+  color: vars.$color-text;
+  font-weight: 600;
+  margin: 0 0 14px;
+}
+
+// ─── Form fields ──────────────────────────────────────────────────────────────
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin-bottom: 10px;
+}
+
+.fieldRowBg {
+  align-items: flex-start;
+  margin-top: 2px;
+}
+
+.fieldLabel {
+  width: 90px;
+  flex-shrink: 0;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  text-align: right;
+}
+
+.inputGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.numInput {
+  width: 72px;
+  padding: 4px 6px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  text-align: right;
+
+  &:focus {
+    outline: 1px solid vars.$color-accent-solid;
+    outline-offset: 0;
+  }
+
+  // Hide native number spinners for a cleaner look
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+.unit {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+}
+
+.staticField {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+}
+
+// ─── Orientation buttons ──────────────────────────────────────────────────────
+
+.orientGroup {
+  display: flex;
+  gap: 6px;
+}
+
+.orientBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  background: vars.$color-surface-2;
+  color: vars.$color-text-muted;
+  cursor: pointer;
+  transition: background-color vars.$transition-fast, border-color vars.$transition-fast, color vars.$transition-fast;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.orientActive {
+  background: vars.$color-surface-selected;
+  border-color: vars.$color-accent-solid;
+  color: vars.$color-text;
+}
+
+// ─── Background options ───────────────────────────────────────────────────────
+
+.bgGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bgOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: vars.$radius-sm;
+  border: 1px solid transparent;
+  transition: background-color vars.$transition-fast, border-color vars.$transition-fast;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}
+
+.bgOptionActive {
+  background: vars.$color-surface-selected;
+  border-color: vars.$color-accent-solid;
+  color: vars.$color-text;
+}
+
+.bgSwatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.bgSwatchTransparent {
+  background-color: vars.$color-checker-dark;
+  background-image:
+    linear-gradient(45deg, vars.$color-checker-light 25%, transparent 25%),
+    linear-gradient(-45deg, vars.$color-checker-light 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, vars.$color-checker-light 75%),
+    linear-gradient(-45deg, transparent 75%, vars.$color-checker-light 75%);
+  background-size: 6px 6px;
+  background-position: 0 0, 0 3px, 3px -3px, -3px 0;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid vars.$color-border;
+  flex-shrink: 0;
+
+  // Override DialogButton widths — footer buttons should auto-size
+  button {
+    width: auto;
+    padding: 5px 20px;
+  }
+}
+
+// ─── Accessibility helper ─────────────────────────────────────────────────────
+
+.srOnly {
+  @include m.visually-hidden;
+}

@@ -298,6 +298,7 @@ export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): 
       initialColor={dialogTarget === 'fg' ? fgColor : bgColor}
       onConfirm={handleConfirm}
       onCancel={() => setDialogOpen(false)}
+      onAddSwatch={(c) => dispatch({ type: 'ADD_SWATCH', payload: c })}
     />
     </>
   )

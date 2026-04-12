@@ -71,6 +71,8 @@ export interface LayerState {
   blendMode: BlendMode
 }
 
+export type BackgroundFill = 'white' | 'black' | 'transparent'
+
 export interface CanvasState {
   width: number
   height: number
@@ -78,12 +80,15 @@ export interface CanvasState {
   panX: number
   panY: number
   showGrid: boolean
+  backgroundFill: BackgroundFill
+  key: number
 }
 
 export interface AppState {
   activeTool: Tool
   primaryColor: RGBAColor
   secondaryColor: RGBAColor
+  swatches: RGBAColor[]
   layers: LayerState[]
   activeLayerId: string | null
   canvas: CanvasState

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:wasm": "emcmake cmake -S wasm -B wasm/build -DCMAKE_BUILD_TYPE=Release && cmake --build wasm/build",
     "preview": "electron-vite preview",
     "typecheck:node": "tsc --project tsconfig.node.json --noEmit",
     "typecheck:web": "tsc --project tsconfig.web.json --noEmit",

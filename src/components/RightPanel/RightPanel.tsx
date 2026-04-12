@@ -98,7 +98,28 @@ export function RightPanel(): React.JSX.Element {
           />
         )}
         {colorTab === 'Swatches' && (
-          <div className={styles.placeholder}>Swatches</div>
+          <div className={styles.swatchesPanel}>
+            {state.swatches.map((sw, i) => {
+              const hex = `#${[sw.r, sw.g, sw.b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
+              return (
+                <button
+                  key={i}
+                  className={styles.swatchCell}
+                  style={{ background: hex }}
+                  title={hex.toUpperCase()}
+                  aria-label={`Swatch ${hex.toUpperCase()}`}
+                  onClick={() => dispatch({ type: 'SET_PRIMARY_COLOR', payload: sw })}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    dispatch({ type: 'REMOVE_SWATCH', payload: i })
+                  }}
+                />
+              )
+            })}
+            {state.swatches.length === 0 && (
+              <span className={styles.swatchesEmpty}>No swatches yet. Add colors from the Color Picker.</span>
+            )}
+          </div>
         )}
         {colorTab === 'Navigator' && (
           <Navigator />

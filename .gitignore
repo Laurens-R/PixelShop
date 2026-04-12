@@ -37,6 +37,10 @@ bower_components
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
 
+# WASM build artifacts (run `npm run build:wasm` to regenerate)
+wasm/build/
+src/wasm/generated/
+
 # Dependency directories
 node_modules/
 jspm_packages/

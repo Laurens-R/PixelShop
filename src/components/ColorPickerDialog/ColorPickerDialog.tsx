@@ -1,7 +1,29 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { RGBAColor } from '@/types'
+import { DialogButton } from './../DialogButton/DialogButton'
 import styles from './ColorPickerDialog.module.scss'
+
+interface DialogButtonRowProps {
+  onConfirm: () => void
+  onCancel: () => void
+  onAddSwatch?: () => void
+}
+
+export function DialogButtonRow({ onConfirm, onCancel, onAddSwatch }: DialogButtonRowProps): React.JSX.Element {
+  return (
+    <div className={styles.buttonRow}>
+      <DialogButton onClick={onConfirm}>OK</DialogButton>
+      <DialogButton onClick={onCancel}>Cancel</DialogButton>
+      {onAddSwatch && (
+        <DialogButton onClick={onAddSwatch} title="Add current color to Swatches">
+          Add to Swatches
+        </DialogButton>
+      )}
+    </div>
+  )
+}
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,6 +36,7 @@ export interface ColorPickerDialogProps {
   initialColor: RGBAColor
   onConfirm: (color: RGBAColor) => void
   onCancel: () => void
+  onAddSwatch?: (color: RGBAColor) => void
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -255,6 +278,7 @@ export function ColorPickerDialog({
   initialColor,
   onConfirm,
   onCancel,
+  onAddSwatch,
 }: ColorPickerDialogProps): React.JSX.Element | null {
   const gradRef  = useRef<HTMLCanvasElement>(null)
   const stripRef = useRef<HTMLCanvasElement>(null)
@@ -433,16 +457,12 @@ export function ColorPickerDialog({
           {/* ── Right: buttons + preview + inputs ─────────────────────── */}
           <div className={styles.rightPanel}>
 
-            {/* OK / Cancel */}
-            <div className={styles.buttonRow}>
-              <button
-                className={`${styles.btn} ${styles.btnPrimary}`}
-                onClick={() => onConfirm({ r, g, b, a: 255 })}
-              >
-                OK
-              </button>
-              <button className={styles.btn} onClick={onCancel}>Cancel</button>
-            </div>
+            {/* OK / Cancel / Add to Swatches */}
+            <DialogButtonRow
+              onConfirm={() => onConfirm({ r, g, b, a: 255 })}
+              onCancel={onCancel}
+              onAddSwatch={onAddSwatch ? () => onAddSwatch({ r, g, b, a: 255 }) : undefined}
+            />
 
             {/* New / Current color preview */}
             <div className={styles.preview}>

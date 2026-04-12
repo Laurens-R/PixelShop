@@ -1,0 +1,106 @@
+/**
+ * pixelops.cpp
+ *
+ * Exported C interface for all WASM pixel operations.
+ * Each function is declared EMSCRIPTEN_KEEPALIVE so the linker retains it
+ * even if it would otherwise be dead-stripped.
+ *
+ * Memory convention:
+ *   Callers allocate buffers via malloc / free (exported by Emscripten).
+ *   Pixel buffers are always RGBA, row-major, 4 bytes per pixel.
+ */
+
+#include <emscripten/emscripten.h>
+#include <cstdint>
+
+#include "fill.h"
+#include "filters.h"
+#include "quantize.h"
+#include "resize.h"
+#include "dither.h"
+
+extern "C" {
+
+// ─── Flood Fill ───────────────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_flood_fill(
+    uint8_t* pixels, int width, int height,
+    int startX, int startY,
+    uint8_t fillR, uint8_t fillG, uint8_t fillB, uint8_t fillA,
+    int tolerance
+) {
+    fill_flood(pixels, width, height, startX, startY,
+               fillR, fillG, fillB, fillA, tolerance);
+}
+
+// ─── Gaussian Blur (in-place) ─────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_gaussian_blur(
+    uint8_t* pixels, int width, int height, int radius
+) {
+    filters_gaussian_blur(pixels, width, height, radius);
+}
+
+// ─── Generic Convolution (src → dst) ─────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_convolve(
+    const uint8_t* src, uint8_t* dst,
+    int width, int height,
+    const float* kernel, int kernelSize
+) {
+    filters_convolve(src, dst, width, height, kernel, kernelSize);
+}
+
+// ─── Bilinear Resize ─────────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_resize_bilinear(
+    const uint8_t* src, int srcWidth, int srcHeight,
+    uint8_t* dst, int dstWidth, int dstHeight
+) {
+    resize_bilinear(src, srcWidth, srcHeight, dst, dstWidth, dstHeight);
+}
+
+// ─── Nearest-Neighbour Resize ────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_resize_nearest(
+    const uint8_t* src, int srcWidth, int srcHeight,
+    uint8_t* dst, int dstWidth, int dstHeight
+) {
+    resize_nearest(src, srcWidth, srcHeight, dst, dstWidth, dstHeight);
+}
+
+// ─── Floyd-Steinberg Dithering ────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_dither_floyd_steinberg(
+    uint8_t* pixels, int width, int height,
+    const uint8_t* palette, int paletteSize
+) {
+    dither_floyd_steinberg(pixels, width, height, palette, paletteSize);
+}
+
+// ─── Bayer Ordered Dithering ─────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_dither_bayer(
+    uint8_t* pixels, int width, int height, int matrixSize
+) {
+    dither_bayer(pixels, width, height, matrixSize);
+}
+
+// ─── Median-Cut Palette Quantisation ─────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+int pixelops_quantize(
+    const uint8_t* pixels, int pixelCount,
+    uint8_t* paletteOut, int maxColors
+) {
+    return quantize_median_cut(pixels, pixelCount, paletteOut, maxColors);
+}
+
+} // extern "C"

@@ -88,36 +88,7 @@
   gap: 5px;
 }
 
-.btn {
-  width: 100%;
-  padding: 5px 0;
-  border: 1px solid vars.$color-border-light;
-  border-radius: vars.$radius-xl;
-  background: vars.$color-surface-2;
-  color: vars.$color-text;
-  font-size: vars.$font-size-sm;
-  cursor: pointer;
-  text-align: center;
-  transition: background-color vars.$transition-fast;
 
-  &:hover {
-    background: vars.$color-surface-hover;
-  }
-
-  &:focus-visible {
-    @include m.focus-ring;
-  }
-}
-
-.btnPrimary {
-  background: vars.$color-surface-hover;
-  border-color: vars.$color-text-muted;
-  font-weight: 600;
-
-  &:hover {
-    background: vars.$color-surface-selected;
-  }
-}
 
 // ─── New / Current preview ────────────────────────────────────────────────────
 

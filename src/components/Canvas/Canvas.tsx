@@ -16,7 +16,7 @@ interface CanvasProps {
 export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
   const { state } = useAppContext()
   const { canvasElRef } = useCanvasContext()
-  const { canvasRef, rendererRef, createLayer, render } = useWebGL({
+  const { canvasRef, rendererRef, render } = useWebGL({
     pixelWidth: width,
     pixelHeight: height
   })
@@ -24,20 +24,32 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
   // Map of layerId → WebGLLayer, preserving pixel data across re-renders
   const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
+  // Guard: ensure the one-time layer init never re-runs after first success
+  const hasInitializedRef = useRef(false)
 
   // Publish canvas element into shared context
   useEffect(() => {
     canvasElRef.current = canvasRef.current
   })
 
-  // Initialize first layer after renderer mounts
+  // Initialize first layer after renderer mounts — runs once only
   useEffect(() => {
+    if (hasInitializedRef.current) return
     const renderer = rendererRef.current
     if (!renderer) return
     const firstState = state.layers[0]
     if (!firstState) return
+    hasInitializedRef.current = true
     const layer = renderer.createLayer(firstState.id, firstState.name)
-    layer.data.fill(255) // white, fully opaque
+    const bg = state.canvas.backgroundFill
+    if (bg === 'white') {
+      layer.data.fill(255)
+    } else if (bg === 'black') {
+      for (let i = 0; i < layer.data.length; i += 4) {
+        layer.data[i] = 0; layer.data[i + 1] = 0; layer.data[i + 2] = 0; layer.data[i + 3] = 255
+      }
+    }
+    // transparent: data already initialized to 0
     renderer.flushLayer(layer)
     glLayersRef.current.set(firstState.id, layer)
     render(buildOrderedGLLayers())
@@ -132,7 +144,10 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
           className={styles.canvas}
           width={width}
           height={height}
-          style={{ width: width * state.canvas.zoom, height: height * state.canvas.zoom }}
+          style={{
+            width:  width  * state.canvas.zoom / window.devicePixelRatio,
+            height: height * state.canvas.zoom / window.devicePixelRatio,
+          }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
