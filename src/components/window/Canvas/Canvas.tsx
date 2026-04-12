@@ -560,6 +560,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       layers: buildOrderedGLLayers(),
       primaryColor: state.primaryColor,
       secondaryColor: state.secondaryColor,
+      selectionMask: selectionStore.mask,
       render,
       growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
         renderer.growLayerToFit(activeLayer, canvasX, canvasY, extraRadius)

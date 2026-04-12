@@ -55,6 +55,9 @@ export function drawLine(
  *     This prevents accumulation while allowing coverage to be upgraded
  *     (fixes ring artifacts from overlapping AA capsule segments).
  */
+// Selection mask shorthand used by draw/erase helpers.
+type SelMask = { mask: Uint8Array; width: number }
+
 function blendPixelOver(
   renderer: WebGLRenderer,
   layer: WebGLLayer,
@@ -66,7 +69,9 @@ function blendPixelOver(
   a: number,
   opacity: number, // 0-100, already includes geometric coverage for AA paths
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
+  if (sel && sel.mask[canvasY * sel.width + canvasX] === 0) return
   const lx = canvasX - layer.offsetX
   const ly = canvasY - layer.offsetY
   if (lx < 0 || lx >= layer.layerWidth || ly < 0 || ly >= layer.layerHeight) return
@@ -118,13 +123,14 @@ function stampCircle(
   a: number,
   opacity: number,
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
   const radius = size / 2
   const iRadius = Math.ceil(radius)
   for (let dy = -iRadius; dy <= iRadius; dy++) {
     for (let dx = -iRadius; dx <= iRadius; dx++) {
       if (dx * dx + dy * dy <= radius * radius) {
-        blendPixelOver(renderer, layer, cx + dx, cy + dy, r, g, b, a, opacity, touched)
+        blendPixelOver(renderer, layer, cx + dx, cy + dy, r, g, b, a, opacity, touched, sel)
       }
     }
   }
@@ -146,6 +152,7 @@ function drawAAThickSegment(
   r: number, g: number, b: number, a: number,
   opacity: number,
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
   const radius = size / 2
   const pad = Math.ceil(radius) + 1
@@ -171,7 +178,7 @@ function drawAAThickSegment(
       }
       const coverage = Math.max(0, Math.min(1, radius + 0.5 - dist))
       if (coverage > 0) {
-        blendPixelOver(renderer, layer, px, py, r, g, b, a, opacity * coverage, touched)
+        blendPixelOver(renderer, layer, px, py, r, g, b, a, opacity * coverage, touched, sel)
       }
     }
   }
@@ -200,21 +207,22 @@ export function drawThickLine(
   opacity = 100,
   touched?: Map<number, number>,
   antiAlias = false,
+  sel?: SelMask,
 ): void {
   if (antiAlias) {
     if (size <= 1) {
       wuLine(x0, y0, x1, y1, (x, y, coverage) =>
-        blendPixelOver(renderer, layer, x, y, r, g, b, a, opacity * coverage, touched))
+        blendPixelOver(renderer, layer, x, y, r, g, b, a, opacity * coverage, touched, sel))
     } else {
-      drawAAThickSegment(renderer, layer, x0, y0, x1, y1, size, r, g, b, a, opacity, touched)
+      drawAAThickSegment(renderer, layer, x0, y0, x1, y1, size, r, g, b, a, opacity, touched, sel)
     }
   } else {
     if (size <= 1) {
       bresenham(x0, y0, x1, y1, (x, y) =>
-        blendPixelOver(renderer, layer, x, y, r, g, b, a, opacity, touched))
+        blendPixelOver(renderer, layer, x, y, r, g, b, a, opacity, touched, sel))
     } else {
       bresenham(x0, y0, x1, y1, (x, y) =>
-        stampCircle(renderer, layer, x, y, size, r, g, b, a, opacity, touched))
+        stampCircle(renderer, layer, x, y, size, r, g, b, a, opacity, touched, sel))
     }
   }
 }
@@ -334,7 +342,9 @@ function erasePixelOp(
   blendFactor: number, // 0-1  (coverage × strength/100)
   alphaMode: boolean,
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
+  if (sel && sel.mask[canvasY * sel.width + canvasX] === 0) return
   const lx = canvasX - layer.offsetX
   const ly = canvasY - layer.offsetY
   if (lx < 0 || lx >= layer.layerWidth || ly < 0 || ly >= layer.layerHeight) return
@@ -379,6 +389,7 @@ function eraseStampCircle(
   strength: number,
   alphaMode: boolean,
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
   const radius = size / 2
   const iRadius = Math.ceil(radius)
@@ -386,7 +397,7 @@ function eraseStampCircle(
   for (let dy = -iRadius; dy <= iRadius; dy++) {
     for (let dx = -iRadius; dx <= iRadius; dx++) {
       if (dx * dx + dy * dy <= radius * radius) {
-        erasePixelOp(renderer, layer, cx + dx, cy + dy, secR, secG, secB, bf, alphaMode, touched)
+        erasePixelOp(renderer, layer, cx + dx, cy + dy, secR, secG, secB, bf, alphaMode, touched, sel)
       }
     }
   }
@@ -404,6 +415,7 @@ function eraseAASegment(
   strength: number,
   alphaMode: boolean,
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
   const radius = size / 2
   const pad = Math.ceil(radius) + 1
@@ -425,7 +437,7 @@ function eraseAASegment(
       }
       const coverage = Math.max(0, Math.min(1, radius + 0.5 - dist))
       if (coverage > 0) {
-        erasePixelOp(renderer, layer, px, py, secR, secG, secB, (strength / 100) * coverage, alphaMode, touched)
+        erasePixelOp(renderer, layer, px, py, secR, secG, secB, (strength / 100) * coverage, alphaMode, touched, sel)
       }
     }
   }
@@ -454,24 +466,186 @@ export function eraseThickLine(
   alphaMode = false,
   antiAlias = false,
   touched?: Map<number, number>,
+  sel?: SelMask,
 ): void {
   const bf = strength / 100
   if (antiAlias) {
     if (size <= 1) {
       wuLine(x0, y0, x1, y1, (x, y, coverage) => {
-        erasePixelOp(renderer, layer, x, y, secR, secG, secB, bf * coverage, alphaMode, touched)
+        erasePixelOp(renderer, layer, x, y, secR, secG, secB, bf * coverage, alphaMode, touched, sel)
       })
     } else {
-      eraseAASegment(renderer, layer, x0, y0, x1, y1, size, secR, secG, secB, strength, alphaMode, touched)
+      eraseAASegment(renderer, layer, x0, y0, x1, y1, size, secR, secG, secB, strength, alphaMode, touched, sel)
     }
   } else {
     if (size <= 1) {
       bresenham(x0, y0, x1, y1, (x, y) => {
-        erasePixelOp(renderer, layer, x, y, secR, secG, secB, bf, alphaMode, touched)
+        erasePixelOp(renderer, layer, x, y, secR, secG, secB, bf, alphaMode, touched, sel)
       })
     } else {
       bresenham(x0, y0, x1, y1, (cx, cy) => {
-        eraseStampCircle(renderer, layer, cx, cy, size, secR, secG, secB, strength, alphaMode, touched)
+        eraseStampCircle(renderer, layer, cx, cy, size, secR, secG, secB, strength, alphaMode, touched, sel)
+      })
+    }
+  }
+}
+
+// ─── Dodge / Burn helpers ─────────────────────────────────────────────────────
+
+/** Range channels covered by dodge/burn. */
+export type DodgeBurnRange = 'shadows' | 'midtones' | 'highlights'
+
+/**
+ * Compute the per-pixel exposure factor for dodge/burn.
+ *
+ * @param luminance  0–1 linear luminance of the existing pixel
+ * @param range      Which tonal range to target
+ * @returns          0–1 weight (1 = full effect at the sweet-spot, 0 = no effect)
+ */
+function toneWeight(luminance: number, range: DodgeBurnRange): number {
+  switch (range) {
+    case 'shadows':    return Math.max(0, 1 - luminance * 3)
+    case 'highlights': return Math.max(0, luminance * 3 - 2)
+    default:           return Math.max(0, 1 - Math.abs(luminance - 0.5) * 4)
+  }
+}
+
+function dodgeBurnPixelOp(
+  renderer: WebGLRenderer,
+  layer: WebGLLayer,
+  canvasX: number,
+  canvasY: number,
+  /** positive = dodge (lighten), negative = burn (darken) */
+  exposure: number,  // e.g. +0.3 dodge, –0.3 burn
+  range: DodgeBurnRange,
+  touched?: Map<number, number>,
+  sel?: SelMask,
+): void {
+  if (sel && sel.mask[canvasY * sel.width + canvasX] === 0) return
+  const lx = canvasX - layer.offsetX
+  const ly = canvasY - layer.offsetY
+  if (lx < 0 || lx >= layer.layerWidth || ly < 0 || ly >= layer.layerHeight) return
+
+  if (touched !== undefined) {
+    const key = canvasY * renderer.pixelWidth + canvasX
+    if (touched.has(key)) return
+    touched.set(key, 1)
+  }
+
+  const [r, g, b, a] = renderer.samplePixel(layer, lx, ly)
+  if (a === 0) return
+
+  // sRGB → linear for luminance calculation
+  const rl = r / 255, gl = g / 255, bl = b / 255
+  const lum = 0.2126 * rl + 0.7152 * gl + 0.0722 * bl
+  const weight = toneWeight(lum, range)
+  if (weight <= 0) return
+
+  const factor = 1 + exposure * weight
+  renderer.drawPixel(
+    layer, lx, ly,
+    Math.max(0, Math.min(255, Math.round(r * factor))),
+    Math.max(0, Math.min(255, Math.round(g * factor))),
+    Math.max(0, Math.min(255, Math.round(b * factor))),
+    a,
+  )
+}
+
+function dodgeBurnStampCircle(
+  renderer: WebGLRenderer,
+  layer: WebGLLayer,
+  cx: number, cy: number,
+  size: number,
+  exposure: number,
+  range: DodgeBurnRange,
+  touched?: Map<number, number>,
+  sel?: SelMask,
+): void {
+  const radius = size / 2
+  const iRadius = Math.ceil(radius)
+  for (let dy = -iRadius; dy <= iRadius; dy++) {
+    for (let dx = -iRadius; dx <= iRadius; dx++) {
+      if (dx * dx + dy * dy <= radius * radius) {
+        dodgeBurnPixelOp(renderer, layer, cx + dx, cy + dy, exposure, range, touched, sel)
+      }
+    }
+  }
+}
+
+function dodgeBurnAASegment(
+  renderer: WebGLRenderer,
+  layer: WebGLLayer,
+  x0: number, y0: number,
+  x1: number, y1: number,
+  size: number,
+  exposure: number,
+  range: DodgeBurnRange,
+  touched?: Map<number, number>,
+  sel?: SelMask,
+): void {
+  const radius = size / 2
+  const pad = Math.ceil(radius) + 1
+  const sdx = x1 - x0, sdy = y1 - y0
+  const lenSq = sdx * sdx + sdy * sdy
+  const minX = Math.floor(Math.min(x0, x1)) - pad
+  const maxX = Math.ceil(Math.max(x0, x1)) + pad
+  const minY = Math.floor(Math.min(y0, y1)) - pad
+  const maxY = Math.ceil(Math.max(y0, y1)) + pad
+
+  for (let py = minY; py <= maxY; py++) {
+    for (let px = minX; px <= maxX; px++) {
+      let dist: number
+      if (lenSq === 0) {
+        dist = Math.sqrt((px - x0) ** 2 + (py - y0) ** 2)
+      } else {
+        const t = Math.max(0, Math.min(1, ((px - x0) * sdx + (py - y0) * sdy) / lenSq))
+        dist = Math.sqrt((px - x0 - t * sdx) ** 2 + (py - y0 - t * sdy) ** 2)
+      }
+      const coverage = Math.max(0, Math.min(1, radius + 0.5 - dist))
+      if (coverage > 0) {
+        dodgeBurnPixelOp(renderer, layer, px, py, exposure * coverage, range, touched, sel)
+      }
+    }
+  }
+}
+
+/**
+ * Apply dodge (lighten) or burn (darken) along a thick line segment.
+ *
+ * exposure > 0 = dodge, exposure < 0 = burn.
+ * exposure magnitude is 0–1 (maps to 0–100% in the UI).
+ */
+export function dodgeBurnThickLine(
+  renderer: WebGLRenderer,
+  layer: WebGLLayer,
+  x0: number, y0: number,
+  x1: number, y1: number,
+  size: number,
+  exposure: number,
+  range: DodgeBurnRange,
+  antiAlias = false,
+  touched?: Map<number, number>,
+  sel?: SelMask,
+): void {
+  if (antiAlias) {
+    // Don't pass `touched` in AA paths — the capsule SDF gradient must be able to
+    // process pixels that were edge-touched by the previous segment's capsule.
+    // Without this, pixels near segment seams are blocked and visible circle artifacts appear.
+    if (size <= 1) {
+      wuLine(x0, y0, x1, y1, (x, y, coverage) => {
+        dodgeBurnPixelOp(renderer, layer, x, y, exposure * coverage, range, undefined, sel)
+      })
+    } else {
+      dodgeBurnAASegment(renderer, layer, x0, y0, x1, y1, size, exposure, range, undefined, sel)
+    }
+  } else {
+    if (size <= 1) {
+      bresenham(x0, y0, x1, y1, (x, y) => {
+        dodgeBurnPixelOp(renderer, layer, x, y, exposure, range, touched, sel)
+      })
+    } else {
+      bresenham(x0, y0, x1, y1, (cx, cy) => {
+        dodgeBurnStampCircle(renderer, layer, cx, cy, size, exposure, range, touched, sel)
       })
     }
   }

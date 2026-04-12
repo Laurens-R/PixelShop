@@ -38,7 +38,7 @@ function renderGradient(
   x0: number, y0: number,
   x1: number, y1: number,
 ): void {
-  const { renderer, layer, layers, primaryColor, secondaryColor, render, growLayerToFit } = ctx
+  const { renderer, layer, layers, primaryColor, secondaryColor, selectionMask, render, growLayerToFit } = ctx
   const { type, repeat, opacity } = gradientOptions
 
   // Grow layer to full canvas coverage
@@ -61,6 +61,9 @@ function renderGradient(
     for (let lx = 0; lx < layer.layerWidth; lx++) {
       const cx = lx + layer.offsetX
       const cy = ly + layer.offsetY
+
+      // Skip pixels outside the active selection
+      if (selectionMask && selectionMask[cy * cw + cx] === 0) continue
 
       let t: number
       if (type === 'linear') {

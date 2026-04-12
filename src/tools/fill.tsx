@@ -40,7 +40,7 @@ function fillAllMatching(
 function createFillHandler(): ToolHandler {
   return {
     onPointerDown({ x, y }: ToolPointerPos, ctx: ToolContext) {
-      const { renderer, layer, layers, primaryColor, render, commitStroke, growLayerToFit } = ctx
+      const { renderer, layer, layers, primaryColor, selectionMask, render, commitStroke, growLayerToFit } = ctx
       const { r, g, b, a } = primaryColor
 
       // Grow the layer to cover the full canvas so that clicks on transparent
@@ -51,6 +51,29 @@ function createFillHandler(): ToolHandler {
       growLayerToFit(cw - 1, 0)
       growLayerToFit(0, ch - 1)
       growLayerToFit(cw - 1, ch - 1)
+
+      // Snapshot pixels outside the selection so we can restore them after fill.
+      // (We snapshot only when a selection mask is active to avoid the copy cost.)
+      const snapshot = selectionMask ? layer.data.slice() : null
+
+      /** Restore pixels that fall outside the active selection mask. */
+      const applySelectionMask = (): void => {
+        if (!snapshot || !selectionMask) return
+        const lw = layer.layerWidth
+        for (let ly2 = 0; ly2 < layer.layerHeight; ly2++) {
+          for (let lx2 = 0; lx2 < lw; lx2++) {
+            const cx2 = lx2 + layer.offsetX
+            const cy2 = ly2 + layer.offsetY
+            const mi = cy2 * cw + cx2
+            if (mi < 0 || mi >= selectionMask.length || selectionMask[mi] !== 0) continue
+            const pi = (ly2 * lw + lx2) * 4
+            layer.data[pi]     = snapshot[pi]
+            layer.data[pi + 1] = snapshot[pi + 1]
+            layer.data[pi + 2] = snapshot[pi + 2]
+            layer.data[pi + 3] = snapshot[pi + 3]
+          }
+        }
+      }
 
       // Convert canvas-space click to layer-local coords (re-compute after growth)
       const lx = Math.floor(x) - layer.offsetX
@@ -67,6 +90,7 @@ function createFillHandler(): ToolHandler {
           fillOptions.tolerance,
         ).then((result) => {
           layer.data.set(result)
+          applySelectionMask()
           renderer.flushLayer(layer)
           render(layers)
           commitStroke('Fill')
@@ -82,6 +106,7 @@ function createFillHandler(): ToolHandler {
         const targetB = layer.data[startIdx + 2]
         const targetA = layer.data[startIdx + 3]
         fillAllMatching(layer.data, layer.layerWidth, layer.layerHeight, targetR, targetG, targetB, targetA, r, g, b, a, fillOptions.tolerance)
+        applySelectionMask()
         renderer.flushLayer(layer)
         render(layers)
         commitStroke('Fill')

@@ -115,21 +115,7 @@ const Icon = {
       <circle cx="12" cy="4" r="3" />
       <polygon points="2,15 14,15 8,9.5" />
     </svg>
-  ),
-  hand: (
-    <svg viewBox="0 0 16 16" fill="currentColor">
-      {/* palm */}
-      <path d="M5 14.5c-1.2 0-3-1.5-3-4V8a1 1 0 012 0v1.5h.1V5.8a1 1 0 012 0V4.5a1 1 0 012 0V4a1 1 0 012 0v.5a1 1 0 012 0V8.5c0 1.2-.4 2.3-1.2 3.2L9.2 13a3 3 0 01-2.2 1.5H5z" opacity="0.9" />
-    </svg>
-  ),
-  zoom: (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <circle cx="7" cy="7" r="4.5" />
-      <line x1="10.5" y1="10.5" x2="14" y2="14" />
-      <line x1="5" y1="7" x2="9" y2="7" />
-      <line x1="7" y1="5" x2="7" y2="9" />
-    </svg>
-  ),
+  )
 }
 
 // ─── Shape picker definitions ─────────────────────────────────────────────────
@@ -255,11 +241,6 @@ const TOOL_GRID: ToolGrid = [
   [
     { id: 'text',       label: 'Type',          shortcut: 'T', icon: Icon.text },
     { id: 'shape',      label: 'Shape',         shortcut: 'U', icon: Icon.shape }
-  ],
-  // group 8 – navigation
-  [
-    { id: 'hand',       label: 'Hand',          shortcut: 'H', icon: Icon.hand },
-    { id: 'zoom',       label: 'Zoom',          shortcut: 'Z', icon: Icon.zoom }
   ]
 ]
 

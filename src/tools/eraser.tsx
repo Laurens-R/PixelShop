@@ -22,11 +22,12 @@ function createEraserHandler(): ToolHandler {
     x0: number, y0: number, x1: number, y1: number,
     ctx: ToolContext
   ): void {
-    const { renderer, layer, layers, secondaryColor, render, growLayerToFit } = ctx
+    const { renderer, layer, layers, secondaryColor, selectionMask, render, growLayerToFit } = ctx
     const { r: secR, g: secG, b: secB } = secondaryColor
     const radius = eraserOptions.size / 2
     growLayerToFit(x0, y0, Math.ceil(radius))
     if (x1 !== x0 || y1 !== y0) growLayerToFit(x1, y1, Math.ceil(radius))
+    const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
     eraseThickLine(
       renderer, layer,
       x0, y0, x1, y1,
@@ -36,6 +37,7 @@ function createEraserHandler(): ToolHandler {
       eraserOptions.alphaMode,
       eraserOptions.antiAlias,
       touched ?? undefined,
+      sel,
     )
     renderer.flushLayer(layer)
     render(layers)

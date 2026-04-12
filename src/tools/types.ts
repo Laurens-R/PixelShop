@@ -17,6 +17,11 @@ export interface ToolContext {
    * at canvas coords near the edge.
    */
   growLayerToFit: (canvasX: number, canvasY: number, extraRadius?: number) => void
+  /**
+   * Active selection mask in canvas-space (1 byte per pixel, 0 = not selected,
+   * non-zero = selected). null means the whole canvas is selected.
+   */
+  selectionMask: Uint8Array | null
   /** Set the primary color in app state (used by the eyedropper tool). */
   setColor: (color: RGBAColor) => void
   /**

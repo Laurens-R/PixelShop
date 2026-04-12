@@ -1,0 +1,137 @@
+import React, { useState } from 'react'
+import { dodgeBurnThickLine } from './algorithm/bresenham'
+import type { DodgeBurnRange } from './algorithm/bresenham'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
+
+// ─── Module-level options ─────────────────────────────────────────────────────
+
+export const dodgeOptions = {
+  size: 25,
+  exposure: 50,
+  range: 'midtones' as DodgeBurnRange,
+  antiAlias: false,
+}
+
+export const burnOptions = {
+  size: 25,
+  exposure: 50,
+  range: 'midtones' as DodgeBurnRange,
+  antiAlias: false,
+}
+
+// ─── Handler factory ──────────────────────────────────────────────────────────
+
+function createDodgeBurnHandler(opts: typeof dodgeOptions, sign: 1 | -1): () => ToolHandler {
+  return function (): ToolHandler {
+    let lastPos: { x: number; y: number } | null = null
+    let touched: Map<number, number> | null = null
+
+    function stamp(
+      x0: number, y0: number, x1: number, y1: number,
+      ctx: ToolContext,
+    ): void {
+      const { renderer, layer, layers, selectionMask, render, growLayerToFit } = ctx
+      const radius = opts.size / 2
+      growLayerToFit(x0, y0, Math.ceil(radius))
+      if (x1 !== x0 || y1 !== y0) growLayerToFit(x1, y1, Math.ceil(radius))
+      const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
+      dodgeBurnThickLine(
+        renderer, layer,
+        x0, y0, x1, y1,
+        opts.size,
+        sign * opts.exposure / 100,
+        opts.range,
+        opts.antiAlias,
+        touched ?? undefined,
+        sel,
+      )
+      renderer.flushLayer(layer)
+      render(layers)
+    }
+
+    return {
+      onPointerDown({ x, y }: ToolPointerPos, ctx: ToolContext) {
+        touched = new Map()
+        lastPos = null
+        stamp(x, y, x, y, ctx)
+        lastPos = { x, y }
+      },
+
+      onPointerMove({ x, y }: ToolPointerPos, ctx: ToolContext) {
+        if (!lastPos) return
+        stamp(lastPos.x, lastPos.y, x, y, ctx)
+        lastPos = { x, y }
+      },
+
+      onPointerUp() {
+        lastPos = null
+        touched = null
+      },
+    }
+  }
+}
+
+// ─── Shared options UI ────────────────────────────────────────────────────────
+
+function DodgeBurnOptions({
+  opts,
+  styles,
+}: {
+  opts: typeof dodgeOptions
+  styles: ToolOptionsStyles
+}): React.JSX.Element {
+  const [size, setSize]         = useState(opts.size)
+  const [exposure, setExposure] = useState(opts.exposure)
+  const [range, setRange]       = useState<DodgeBurnRange>(opts.range)
+  const [antiAlias, setAA]      = useState(opts.antiAlias)
+
+  const handleSize     = (v: number): void => { opts.size = v; setSize(v) }
+  const handleExposure = (v: number): void => { opts.exposure = v; setExposure(v) }
+  const handleRange    = (v: DodgeBurnRange): void => { opts.range = v; setRange(v) }
+  const handleAA       = (v: boolean): void => { opts.antiAlias = v; setAA(v) }
+
+  return (
+    <>
+      <label className={styles.optLabel}>Size:</label>
+      <SliderInput value={size} min={1} max={200} inputWidth={42} onChange={handleSize} />
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>Exposure:</label>
+      <SliderInput value={exposure} min={1} max={100} suffix="%" inputWidth={42} onChange={handleExposure} />
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>Range:</label>
+      <select
+        className={styles.optSelect}
+        value={range}
+        onChange={(e) => handleRange(e.target.value as DodgeBurnRange)}
+      >
+        <option value="shadows">Shadows</option>
+        <option value="midtones">Midtones</option>
+        <option value="highlights">Highlights</option>
+      </select>
+      <span className={styles.optSep} />
+      <label className={styles.optCheckLabel}>
+        <input
+          type="checkbox"
+          checked={antiAlias}
+          onChange={(e) => handleAA(e.target.checked)}
+        />
+        Anti-alias
+      </label>
+    </>
+  )
+}
+
+// ─── Tool exports ─────────────────────────────────────────────────────────────
+
+export const dodgeTool: ToolDefinition = {
+  createHandler: createDodgeBurnHandler(dodgeOptions, 1),
+  Options: ({ styles }) => <DodgeBurnOptions opts={dodgeOptions} styles={styles} />,
+  modifiesPixels: true,
+}
+
+export const burnTool: ToolDefinition = {
+  createHandler: createDodgeBurnHandler(burnOptions, -1),
+  Options: ({ styles }) => <DodgeBurnOptions opts={burnOptions} styles={styles} />,
+  modifiesPixels: true,
+}
