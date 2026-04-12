@@ -4,6 +4,8 @@ import { CanvasProvider } from '@/store/CanvasContext'
 import { selectionStore } from '@/store/selectionStore'
 import { clipboardStore } from '@/store/clipboardStore'
 import { historyStore } from '@/store/historyStore'
+import type { HistoryEntry } from '@/store/historyStore'
+import { cropStore } from '@/store/cropStore'
 import { TopBar } from '@/components/window/TopBar/TopBar'
 import { ToolOptionsBar } from '@/components/window/ToolOptionsBar/ToolOptionsBar'
 import { TabBar } from '@/components/window/TabBar/TabBar'
@@ -45,6 +47,8 @@ interface TabRecord {
   snapshot: TabSnapshot
   /** Pixel data for each layer — null while tab is active (data lives in WebGL) */
   savedLayerData: Map<string, string> | null
+  /** History stack — null while tab is active (historyStore holds the live data) */
+  savedHistory: { entries: HistoryEntry[]; currentIndex: number } | null
 }
 
 function makeTabId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2)}` }
@@ -66,11 +70,16 @@ function AppContent(): React.JSX.Element {
   const stateRef = useRef(state)
   stateRef.current = state
   const isRestoringRef = useRef(false)
+  const suppressReadyCaptureRef = useRef(false)
   const pendingLayerLabelRef = useRef<string | null>(null)
   const prevLayersRef = useRef(state.layers)
 
   const captureHistory = useCallback((label: string): void => {
     if (isRestoringRef.current) return
+    if (suppressReadyCaptureRef.current) {
+      suppressReadyCaptureRef.current = false
+      return
+    }
     const layerPixels = canvasHandleRef.current?.captureAllLayerPixels()
     if (!layerPixels || layerPixels.size === 0) return
     const s = stateRef.current
@@ -90,6 +99,12 @@ function AppContent(): React.JSX.Element {
     historyStore.onPreview = (index: number): void => {
       const entry = historyStore.entries[index]
       if (!entry) return
+      // Don't try to preview entries with different canvas dimensions — the
+      // pixel buffers would have the wrong size and corrupt the display.
+      if (
+        entry.canvasWidth !== stateRef.current.canvas.width ||
+        entry.canvasHeight !== stateRef.current.canvas.height
+      ) return
       canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
     }
     return () => { historyStore.onPreview = null }
@@ -100,14 +115,50 @@ function AppContent(): React.JSX.Element {
       const entry = historyStore.entries[index]
       if (!entry) return
       isRestoringRef.current = true
-      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
-      dispatch({
-        type: 'RESTORE_LAYERS',
-        payload: {
-          layers: entry.layerState,
-          activeLayerId: entry.activeLayerId,
-        },
-      })
+      const currentW = stateRef.current.canvas.width
+      const currentH = stateRef.current.canvas.height
+
+      if (entry.canvasWidth !== currentW || entry.canvasHeight !== currentH) {
+        // The target state has different canvas dimensions — we must remount the
+        // Canvas (same path as resize/crop). Encode the snapshot pixels as PNGs
+        // so the new Canvas initializer can load them.
+        const encoded = new Map<string, string>()
+        for (const [id, pixels] of entry.layerPixels) {
+          const tmp = document.createElement('canvas')
+          tmp.width = entry.canvasWidth; tmp.height = entry.canvasHeight
+          const ctx2d = tmp.getContext('2d')!
+          ctx2d.putImageData(
+            new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), entry.canvasWidth, entry.canvasHeight),
+            0, 0
+          )
+          encoded.set(id, tmp.toDataURL('image/png'))
+        }
+        // Suppress the onReady 'Initial State' capture — history is already correct.
+        suppressReadyCaptureRef.current = true
+        setPendingLayerData(encoded)
+        dispatch({
+          type: 'RESTORE_TAB',
+          payload: {
+            width: entry.canvasWidth,
+            height: entry.canvasHeight,
+            backgroundFill: stateRef.current.canvas.backgroundFill,
+            layers: entry.layerState,
+            activeLayerId: entry.activeLayerId,
+            zoom: stateRef.current.canvas.zoom,
+          },
+        })
+      } else {
+        // Same canvas size — fast path: swap pixels in-place.
+        canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
+        dispatch({
+          type: 'RESTORE_LAYERS',
+          payload: {
+            layers: entry.layerState,
+            activeLayerId: entry.activeLayerId,
+          },
+        })
+      }
+
       historyStore.setCurrent(index)
       setTimeout(() => { isRestoringRef.current = false }, 200)
     }
@@ -147,6 +198,7 @@ function AppContent(): React.JSX.Element {
     filePath: null,
     snapshot: INITIAL_SNAPSHOT,
     savedLayerData: null,
+    savedHistory: null,
   }])
   const [activeTabId, setActiveTabId] = useState(initialTabId)
 
@@ -176,6 +228,14 @@ function AppContent(): React.JSX.Element {
     const data = toTab.savedLayerData
     setPendingLayerData(data)
     setActiveTabId(toId)
+    // Restore this tab's history (suppress the onReady 'Initial State' push if
+    // there are already entries to restore)
+    if (toTab.savedHistory && toTab.savedHistory.entries.length > 0) {
+      suppressReadyCaptureRef.current = true
+      historyStore.restore(toTab.savedHistory.entries, toTab.savedHistory.currentIndex)
+    } else {
+      historyStore.clear()
+    }
     dispatch({
       type: 'RESTORE_TAB',
       payload: {
@@ -193,8 +253,12 @@ function AppContent(): React.JSX.Element {
     if (toId === activeTabId) return
     const snapshot = captureActiveSnapshot()
     const layerData = captureActiveLayerData()
+    const savedHistory = {
+      entries: historyStore.entries.slice(),
+      currentIndex: historyStore.currentIndex,
+    }
     const updated = tabs.map(t =>
-      t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData } : t
+      t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData, savedHistory } : t
     )
     setTabs(updated)
     switchToTab(toId, updated)
@@ -216,6 +280,10 @@ function AppContent(): React.JSX.Element {
   const handleNewConfirm = useCallback(({ width, height, backgroundFill }: { width: number; height: number; backgroundFill: BackgroundFill }): void => {
     const snapshot = captureActiveSnapshot()
     const layerData = captureActiveLayerData()
+    const savedHistory = {
+      entries: historyStore.entries.slice(),
+      currentIndex: historyStore.currentIndex,
+    }
     const n = untitledCounter
     setUntitledCounter(n + 1)
     const newId = makeTabId()
@@ -225,11 +293,12 @@ function AppContent(): React.JSX.Element {
       activeLayerId: 'layer-0', zoom: 1,
     }
     const updated: TabRecord[] = [
-      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData } : t),
-      { id: newId, title: `Untitled-${n + 1}`, filePath: null, snapshot: newSnapshot, savedLayerData: null }
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData, savedHistory } : t),
+      { id: newId, title: `Untitled-${n + 1}`, filePath: null, snapshot: newSnapshot, savedLayerData: null, savedHistory: null }
     ]
     setTabs(updated)
     setActiveTabId(newId)
+    historyStore.clear()
     setPendingLayerData(null)
     dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
     setShowNewImageDialog(false)
@@ -266,13 +335,18 @@ function AppContent(): React.JSX.Element {
 
     const snapshot = captureActiveSnapshot()
     const currentLayerData = captureActiveLayerData()
+    const savedHistory = {
+      entries: historyStore.entries.slice(),
+      currentIndex: historyStore.currentIndex,
+    }
     const newId = makeTabId()
     const updated: TabRecord[] = [
-      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: currentLayerData } : t),
-      { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: null }
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: currentLayerData, savedHistory } : t),
+      { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: null, savedHistory: null }
     ]
     setTabs(updated)
     setActiveTabId(newId)
+    historyStore.clear()
     setPendingLayerData(layerData)
     dispatch({
       type: 'RESTORE_TAB',
@@ -381,14 +455,16 @@ function AppContent(): React.JSX.Element {
         encoded.set(id, tmp.toDataURL('image/png'))
       }
 
+      // Capture pre-op state so the user can undo this resize
+      captureHistory('Before Resize Image')
       // Set pendingLayerData BEFORE dispatching so Canvas reads it on remount
       setPendingLayerData(encoded)
-      historyStore.clear()
+      pendingLayerLabelRef.current = 'Resize Image'
       dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
     } catch (err) {
       console.error('[Resize] Failed to resize image:', err)
     }
-  }, [state.canvas.width, state.canvas.height, dispatch])
+  }, [state.canvas.width, state.canvas.height, dispatch, captureHistory])
 
   const handleResizeCanvas = useCallback((settings: ResizeCanvasSettings): void => {
     setShowResizeCanvasDialog(false)
@@ -425,15 +501,61 @@ function AppContent(): React.JSX.Element {
       encoded.set(id, tmp.toDataURL('image/png'))
     }
 
+    // Capture pre-op state so the user can undo this resize
+    captureHistory('Before Resize Canvas')
     setPendingLayerData(encoded)
-    historyStore.clear()
+    pendingLayerLabelRef.current = 'Resize Canvas'
     dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
-  }, [state.canvas.width, state.canvas.height, dispatch])
+  }, [state.canvas.width, state.canvas.height, dispatch, captureHistory])
+
+  const handleCrop = useCallback((): void => {
+    const r = cropStore.rect
+    if (!r) return
+    const oldW = state.canvas.width
+    const oldH = state.canvas.height
+    // Clamp crop rect to canvas bounds
+    const cropX = Math.max(0, r.x)
+    const cropY = Math.max(0, r.y)
+    const cropW = Math.min(r.w, oldW - cropX)
+    const cropH = Math.min(r.h, oldH - cropY)
+    if (cropW <= 0 || cropH <= 0) return
+    const handle = canvasHandleRef.current
+    if (!handle) return
+
+    const layerPixels = handle.captureAllLayerPixels()
+    const encoded = new Map<string, string>()
+    for (const [id, pixels] of layerPixels) {
+      const src = document.createElement('canvas')
+      src.width = oldW; src.height = oldH
+      const srcCtx = src.getContext('2d')!
+      srcCtx.putImageData(
+        new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), oldW, oldH),
+        0, 0
+      )
+      const dst = document.createElement('canvas')
+      dst.width = cropW; dst.height = cropH
+      const dstCtx = dst.getContext('2d')!
+      dstCtx.drawImage(src, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+      encoded.set(id, dst.toDataURL('image/png'))
+    }
+
+    cropStore.clear()
+    // Capture pre-op state so the user can undo this crop
+    captureHistory('Before Crop')
+    setPendingLayerData(encoded)
+    pendingLayerLabelRef.current = 'Crop'
+    dispatch({ type: 'RESIZE_CANVAS', payload: { width: cropW, height: cropH } })
+  }, [state.canvas.width, state.canvas.height, dispatch, captureHistory])
+
+  useEffect(() => {
+    cropStore.onCrop = handleCrop
+    return () => { cropStore.onCrop = null }
+  }, [handleCrop])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'Escape') { selectionStore.clear(); return }
+      if (e.key === 'Escape') { selectionStore.clear(); cropStore.clear(); return }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDelete(); return }
       if (!e.ctrlKey) return
       if (e.key === 'z') { e.preventDefault(); handleUndo() }
@@ -511,7 +633,10 @@ function AppContent(): React.JSX.Element {
             height={state.canvas.height}
             initialLayerData={pendingLayerData ?? undefined}
             onStrokeEnd={captureHistory}
-            onReady={() => captureHistory('Initial State')}
+            onReady={() => {
+              captureHistory(pendingLayerLabelRef.current ?? 'Initial State')
+              pendingLayerLabelRef.current = null
+            }}
           />
         </main>
         <RightPanel />

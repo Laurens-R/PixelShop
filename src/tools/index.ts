@@ -9,6 +9,7 @@ import { magicWandTool } from './magicWand'
 import { fillTool } from './fill'
 import { eyedropperTool } from './eyedropper'
 import { zoomTool } from './zoom'
+import { cropTool } from './crop'
 import { noopTool } from './noop'
 
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
@@ -23,7 +24,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   zoom:         zoomTool,
   // ── Not yet implemented ────────────────────────────────────────────────────
   move:         noopTool,
-  crop:         noopTool,
+  crop:         cropTool,
   frame:        noopTool,
   gradient:     noopTool,
   dodge:        noopTool,

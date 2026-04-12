@@ -85,6 +85,18 @@ class HistoryStore {
     this.notify()
   }
 
+  /**
+   * Bulk-restore a previously snapshotted history state (e.g. when switching tabs).
+   * Does NOT invoke onJumpTo/onPreview — the caller is responsible for
+   * restoring canvas pixels separately.
+   */
+  restore(entries: HistoryEntry[], currentIndex: number): void {
+    this.entries = entries
+    this.currentIndex = currentIndex
+    this.selectedIndex = currentIndex
+    this.notify()
+  }
+
   subscribe(cb: () => void): () => void {
     this.listeners.add(cb)
     return () => this.listeners.delete(cb)

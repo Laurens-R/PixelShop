@@ -7,6 +7,7 @@ import type { WebGLLayer } from '@/webgl/WebGLRenderer'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { selectionStore } from '@/store/selectionStore'
+import { cropStore } from '@/store/cropStore'
 import styles from './Canvas.module.scss'
 
 // ─── Public handle (for save / export / clipboard) ─────────────────────────
@@ -252,7 +253,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       ctx2d.clearRect(0, 0, overlay.width, overlay.height)
 
       const { mask, pending, borderSegments } = selectionStore
-      if (!mask && !pending) return
+      const hasCrop = !!(cropStore.pendingRect || cropStore.rect)
+      if (!mask && !pending && !hasCrop) return
 
       // Draw in image pixel coords — CSS scaling handles zoom
       if (borderSegments && borderSegments.length > 0) {
@@ -294,6 +296,31 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           }
         }
         ctx2d.stroke()
+      }
+
+      // ── Crop overlay ──────────────────────────────────────────────────────
+      const cp = cropStore.pendingRect
+      const cr = cropStore.rect
+      if (cp) {
+        // Live drag preview — orange dashed rect
+        ctx2d.strokeStyle = '#ff9900'
+        ctx2d.lineWidth   = 1
+        ctx2d.setLineDash([4, 2])
+        ctx2d.lineDashOffset = 0
+        ctx2d.strokeRect(
+          Math.min(cp.x1, cp.x2), Math.min(cp.y1, cp.y2),
+          Math.abs(cp.x2 - cp.x1), Math.abs(cp.y2 - cp.y1)
+        )
+      } else if (cr) {
+        // Committed crop rect — orange marching ants
+        dashOffset = (dashOffset + 0.25) % 8
+        ctx2d.lineWidth = 1
+        ctx2d.setLineDash([4, 4])
+        for (const [color, extra] of [['#000000', 0], ['#ff9900', 4]] as const) {
+          ctx2d.strokeStyle = color
+          ctx2d.lineDashOffset = dashOffset + extra
+          ctx2d.strokeRect(cr.x, cr.y, cr.w, cr.h)
+        }
       }
     }
 
