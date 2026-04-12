@@ -4,6 +4,8 @@ export interface CanvasPointerPosition {
   x: number
   y: number
   pressure: number
+  shiftKey: boolean
+  altKey: boolean
 }
 
 interface UseCanvasOptions {
@@ -35,7 +37,9 @@ export function useCanvas({
       return {
         x: Math.floor((e.clientX - rect.left) * scaleX),
         y: Math.floor((e.clientY - rect.top) * scaleY),
-        pressure: e.pressure
+        pressure: e.pressure,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
       }
     },
     []

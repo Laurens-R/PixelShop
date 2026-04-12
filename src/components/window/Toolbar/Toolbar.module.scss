@@ -77,6 +77,79 @@
   }
 }
 
+// ─── Shape picker ─────────────────────────────────────────────────────────────
+
+.shapeCell {
+  position: relative;
+  display: flex;
+}
+
+.shapeCaret {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: vars.$color-text-muted;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: all;
+
+  &:hover {
+    color: vars.$color-text;
+  }
+}
+
+.shapeFlyout {
+  position: fixed;
+  left: calc(vars.$toolbar-width + 4px);
+  z-index: 1000;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-md;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.shapeFlyoutBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-sm;
+  background: transparent;
+  cursor: pointer;
+  color: vars.$color-text-dim;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+
+  &.active {
+    background: vars.$color-surface-selected;
+    color: vars.$color-text;
+    border-color: vars.$color-border-light;
+  }
+}
+
 // ─── Color swatches ───────────────────────────────────────────────────────────
 
 .swatches {

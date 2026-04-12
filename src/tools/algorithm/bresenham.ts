@@ -143,14 +143,14 @@ function drawAAThickSegment(
   touched?: Map<number, number>,
 ): void {
   const radius = size / 2
-  const pad    = Math.ceil(radius) + 1
+  const pad = Math.ceil(radius) + 1
   const sdx = x1 - x0, sdy = y1 - y0
   const lenSq = sdx * sdx + sdy * sdy
 
   const minX = Math.floor(Math.min(x0, x1)) - pad
-  const maxX = Math.ceil(Math.max(x0, x1))  + pad
+  const maxX = Math.ceil(Math.max(x0, x1)) + pad
   const minY = Math.floor(Math.min(y0, y1)) - pad
-  const maxY = Math.ceil(Math.max(y0, y1))  + pad
+  const maxY = Math.ceil(Math.max(y0, y1)) + pad
 
   for (let py = minY; py <= maxY; py++) {
     for (let px = minX; px <= maxX; px++) {
@@ -159,7 +159,7 @@ function drawAAThickSegment(
         // Degenerate segment: distance to the single point
         dist = Math.sqrt((px - x0) ** 2 + (py - y0) ** 2)
       } else {
-        const t     = Math.max(0, Math.min(1, ((px - x0) * sdx + (py - y0) * sdy) / lenSq))
+        const t = Math.max(0, Math.min(1, ((px - x0) * sdx + (py - y0) * sdy) / lenSq))
         const nearX = x0 + t * sdx
         const nearY = y0 + t * sdy
         dist = Math.sqrt((px - nearX) ** 2 + (py - nearY) ** 2)
@@ -226,13 +226,13 @@ function wuLine(
   // Single point — plot once at full coverage
   if (x0 === x1 && y0 === y1) { plot(x0, y0, 1); return }
 
-  const ipart  = (n: number): number => Math.floor(n)
-  const fpart  = (n: number): number => n - Math.floor(n)
+  const ipart = (n: number): number => Math.floor(n)
+  const fpart = (n: number): number => n - Math.floor(n)
   const rfpart = (n: number): number => 1 - fpart(n)
 
   let [ax, ay, bx, by] = [x0, y0, x1, y1]
   const steep = Math.abs(by - ay) > Math.abs(bx - ax)
-  if (steep)   { [ax, ay, bx, by] = [ay, ax, by, bx] }
+  if (steep) { [ax, ay, bx, by] = [ay, ax, by, bx] }
   if (ax > bx) { [ax, ay, bx, by] = [bx, by, ax, ay] }
 
   const dx = bx - ax
@@ -248,8 +248,8 @@ function wuLine(
   let yend = ay + gradient * (xend - ax)
   let xgap = rfpart(ax + 0.5)
   const xpxl1 = xend, ypxl1 = ipart(yend)
-  emit(xpxl1, ypxl1,     rfpart(yend) * xgap)
-  emit(xpxl1, ypxl1 + 1,  fpart(yend) * xgap)
+  emit(xpxl1, ypxl1, rfpart(yend) * xgap)
+  emit(xpxl1, ypxl1 + 1, fpart(yend) * xgap)
   let intery = yend + gradient
 
   // Second endpoint
@@ -257,13 +257,13 @@ function wuLine(
   yend = by + gradient * (xend - bx)
   xgap = fpart(bx + 0.5)
   const xpxl2 = xend, ypxl2 = ipart(yend)
-  emit(xpxl2, ypxl2,     rfpart(yend) * xgap)
-  emit(xpxl2, ypxl2 + 1,  fpart(yend) * xgap)
+  emit(xpxl2, ypxl2, rfpart(yend) * xgap)
+  emit(xpxl2, ypxl2 + 1, fpart(yend) * xgap)
 
   // Main loop — pixels between the two endpoints
   for (let x = xpxl1 + 1; x < xpxl2; x++) {
-    emit(x, ipart(intery),     rfpart(intery))
-    emit(x, ipart(intery) + 1,  fpart(intery))
+    emit(x, ipart(intery), rfpart(intery))
+    emit(x, ipart(intery) + 1, fpart(intery))
     intery += gradient
   }
 }

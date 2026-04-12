@@ -1,5 +1,7 @@
 // ─── Tools ────────────────────────────────────────────────────────────────────
 
+export type ShapeType = 'rectangle' | 'ellipse' | 'triangle' | 'line' | 'diamond' | 'star'
+
 export type Tool =
   | 'move'
   | 'select'
@@ -86,6 +88,7 @@ export interface CanvasState {
 
 export interface AppState {
   activeTool: Tool
+  activeShape: ShapeType
   primaryColor: RGBAColor
   secondaryColor: RGBAColor
   swatches: RGBAColor[]

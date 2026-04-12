@@ -131,7 +131,7 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
             <p className={styles.sectionTitle}>PRESETS</p>
             <div className={styles.presetsGrid}>
               {PRESETS.map((p) => (
-                <button
+                <DialogButton
                   key={p.label}
                   className={`${styles.presetCard} ${selectedPreset === p.label ? styles.presetSelected : ''}`}
                   onClick={() => handlePreset(p)}
@@ -140,7 +140,7 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
                   <DocIcon />
                   <span className={styles.presetDims}>{p.label}</span>
                   <span className={styles.presetSub}>{p.sub}</span>
-                </button>
+                </DialogButton>
               ))}
             </div>
           </div>
@@ -190,7 +190,7 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
             <div className={styles.fieldRow}>
               <label className={styles.fieldLabel}>Orientation</label>
               <div className={styles.orientGroup}>
-                <button
+                <DialogButton
                   className={`${styles.orientBtn} ${isPortrait ? styles.orientActive : ''}`}
                   onClick={handlePortrait}
                   title="Portrait"
@@ -200,8 +200,8 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
                   <svg viewBox="0 0 12 16" width="12" height="16" aria-hidden="true">
                     <rect x="1.5" y="1.5" width="9" height="13" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
                   </svg>
-                </button>
-                <button
+                </DialogButton>
+                <DialogButton
                   className={`${styles.orientBtn} ${!isPortrait ? styles.orientActive : ''}`}
                   onClick={handleLandscape}
                   title="Landscape"
@@ -211,7 +211,7 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
                   <svg viewBox="0 0 16 12" width="16" height="12" aria-hidden="true">
                     <rect x="1.5" y="1.5" width="13" height="9" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
                   </svg>
-                </button>
+                </DialogButton>
               </div>
             </div>
 

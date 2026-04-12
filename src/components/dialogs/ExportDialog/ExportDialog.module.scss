@@ -59,24 +59,12 @@
 
 .browseBtn {
   padding: 4px 10px;
-  background: vars.$color-surface-2;
-  border: 1px solid vars.$color-border-light;
-  border-radius: vars.$radius-sm;
   color: vars.$color-text-dim;
-  font-size: vars.$font-size-sm;
-  font-family: vars.$font-sans;
-  cursor: pointer;
   white-space: nowrap;
-  flex-shrink: 0;
-  transition: background-color vars.$transition-fast, color vars.$transition-fast;
+  width: 100px;
 
   &:hover {
-    background: vars.$color-surface-hover;
     color: vars.$color-text;
-  }
-
-  &:focus-visible {
-    @include m.focus-ring;
   }
 }
 

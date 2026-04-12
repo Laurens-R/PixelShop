@@ -104,7 +104,7 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
               placeholder="Choose a file path…"
               onChange={(e) => setFilePath(e.target.value)}
             />
-            <button className={styles.browseBtn} onClick={handleBrowse}>Browse…</button>
+            <DialogButton onClick={handleBrowse} className={styles.browseBtn}>Browse…</DialogButton>
           </div>
 
           {/* Format */}

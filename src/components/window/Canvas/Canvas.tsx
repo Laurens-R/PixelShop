@@ -6,6 +6,7 @@ import { useCanvasContext } from '@/store/CanvasContext'
 import type { WebGLLayer } from '@/webgl/WebGLRenderer'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
+import { selectionStore } from '@/tools/selectionStore'
 import styles from './Canvas.module.scss'
 
 // ─── Public handle (for save / export) ──────────────────────────────────────
@@ -69,6 +70,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
   const hasInitializedRef = useRef(false)
+  const overlayRef = useRef<HTMLCanvasElement>(null)
 
   // Keep a ref to the current layer list so the imperative handle can access
   // up-to-date ordering and visibility without being re-created on every render.
@@ -94,6 +96,77 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
     }
   }), [width, height])
+
+  // Init selection store dimensions once canvas is sized
+  useEffect(() => {
+    selectionStore.setDimensions(width, height)
+    return () => { selectionStore.clear() }
+  }, [width, height])
+
+  // Marching-ants RAF loop — mounted once
+  useEffect(() => {
+    let rafId: number
+    let dashOffset = 0
+
+    const tick = (): void => {
+      rafId = requestAnimationFrame(tick)
+      const overlay = overlayRef.current
+      if (!overlay) return
+      const ctx2d = overlay.getContext('2d')
+      if (!ctx2d) return
+
+      ctx2d.clearRect(0, 0, overlay.width, overlay.height)
+
+      const { mask, pending, borderSegments } = selectionStore
+      if (!mask && !pending) return
+
+      // Draw in image pixel coords — CSS scaling handles zoom
+      if (borderSegments && borderSegments.length > 0) {
+        dashOffset = (dashOffset + 0.25) % 8
+        ctx2d.lineWidth = 1
+        ctx2d.setLineDash([4, 4])
+
+        for (const [color, extra] of [['#000000', 0], ['#ffffff', 4]] as const) {
+          ctx2d.strokeStyle = color
+          ctx2d.lineDashOffset = dashOffset + extra
+          ctx2d.beginPath()
+          for (let i = 0; i < borderSegments.length; i += 4) {
+            ctx2d.moveTo(borderSegments[i],     borderSegments[i + 1])
+            ctx2d.lineTo(borderSegments[i + 2], borderSegments[i + 3])
+          }
+          ctx2d.stroke()
+        }
+      }
+
+      // ── Pending drag preview ───────────────────────────────────────────────
+      if (pending) {
+        ctx2d.strokeStyle = '#00aaff'
+        ctx2d.lineWidth   = 1
+        ctx2d.setLineDash([4, 2])
+        ctx2d.lineDashOffset = 0
+        ctx2d.beginPath()
+
+        if (pending.type === 'rect') {
+          const { x1, y1, x2, y2 } = pending
+          ctx2d.rect(
+            Math.min(x1, x2), Math.min(y1, y2),
+            Math.abs(x2 - x1), Math.abs(y2 - y1)
+          )
+        } else {
+          const pts = pending.points
+          if (pts.length > 1) {
+            ctx2d.moveTo(pts[0].x, pts[0].y)
+            for (let i = 1; i < pts.length; i++) ctx2d.lineTo(pts[i].x, pts[i].y)
+          }
+        }
+        ctx2d.stroke()
+      }
+    }
+
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Publish canvas element into shared context
   useEffect(() => {
@@ -186,6 +259,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   }
 
   useEffect(() => {
+    const sel = state.activeTool
+    if (sel !== 'select' && sel !== 'lasso' && sel !== 'magic-wand') {
+      selectionStore.setPending(null)
+    }
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
   }, [state.activeTool])
 
@@ -224,21 +301,35 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   return (
     <div className={styles.viewport} data-canvas-viewport>
       <div className={styles.viewportInner}>
-        <canvas
-          ref={canvasRef}
-          className={styles.canvas}
-          width={width}
-          height={height}
+        <div
+          className={styles.canvasWrapper}
           style={{
             width:  width  * state.canvas.zoom / window.devicePixelRatio,
             height: height * state.canvas.zoom / window.devicePixelRatio,
           }}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerLeave}
-          aria-label={`Canvas ${width}\u00d7${height}`}
-        />
+        >
+          <canvas
+            ref={canvasRef}
+            className={styles.canvas}
+            width={width}
+            height={height}
+            style={{
+              width:  width  * state.canvas.zoom / window.devicePixelRatio,
+              height: height * state.canvas.zoom / window.devicePixelRatio,
+            }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerLeave}
+            aria-label={`Canvas ${width}\u00d7${height}`}
+          />
+          <canvas
+            ref={overlayRef}
+            className={styles.overlay}
+            width={width}
+            height={height}
+          />
+        </div>
       </div>
     </div>
   )

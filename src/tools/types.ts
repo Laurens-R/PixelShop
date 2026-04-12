@@ -18,6 +18,8 @@ export interface ToolPointerPos {
   x: number
   y: number
   pressure: number
+  shiftKey: boolean
+  altKey: boolean
 }
 
 // ─── Stateful handler created fresh for each tool activation ──────────────────

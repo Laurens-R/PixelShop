@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import styles from './MenuBar.module.scss'
 
-interface MenuItemDef {
+export interface MenuItemDef {
   label: string
   shortcut?: string
   action?: () => void
@@ -9,12 +9,12 @@ interface MenuItemDef {
   disabled?: boolean
 }
 
-interface MenuDef {
+export interface MenuDef {
   label: string
   items: MenuItemDef[]
 }
 
-const MENUS: MenuDef[] = [
+const DEFAULT_MENUS: MenuDef[] = [
   {
     label: 'File',
     items: [
@@ -67,7 +67,11 @@ const MENUS: MenuDef[] = [
   }
 ]
 
-export function MenuBar(): React.JSX.Element {
+interface MenuBarProps {
+  menus?: MenuDef[]
+}
+
+export function MenuBar({ menus = DEFAULT_MENUS }: MenuBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const navRef = useRef<HTMLElement>(null)
 
@@ -94,6 +98,12 @@ export function MenuBar(): React.JSX.Element {
     setOpenMenu((prev) => (prev === label ? null : label))
   }
 
+  const handleMouseEnter = (label: string): void => {
+    if (openMenu !== null && openMenu !== label) {
+      setOpenMenu(label)
+    }
+  }
+
   const handleItemClick = (item: MenuItemDef): void => {
     if (item.disabled || item.separator) return
     item.action?.()
@@ -102,11 +112,12 @@ export function MenuBar(): React.JSX.Element {
 
   return (
     <nav ref={navRef} className={styles.menuBar} aria-label="Application menu">
-      {MENUS.map((menu) => (
+      {menus.map((menu) => (
         <div key={menu.label} className={styles.entry}>
           <button
             className={`${styles.trigger} ${openMenu === menu.label ? styles.open : ''}`}
             onClick={() => handleTrigger(menu.label)}
+            onMouseEnter={() => handleMouseEnter(menu.label)}
             aria-haspopup="menu"
             aria-expanded={openMenu === menu.label}
           >
@@ -128,7 +139,7 @@ export function MenuBar(): React.JSX.Element {
                     >
                       <span className={styles.itemLabel}>{item.label}</span>
                       {item.shortcut && (
-                        <kbd className={styles.shortcut}>{item.shortcut}</kbd>
+                        <span className={styles.shortcut}>{item.shortcut}</span>
                       )}
                     </button>
                   </li>

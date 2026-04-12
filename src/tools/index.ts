@@ -4,6 +4,8 @@ import { pencilTool } from './pencil'
 import { brushTool } from './brush'
 import { eraserTool } from './eraser'
 import { selectTool } from './select'
+import { lassoTool } from './lasso'
+import { magicWandTool } from './magicWand'
 import { fillTool } from './fill'
 import { eyedropperTool } from './eyedropper'
 import { zoomTool } from './zoom'
@@ -14,13 +16,13 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   brush:        brushTool,
   eraser:       eraserTool,
   select:       selectTool,
+  lasso:        lassoTool,
+  'magic-wand': magicWandTool,
   fill:         fillTool,
   eyedropper:   eyedropperTool,
   zoom:         zoomTool,
   // ── Not yet implemented ────────────────────────────────────────────────────
   move:         noopTool,
-  lasso:        noopTool,
-  'magic-wand': noopTool,
   crop:         noopTool,
   frame:        noopTool,
   gradient:     noopTool,

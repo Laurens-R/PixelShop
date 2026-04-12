@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, RGBAColor, LayerState, BlendMode, BackgroundFill } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, BlendMode, BackgroundFill } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
 type AppAction =
   | { type: 'SET_TOOL'; payload: Tool }
+  | { type: 'SET_SHAPE'; payload: ShapeType }
   | { type: 'SET_PRIMARY_COLOR'; payload: RGBAColor }
   | { type: 'SET_SECONDARY_COLOR'; payload: RGBAColor }
   | { type: 'ADD_SWATCH'; payload: RGBAColor }
@@ -50,6 +51,7 @@ const DEFAULT_SWATCHES: RGBAColor[] = [
 
 const initialState: AppState = {
   activeTool: 'pencil',
+  activeShape: 'rectangle',
   primaryColor: { r: 0, g: 0, b: 0, a: 255 },
   secondaryColor: { r: 255, g: 255, b: 255, a: 255 },
   swatches: DEFAULT_SWATCHES,
@@ -65,6 +67,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_TOOL':
       return { ...state, activeTool: action.payload }
+
+    case 'SET_SHAPE':
+      return { ...state, activeShape: action.payload }
 
     case 'SET_PRIMARY_COLOR':
       return { ...state, primaryColor: action.payload }

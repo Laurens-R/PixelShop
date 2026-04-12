@@ -2,7 +2,7 @@
 
 ## Overview
 
-Desktop pixel art / image editor built with Electron, React 19, TypeScript, WebGL2, and C++/WASM.
+Desktop pixel art / image editor built with Electron, React 19, TypeScript, WebGL2, and C++/WASM. It is intended to be a Photoshop clone as much as possible.
 
 ## Build & Dev
 
