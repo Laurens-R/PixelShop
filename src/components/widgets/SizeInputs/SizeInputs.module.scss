@@ -1,0 +1,62 @@
+@use '@/styles/variables' as vars;
+
+.sizeInputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+// ─── Field row ────────────────────────────────────────────────────────────────
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+
+.fieldLabel {
+  width: 52px;
+  flex-shrink: 0;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  text-align: right;
+}
+
+// ─── Constrain row ────────────────────────────────────────────────────────────
+
+.constrainRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 4px;
+  padding-left: 62px; // aligns with input column (52px label + 10px gap)
+}
+
+.chainLine {
+  flex: 0 0 14px;
+  height: 1px;
+  background: vars.$color-border-light;
+}
+
+.constrainLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-dim;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.constrainCheck {
+  accent-color: vars.$color-accent-blue;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.aspectHint {
+  color: vars.$color-text-muted;
+  font-size: vars.$font-size-xs;
+}

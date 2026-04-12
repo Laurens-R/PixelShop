@@ -1,0 +1,108 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 14px;
+  gap: 0;
+}
+
+.currentSize {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+// ─── Side-by-side size + anchor ───────────────────────────────────────────────
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.sizeCol {
+  flex: 1;
+  min-width: 0;
+}
+
+.anchorCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.anchorLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+}
+
+// ─── 3×3 Anchor grid ─────────────────────────────────────────────────────────
+
+.anchorGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 26px);
+  grid-template-rows: repeat(3, 26px);
+  gap: 2px;
+}
+
+.anchorCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text-muted;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text;
+    border-color: vars.$color-border-light;
+  }
+}
+
+.anchorCellActive {
+  background: vars.$color-accent-blue;
+  border-color: vars.$color-accent-blue;
+  color: #fff;
+
+  &:hover {
+    background: vars.$color-accent-blue-hover;
+    border-color: vars.$color-accent-blue-hover;
+    color: #fff;
+  }
+}
+
+// ─── Delta hint ───────────────────────────────────────────────────────────────
+
+.deltaHint {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  margin: 14px 0 0;
+  text-align: center;
+  min-height: 14px;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}

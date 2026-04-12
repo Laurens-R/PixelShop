@@ -18,6 +18,8 @@ import { ExportDialog } from '@/components/dialogs/ExportDialog/ExportDialog'
 import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
 import { ResizeImageDialog } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
 import type { ResizeImageSettings } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
+import { ResizeCanvasDialog } from '@/components/dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
+import type { ResizeCanvasSettings } from '@/components/dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
 import { resizeBilinear, resizeNearest } from '@/wasm'
 import { useAppContext } from '@/store/AppContext'
 import type { LayerState, BackgroundFill } from '@/types'
@@ -135,6 +137,7 @@ function AppContent(): React.JSX.Element {
   const [showNewImageDialog, setShowNewImageDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
   const [showResizeDialog, setShowResizeDialog] = useState(false)
+  const [showResizeCanvasDialog, setShowResizeCanvasDialog] = useState(false)
   const [pendingLayerData, setPendingLayerData] = useState<Map<string, string> | null>(null)
 
   const initialTabId = useRef(makeTabId()).current
@@ -330,6 +333,15 @@ function AppContent(): React.JSX.Element {
     captureHistory('Cut')
   }, [state.activeLayerId, state.canvas, handleCopy, captureHistory])
 
+  const handleDelete = useCallback((): void => {
+    const activeId = state.activeLayerId
+    if (!activeId) return
+    const totalPixels = state.canvas.width * state.canvas.height
+    const mask = selectionStore.mask ?? new Uint8Array(totalPixels).fill(255)
+    canvasHandleRef.current?.clearLayerPixels(activeId, mask)
+    captureHistory('Delete')
+  }, [state.activeLayerId, state.canvas, captureHistory])
+
   const handlePaste = useCallback((): void => {
     const clip = clipboardStore.current
     if (!clip) return
@@ -371,16 +383,58 @@ function AppContent(): React.JSX.Element {
 
       // Set pendingLayerData BEFORE dispatching so Canvas reads it on remount
       setPendingLayerData(encoded)
+      historyStore.clear()
       dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
     } catch (err) {
       console.error('[Resize] Failed to resize image:', err)
     }
   }, [state.canvas.width, state.canvas.height, dispatch])
 
+  const handleResizeCanvas = useCallback((settings: ResizeCanvasSettings): void => {
+    setShowResizeCanvasDialog(false)
+    const { width: newW, height: newH, anchorCol, anchorRow } = settings
+    const oldW = state.canvas.width
+    const oldH = state.canvas.height
+    if (newW === oldW && newH === oldH) return
+
+    const handle = canvasHandleRef.current
+    if (!handle) return
+
+    // Compute pixel offset of the existing content in the new canvas.
+    // anchorCol/Row: 0=start, 1=center, 2=end → maps to offsetX/Y.
+    const offsetX = anchorCol === 0 ? 0
+      : anchorCol === 1 ? Math.round((newW - oldW) / 2)
+      : newW - oldW
+    const offsetY = anchorRow === 0 ? 0
+      : anchorRow === 1 ? Math.round((newH - oldH) / 2)
+      : newH - oldH
+
+    const layerPixels = handle.captureAllLayerPixels()
+    const encoded = new Map<string, string>()
+    for (const [id, oldPixels] of layerPixels) {
+      const tmp = document.createElement('canvas')
+      tmp.width = newW; tmp.height = newH
+      const ctx2d = tmp.getContext('2d')!
+
+      // Draw the old layer data into the offset position
+      const oldCvs = document.createElement('canvas')
+      oldCvs.width = oldW; oldCvs.height = oldH
+      const oldCtx = oldCvs.getContext('2d')!
+      oldCtx.putImageData(new ImageData(new Uint8ClampedArray(oldPixels.buffer as ArrayBuffer), oldW, oldH), 0, 0)
+      ctx2d.drawImage(oldCvs, offsetX, offsetY)
+      encoded.set(id, tmp.toDataURL('image/png'))
+    }
+
+    setPendingLayerData(encoded)
+    historyStore.clear()
+    dispatch({ type: 'RESIZE_CANVAS', payload: { width: newW, height: newH } })
+  }, [state.canvas.width, state.canvas.height, dispatch])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'Escape') { selectionStore.clear(); return }
+      if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); handleDelete(); return }
       if (!e.ctrlKey) return
       if (e.key === 'z') { e.preventDefault(); handleUndo() }
       else if (e.key === 'y') { e.preventDefault(); handleRedo() }
@@ -390,7 +444,7 @@ function AppContent(): React.JSX.Element {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste])
+}, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete])
 
   // ── Export ────────────────────────────────────────────────────────
   const handleExportConfirm = useCallback(async (settings: ExportSettings): Promise<void> => {
@@ -431,7 +485,9 @@ function AppContent(): React.JSX.Element {
         onCopy={handleCopy}
         onCut={handleCut}
         onPaste={handlePaste}
+        onDelete={handleDelete}
         onResizeImage={() => setShowResizeDialog(true)}
+        onResizeCanvas={() => setShowResizeCanvasDialog(true)}
       />
       <ToolOptionsBar />
       <TabBar
@@ -481,6 +537,14 @@ function AppContent(): React.JSX.Element {
         currentHeight={state.canvas.height}
         onCancel={() => setShowResizeDialog(false)}
         onConfirm={handleResizeImage}
+      />
+
+      <ResizeCanvasDialog
+        open={showResizeCanvasDialog}
+        currentWidth={state.canvas.width}
+        currentHeight={state.canvas.height}
+        onCancel={() => setShowResizeCanvasDialog(false)}
+        onConfirm={handleResizeCanvas}
       />
     </div>
   )

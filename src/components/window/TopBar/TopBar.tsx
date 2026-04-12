@@ -18,10 +18,12 @@ interface TopBarProps {
   onCut?: () => void
   onCopy?: () => void
   onPaste?: () => void
+  onDelete?: () => void
   onResizeImage?: () => void
+  onResizeCanvas?: () => void
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onResizeImage }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -42,11 +44,13 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Undo', shortcut: 'Ctrl+Z', action: onUndo },
         { label: 'Redo', shortcut: 'Ctrl+Y', action: onRedo },
         { separator: true, label: '' },
-        { label: 'Cut',   shortcut: 'Ctrl+X', action: onCut },
-        { label: 'Copy',  shortcut: 'Ctrl+C', action: onCopy },
-        { label: 'Paste', shortcut: 'Ctrl+V', action: onPaste },
+        { label: 'Cut',    shortcut: 'Ctrl+X', action: onCut },
+        { label: 'Copy',   shortcut: 'Ctrl+C', action: onCopy },
+        { label: 'Paste',  shortcut: 'Ctrl+V', action: onPaste },
+        { label: 'Delete', shortcut: 'Del',    action: onDelete },
         { separator: true, label: '' },
-        { label: 'Image Size…', action: onResizeImage },
+        { label: 'Resize Image…',        action: onResizeImage },
+        { label: 'Resize Image Canvas…', action: onResizeCanvas },
       ]
     },
     {
@@ -74,7 +78,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
       label: 'Help',
       items: [{ label: 'About PixelShop' }, { label: 'Keyboard Shortcuts' }]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onResizeImage])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas])
 
   return (
     <div className={styles.topBar}>
