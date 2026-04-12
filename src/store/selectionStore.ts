@@ -251,6 +251,39 @@ export class SelectionStore {
     this.borderSegments = this.computeBorderSegments()
   }
 
+  /**
+   * Replace the current mask with a new one (e.g. after a move operation).
+   * Recomputes border segments and notifies listeners.
+   */
+  replaceMask(newMask: Uint8Array | null): void {
+    this.mask = newMask
+    this.borderSegments = newMask ? this.computeBorderSegments() : null
+    this.pending = null
+    this.notify()
+  }
+
+  /**
+   * Translate the current mask by (dx, dy) pixels.
+   * Pixels shifted outside canvas bounds are dropped.
+   */
+  translateMask(dx: number, dy: number): void {
+    if (!this.mask) return
+    const { width: w, height: h } = this
+    const shifted = new Uint8Array(w * h)
+    for (let sy = 0; sy < h; sy++) {
+      const dy2 = sy + dy
+      if (dy2 < 0 || dy2 >= h) continue
+      for (let sx = 0; sx < w; sx++) {
+        const dx2 = sx + dx
+        if (dx2 < 0 || dx2 >= w) continue
+        shifted[dy2 * w + dx2] = this.mask[sy * w + sx]
+      }
+    }
+    this.mask = shifted
+    this.borderSegments = this.computeBorderSegments()
+    this.notify()
+  }
+
   private computeBorderSegments(): Float32Array {
     const { mask, width: w, height: h } = this
     if (!mask) return new Float32Array(0)
