@@ -3,7 +3,13 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
   openFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:openFile'),
-  saveFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:saveFile')
+  saveFile: (): Promise<string | null> => ipcRenderer.invoke('dialog:saveFile'),
+  openPxshopDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openPxshop'),
+  savePxshopDialog: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:savePxshop', defaultPath),
+  openPxshopFile: (path: string): Promise<string> => ipcRenderer.invoke('file:openPxshop', path),
+  savePxshopFile: (path: string, data: string): Promise<void> =>
+    ipcRenderer.invoke('file:savePxshop', path, data)
 }
 
 if (process.contextIsolated) {

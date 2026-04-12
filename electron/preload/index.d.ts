@@ -6,6 +6,10 @@ declare global {
     api: {
       openFile: () => Promise<string | null>
       saveFile: () => Promise<string | null>
+      openPxshopDialog: () => Promise<string | null>
+      savePxshopDialog: (defaultPath?: string) => Promise<string | null>
+      openPxshopFile: (path: string) => Promise<string>
+      savePxshopFile: (path: string, data: string) => Promise<void>
     }
   }
 }

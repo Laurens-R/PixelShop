@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { useWebGL } from '@/hooks/useWebGL'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
@@ -8,12 +8,51 @@ import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import styles from './Canvas.module.scss'
 
+// ─── Public handle (for save) ─────────────────────────────────────────────────
+
+export interface CanvasHandle {
+  /** Encode a layer's pixel data to a PNG data-URL synchronously. */
+  exportLayerPng: (layerId: string) => string | null
+}
+
+// ─── PNG helpers ──────────────────────────────────────────────────────────────
+
+function encodePng(data: Uint8Array, w: number, h: number): string {
+  const tmp = document.createElement('canvas')
+  tmp.width = w; tmp.height = h
+  const ctx = tmp.getContext('2d')!
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(data.buffer as ArrayBuffer), w, h), 0, 0)
+  return tmp.toDataURL('image/png')
+}
+
+function decodePng(dataUrl: string, w: number, h: number): Promise<Uint8Array> {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const tmp = document.createElement('canvas')
+      tmp.width = w; tmp.height = h
+      const ctx = tmp.getContext('2d')!
+      ctx.drawImage(img, 0, 0)
+      resolve(new Uint8Array(ctx.getImageData(0, 0, w, h).data.buffer))
+    }
+    img.onerror = () => reject(new Error('Failed to decode PNG'))
+    img.src = dataUrl
+  })
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 interface CanvasProps {
   width: number
   height: number
+  /** Per-layer base64 PNG data URLs to populate on mount (used when opening a file). */
+  initialLayerData?: Map<string, string>
 }
 
-export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
+export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
+  { width, height, initialLayerData },
+  ref
+) {
   const { state } = useAppContext()
   const { canvasElRef } = useCanvasContext()
   const { canvasRef, rendererRef, render } = useWebGL({
@@ -21,38 +60,70 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
     pixelHeight: height
   })
 
-  // Map of layerId → WebGLLayer, preserving pixel data across re-renders
   const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
-  // Guard: ensure the one-time layer init never re-runs after first success
   const hasInitializedRef = useRef(false)
+
+  // ── Expose handle for save ───────────────────────────────────────
+  useImperativeHandle(ref, () => ({
+    exportLayerPng: (layerId: string): string | null => {
+      const layer = glLayersRef.current.get(layerId)
+      if (!layer) return null
+      const w = rendererRef.current?.pixelWidth ?? width
+      const h = rendererRef.current?.pixelHeight ?? height
+      return encodePng(layer.data, w, h)
+    }
+  }), [width, height])
 
   // Publish canvas element into shared context
   useEffect(() => {
     canvasElRef.current = canvasRef.current
   })
 
-  // Initialize first layer after renderer mounts — runs once only
+  // Initialize all layers once renderer is ready — runs once per mount
   useEffect(() => {
     if (hasInitializedRef.current) return
     const renderer = rendererRef.current
     if (!renderer) return
-    const firstState = state.layers[0]
-    if (!firstState) return
+    if (!state.layers.length) return
     hasInitializedRef.current = true
-    const layer = renderer.createLayer(firstState.id, firstState.name)
-    const bg = state.canvas.backgroundFill
-    if (bg === 'white') {
-      layer.data.fill(255)
-    } else if (bg === 'black') {
-      for (let i = 0; i < layer.data.length; i += 4) {
-        layer.data[i] = 0; layer.data[i + 1] = 0; layer.data[i + 2] = 0; layer.data[i + 3] = 255
+
+    const init = async (): Promise<void> => {
+      const { pixelWidth: w, pixelHeight: h } = renderer
+      for (let i = 0; i < state.layers.length; i++) {
+        const ls = state.layers[i]
+        const layer = renderer.createLayer(ls.id, ls.name)
+        layer.opacity = ls.opacity
+        layer.visible = ls.visible
+        layer.blendMode = ls.blendMode
+
+        const pngData = initialLayerData?.get(ls.id)
+        if (pngData) {
+          try {
+            const rgba = await decodePng(pngData, w, h)
+            layer.data.set(rgba)
+          } catch (e) {
+            console.error('[Canvas] Failed to load layer PNG:', e)
+          }
+        } else if (i === 0 && !initialLayerData) {
+          // New document — apply background fill to first layer only
+          const bg = state.canvas.backgroundFill
+          if (bg === 'white') {
+            layer.data.fill(255)
+          } else if (bg === 'black') {
+            for (let j = 0; j < layer.data.length; j += 4) {
+              layer.data[j] = 0; layer.data[j + 1] = 0; layer.data[j + 2] = 0; layer.data[j + 3] = 255
+            }
+          }
+        }
+
+        renderer.flushLayer(layer)
+        glLayersRef.current.set(ls.id, layer)
       }
+      render(buildOrderedGLLayers())
     }
-    // transparent: data already initialized to 0
-    renderer.flushLayer(layer)
-    glLayersRef.current.set(firstState.id, layer)
-    render(buildOrderedGLLayers())
+
+    init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendererRef.current])
 
@@ -62,7 +133,6 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
     if (!renderer) return
     const map = glLayersRef.current
 
-    // Create any missing GL layers
     for (const ls of state.layers) {
       if (!map.has(ls.id)) {
         const gl = renderer.createLayer(ls.id, ls.name)
@@ -70,7 +140,6 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
       }
     }
 
-    // Destroy removed GL layers
     const stateIds = new Set(state.layers.map((l) => l.id))
     for (const [id, gl] of map) {
       if (!stateIds.has(id)) {
@@ -79,7 +148,6 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
       }
     }
 
-    // Sync opacity, visibility, blendMode from AppState → WebGL layer
     for (const ls of state.layers) {
       const gl = map.get(ls.id)
       if (!gl) continue
@@ -92,13 +160,11 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.layers])
 
-  // Build ordered GL layer array matching AppState order (bottom → top)
   function buildOrderedGLLayers(): WebGLLayer[] {
     const map = glLayersRef.current
     return state.layers.map((ls) => map.get(ls.id)).filter((l): l is WebGLLayer => !!l)
   }
 
-  // Reset handler state whenever the active tool changes
   useEffect(() => {
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
   }, [state.activeTool])
@@ -109,7 +175,6 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
     const activeId = state.activeLayerId
     const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
     if (!activeLayer) return null
-    // Lock guard: don't draw on locked layers
     const stateMeta = state.layers.find((l) => l.id === activeId)
     if (stateMeta?.locked) return null
     return {
@@ -157,4 +222,5 @@ export function Canvas({ width, height }: CanvasProps): React.JSX.Element {
       </div>
     </div>
   )
-}
+})
+

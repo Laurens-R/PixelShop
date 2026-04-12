@@ -61,9 +61,12 @@ const STATIC_MENUS_TAIL: MenuDef[] = [
 
 interface TopBarProps {
   onNew?: () => void
+  onOpen?: () => void
+  onSave?: () => void
+  onSaveAs?: () => void
 }
 
-export function TopBar({ onNew }: TopBarProps): React.JSX.Element {
+export function TopBar({ onNew, onOpen, onSave, onSaveAs }: TopBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -74,17 +77,17 @@ export function TopBar({ onNew }: TopBarProps): React.JSX.Element {
       label: 'File',
       items: [
         { label: 'New…',       shortcut: 'Ctrl+N',       action: onNew },
-        { label: 'Open…',      shortcut: 'Ctrl+O' },
+        { label: 'Open\u2026',      shortcut: 'Ctrl+O',       action: onOpen },
         { separator: true, label: '' },
-        { label: 'Save',       shortcut: 'Ctrl+S' },
-        { label: 'Save As…',   shortcut: 'Ctrl+Shift+S' },
-        { label: 'Export As…', shortcut: 'Ctrl+E' },
+        { label: 'Save',           shortcut: 'Ctrl+S',       action: onSave },
+        { label: 'Save As\u2026',  shortcut: 'Ctrl+Shift+S', action: onSaveAs },
+        { label: 'Export As\u2026',shortcut: 'Ctrl+E' },
         { separator: true, label: '' },
-        { label: 'Quit',       shortcut: 'Ctrl+Q' }
+        { label: 'Quit',           shortcut: 'Ctrl+Q' }
       ]
     },
     ...STATIC_MENUS_TAIL
-  ], [onNew])
+  ], [onNew, onOpen, onSave, onSaveAs])
 
   useEffect(() => {
     const down = (e: MouseEvent): void => {

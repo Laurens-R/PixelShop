@@ -22,6 +22,7 @@ type AppAction =
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_HISTORY'; payload: { canUndo: boolean; canRedo: boolean } }
   | { type: 'NEW_CANVAS'; payload: { width: number; height: number; backgroundFill: BackgroundFill } }
+  | { type: 'OPEN_FILE'; payload: { width: number; height: number; layers: LayerState[]; activeLayerId: string | null } }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -161,6 +162,23 @@ function appReducer(state: AppState, action: AppAction): AppState {
           width: action.payload.width,
           height: action.payload.height,
           backgroundFill: action.payload.backgroundFill,
+          zoom: 1,
+          panX: 0,
+          panY: 0,
+          key: state.canvas.key + 1
+        },
+        history: { canUndo: false, canRedo: false }
+      }
+
+    case 'OPEN_FILE':
+      return {
+        ...state,
+        layers: action.payload.layers,
+        activeLayerId: action.payload.activeLayerId,
+        canvas: {
+          ...state.canvas,
+          width: action.payload.width,
+          height: action.payload.height,
           zoom: 1,
           panX: 0,
           panY: 0,
