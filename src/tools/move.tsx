@@ -5,74 +5,71 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 function createMoveHandler(): ToolHandler {
-  // State captured at pointer-down, used each pointer-move to rebase from scratch.
   let startX = 0
   let startY = 0
   let lastDx = 0
   let lastDy = 0
+  // For selection move: full pixel copy per-drag
   let originalPixels: Uint8Array | null = null
   let originalMask: Uint8Array | null = null
+  // For whole-layer move: store original offset
+  let originalOffsetX = 0
+  let originalOffsetY = 0
   let isDown = false
 
-  function apply(dx: number, dy: number, ctx: ToolContext): void {
+  function applySelectionMove(dx: number, dy: number, ctx: ToolContext): void {
     const { renderer, layer, layers, render } = ctx
     const w = renderer.pixelWidth
     const h = renderer.pixelHeight
+    const lw = layer.layerWidth
+    const lh = layer.layerHeight
     const src = originalPixels!
     const dst = layer.data
 
-    if (originalMask) {
-      // ── Selection move: clear selected area, paint at offset ──────────────
-      // Step 1: restore original pixels
-      dst.set(src)
-      // Step 2: erase selected pixels from their original position
-      for (let i = 0; i < w * h; i++) {
-        const a = originalMask[i]
+    // Step 1: restore original pixels
+    dst.set(src)
+    // Step 2: erase selected pixels from their original position (in layer-local coords)
+    for (let i = 0; i < w * h; i++) {
+      const a = originalMask![i]
+      if (a === 0) continue
+      const cx = i % w
+      const cy = Math.floor(i / w)
+      const lx = cx - layer.offsetX
+      const ly = cy - layer.offsetY
+      if (lx < 0 || ly < 0 || lx >= lw || ly >= lh) continue
+      const pi = (ly * lw + lx) * 4
+      const f = 1 - a / 255
+      dst[pi]     = Math.round(dst[pi]     * f)
+      dst[pi + 1] = Math.round(dst[pi + 1] * f)
+      dst[pi + 2] = Math.round(dst[pi + 2] * f)
+      dst[pi + 3] = Math.round(dst[pi + 3] * f)
+    }
+    // Step 3: composite selected pixels at the new position (over)
+    for (let sy = 0; sy < h; sy++) {
+      const ty = sy + dy
+      if (ty < 0 || ty >= h) continue
+      for (let sx = 0; sx < w; sx++) {
+        const tx = sx + dx
+        if (tx < 0 || tx >= w) continue
+        const mi = sy * w + sx
+        const a = originalMask![mi]
         if (a === 0) continue
-        const f = 1 - a / 255
-        dst[i * 4]     = Math.round(dst[i * 4]     * f)
-        dst[i * 4 + 1] = Math.round(dst[i * 4 + 1] * f)
-        dst[i * 4 + 2] = Math.round(dst[i * 4 + 2] * f)
-        dst[i * 4 + 3] = Math.round(dst[i * 4 + 3] * f)
-      }
-      // Step 3: composite selected pixels at the new position (over)
-      for (let sy = 0; sy < h; sy++) {
-        const ty = sy + dy
-        if (ty < 0 || ty >= h) continue
-        for (let sx = 0; sx < w; sx++) {
-          const tx = sx + dx
-          if (tx < 0 || tx >= w) continue
-          const mi = sy * w + sx
-          const a = originalMask[mi]
-          if (a === 0) continue
-          const si = mi * 4
-          const di = (ty * w + tx) * 4
-          const srcA = src[si + 3] * a / 255
-          const dstA = dst[di + 3]
-          const outA = srcA + dstA * (1 - srcA / 255)
-          if (outA === 0) continue
-          dst[di]     = Math.round((src[si]     * srcA + dst[di]     * dstA * (1 - srcA / 255)) / outA)
-          dst[di + 1] = Math.round((src[si + 1] * srcA + dst[di + 1] * dstA * (1 - srcA / 255)) / outA)
-          dst[di + 2] = Math.round((src[si + 2] * srcA + dst[di + 2] * dstA * (1 - srcA / 255)) / outA)
-          dst[di + 3] = Math.min(255, Math.round(outA))
-        }
-      }
-    } else {
-      // ── Whole-layer move ──────────────────────────────────────────────────
-      dst.fill(0)
-      for (let sy = 0; sy < h; sy++) {
-        const ty = sy + dy
-        if (ty < 0 || ty >= h) continue
-        for (let sx = 0; sx < w; sx++) {
-          const tx = sx + dx
-          if (tx < 0 || tx >= w) continue
-          const si = (sy * w + sx) * 4
-          const di = (ty * w + tx) * 4
-          dst[di]     = src[si]
-          dst[di + 1] = src[si + 1]
-          dst[di + 2] = src[si + 2]
-          dst[di + 3] = src[si + 3]
-        }
+        const slx = sx - layer.offsetX
+        const sly = sy - layer.offsetY
+        if (slx < 0 || sly < 0 || slx >= lw || sly >= lh) continue
+        const si = (sly * lw + slx) * 4
+        const tlx = tx - layer.offsetX
+        const tly = ty - layer.offsetY
+        if (tlx < 0 || tly < 0 || tlx >= lw || tly >= lh) continue
+        const di = (tly * lw + tlx) * 4
+        const srcA = src[si + 3] * a / 255
+        const dstA = dst[di + 3]
+        const outA = srcA + dstA * (1 - srcA / 255)
+        if (outA === 0) continue
+        dst[di]     = Math.round((src[si]     * srcA + dst[di]     * dstA * (1 - srcA / 255)) / outA)
+        dst[di + 1] = Math.round((src[si + 1] * srcA + dst[di + 1] * dstA * (1 - srcA / 255)) / outA)
+        dst[di + 2] = Math.round((src[si + 2] * srcA + dst[di + 2] * dstA * (1 - srcA / 255)) / outA)
+        dst[di + 3] = Math.min(255, Math.round(outA))
       }
     }
 
@@ -86,35 +83,59 @@ function createMoveHandler(): ToolHandler {
       startY = Math.round(y)
       lastDx = 0
       lastDy = 0
-      originalPixels = ctx.layer.data.slice()
-      originalMask   = selectionStore.mask ? selectionStore.mask.slice() : null
       isDown = true
+
+      if (selectionStore.mask) {
+        // Selection move: pixel-copy approach (selection moves pixels, offset unchanged)
+        originalPixels = ctx.layer.data.slice()
+        originalMask   = selectionStore.mask.slice()
+        originalOffsetX = 0
+        originalOffsetY = 0
+      } else {
+        // Whole-layer move: just update the offset
+        originalPixels = null
+        originalMask   = null
+        originalOffsetX = ctx.layer.offsetX
+        originalOffsetY = ctx.layer.offsetY
+      }
     },
 
     onPointerMove({ x, y }: ToolPointerPos, ctx: ToolContext) {
-      if (!isDown || !originalPixels) return
+      if (!isDown) return
       const dx = Math.round(x) - startX
       const dy = Math.round(y) - startY
       if (dx === lastDx && dy === lastDy) return
       lastDx = dx
       lastDy = dy
-      apply(dx, dy, ctx)
+
+      if (originalPixels) {
+        applySelectionMove(dx, dy, ctx)
+      } else {
+        // Update offset in-place (no pixel data change)
+        ctx.layer.offsetX = originalOffsetX + dx
+        ctx.layer.offsetY = originalOffsetY + dy
+        ctx.render(ctx.layers)
+      }
     },
 
     onPointerUp({ x, y }: ToolPointerPos, ctx: ToolContext) {
-      if (!isDown || !originalPixels) return
+      if (!isDown) return
       isDown = false
       const dx = Math.round(x) - startX
       const dy = Math.round(y) - startY
-      if (dx !== lastDx || dy !== lastDy) {
-        apply(dx, dy, ctx)
+
+      if (originalPixels) {
+        if (dx !== lastDx || dy !== lastDy) applySelectionMove(dx, dy, ctx)
+        if (originalMask && (dx !== 0 || dy !== 0)) selectionStore.translateMask(dx, dy)
+        originalPixels = null
+        originalMask   = null
+      } else {
+        if (dx !== lastDx || dy !== lastDy) {
+          ctx.layer.offsetX = originalOffsetX + dx
+          ctx.layer.offsetY = originalOffsetY + dy
+          ctx.render(ctx.layers)
+        }
       }
-      // Translate the selection mask to its new position
-      if (originalMask && (dx !== 0 || dy !== 0)) {
-        selectionStore.translateMask(dx, dy)
-      }
-      originalPixels = null
-      originalMask   = null
     },
   }
 }

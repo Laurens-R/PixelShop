@@ -138,12 +138,14 @@ function AppContent(): React.JSX.Element {
     }
     const layerPixels = canvasHandleRef.current?.captureAllLayerPixels()
     if (!layerPixels || layerPixels.size === 0) return
+    const layerGeometry = canvasHandleRef.current?.captureAllLayerGeometry() ?? new Map()
     const s = stateRef.current
     historyStore.push({
       id: `hist-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       label,
       timestamp: Date.now(),
       layerPixels,
+      layerGeometry,
       layerState: s.layers,
       activeLayerId: s.activeLayerId,
       canvasWidth: s.canvas.width,
@@ -161,7 +163,7 @@ function AppContent(): React.JSX.Element {
         entry.canvasWidth !== stateRef.current.canvas.width ||
         entry.canvasHeight !== stateRef.current.canvas.height
       ) return
-      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
+      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry)
     }
     return () => { historyStore.onPreview = null }
   }, [])
@@ -177,15 +179,21 @@ function AppContent(): React.JSX.Element {
       if (entry.canvasWidth !== currentW || entry.canvasHeight !== currentH) {
         // The target state has different canvas dimensions — must remount the Canvas.
         const encoded = new Map<string, string>()
-        for (const [id, pixels] of entry.layerPixels) {
+      for (const [id, pixels] of entry.layerPixels) {
+          const geo = entry.layerGeometry?.get(id)
+          const lw = geo?.layerWidth ?? entry.canvasWidth
+          const lh = geo?.layerHeight ?? entry.canvasHeight
           const tmp = document.createElement('canvas')
-          tmp.width = entry.canvasWidth; tmp.height = entry.canvasHeight
+          tmp.width = lw; tmp.height = lh
           const ctx2d = tmp.getContext('2d')!
           ctx2d.putImageData(
-            new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), entry.canvasWidth, entry.canvasHeight),
+            new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), lw, lh),
             0, 0
           )
           encoded.set(id, tmp.toDataURL('image/png'))
+          if (geo) {
+            encoded.set(`${id}:geo`, JSON.stringify(geo))
+          }
         }
         suppressReadyCaptureRef.current = true
         setPendingLayerData(encoded)
@@ -209,7 +217,7 @@ function AppContent(): React.JSX.Element {
         })
       } else {
         // Same canvas size — fast path: swap pixels in-place.
-        canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
+        canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry)
         dispatch({
           type: 'RESTORE_LAYERS',
           payload: {
@@ -279,8 +287,16 @@ function AppContent(): React.JSX.Element {
   const captureActiveLayerData = useCallback((): Map<string, string> => {
     const map = new Map<string, string>()
     for (const layer of state.layers) {
-      const png = canvasHandleRef.current?.exportLayerPng(layer.id)
-      if (png) map.set(layer.id, png)
+      const result = canvasHandleRef.current?.exportLayerPng(layer.id)
+      if (result) {
+        map.set(layer.id, result.png)
+        map.set(`${layer.id}:geo`, JSON.stringify({
+          layerWidth: result.layerWidth,
+          layerHeight: result.layerHeight,
+          offsetX: result.offsetX,
+          offsetY: result.offsetY,
+        }))
+      }
     }
     return map
   }, [state.layers])
@@ -408,12 +424,13 @@ function AppContent(): React.JSX.Element {
       version: number
       canvas: { width: number; height: number; backgroundFill?: BackgroundFill }
       activeLayerId: string | null
-      layers: Array<LayerState & { pngData?: string | null }>
+      layers: Array<LayerState & { pngData?: string | null; layerGeo?: { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number } | null }>
     }
 
     const layerData = new Map<string, string>()
-    const layers: LayerState[] = doc.layers.map(({ pngData, ...meta }) => {
+    const layers: LayerState[] = doc.layers.map(({ pngData, layerGeo, ...meta }) => {
       if (pngData) layerData.set(meta.id, pngData)
+      if (layerGeo) layerData.set(`${meta.id}:geo`, JSON.stringify(layerGeo))
       return meta
     })
     const title = fileTitle(path)
@@ -453,16 +470,20 @@ function AppContent(): React.JSX.Element {
     }
 
     const layerPngs: Record<string, string> = {}
+    const layerGeos: Record<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }> = {}
     for (const layer of state.layers) {
-      const png = canvasHandleRef.current?.exportLayerPng(layer.id)
-      if (png) layerPngs[layer.id] = png
+      const result = canvasHandleRef.current?.exportLayerPng(layer.id)
+      if (result) {
+        layerPngs[layer.id] = result.png
+        layerGeos[layer.id] = { layerWidth: result.layerWidth, layerHeight: result.layerHeight, offsetX: result.offsetX, offsetY: result.offsetY }
+      }
     }
 
     const doc = {
       version: 1,
       canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
-      layers: state.layers.map((l) => ({ ...l, pngData: layerPngs[l.id] ?? null }))
+      layers: state.layers.map((l) => ({ ...l, pngData: layerPngs[l.id] ?? null, layerGeo: layerGeos[l.id] ?? null }))
     }
     await window.api.savePxshopFile(path, JSON.stringify(doc))
 
@@ -579,18 +600,17 @@ function AppContent(): React.JSX.Element {
 
     try {
       // Resize every layer's pixel data and encode to PNG in one pass
-      const layerPixels = handle.captureAllLayerPixels()
       const encoded = new Map<string, string>()
-      for (const [id, pixels] of layerPixels) {
+      for (const layer of stateRef.current.layers) {
+        const pixels = handle.getLayerPixels(layer.id)
+        if (!pixels) continue
         const resized = await resizeFn(pixels, oldW, oldH, newW, newH)
         const tmp = document.createElement('canvas')
         tmp.width = newW; tmp.height = newH
         const ctx2d = tmp.getContext('2d')!
         ctx2d.putImageData(new ImageData(new Uint8ClampedArray(resized.buffer as ArrayBuffer), newW, newH), 0, 0)
-        encoded.set(id, tmp.toDataURL('image/png'))
+        encoded.set(layer.id, tmp.toDataURL('image/png'))
       }
-
-      // Capture pre-op state so the user can undo this resize
       captureHistory('Before Resize Image')
       // Increment canvasKey to trigger Canvas remount with the new dimensions
       const resizeTabId = activeTabId
@@ -626,9 +646,10 @@ function AppContent(): React.JSX.Element {
       : anchorRow === 1 ? Math.round((newH - oldH) / 2)
       : newH - oldH
 
-    const layerPixels = handle.captureAllLayerPixels()
     const encoded = new Map<string, string>()
-    for (const [id, oldPixels] of layerPixels) {
+    for (const layer of stateRef.current.layers) {
+      const oldPixels = handle.getLayerPixels(layer.id)
+      if (!oldPixels) continue
       const tmp = document.createElement('canvas')
       tmp.width = newW; tmp.height = newH
       const ctx2d = tmp.getContext('2d')!
@@ -639,7 +660,7 @@ function AppContent(): React.JSX.Element {
       const oldCtx = oldCvs.getContext('2d')!
       oldCtx.putImageData(new ImageData(new Uint8ClampedArray(oldPixels.buffer as ArrayBuffer), oldW, oldH), 0, 0)
       ctx2d.drawImage(oldCvs, offsetX, offsetY)
-      encoded.set(id, tmp.toDataURL('image/png'))
+      encoded.set(layer.id, tmp.toDataURL('image/png'))
     }
 
     // Capture pre-op state so the user can undo this resize
@@ -670,9 +691,10 @@ function AppContent(): React.JSX.Element {
     const handle = canvasHandleRef.current
     if (!handle) return
 
-    const layerPixels = handle.captureAllLayerPixels()
     const encoded = new Map<string, string>()
-    for (const [id, pixels] of layerPixels) {
+    for (const layer of stateRef.current.layers) {
+      const pixels = handle.getLayerPixels(layer.id)
+      if (!pixels) continue
       const src = document.createElement('canvas')
       src.width = oldW; src.height = oldH
       const srcCtx = src.getContext('2d')!
@@ -684,7 +706,7 @@ function AppContent(): React.JSX.Element {
       dst.width = cropW; dst.height = cropH
       const dstCtx = dst.getContext('2d')!
       dstCtx.drawImage(src, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
-      encoded.set(id, dst.toDataURL('image/png'))
+      encoded.set(layer.id, dst.toDataURL('image/png'))
     }
 
     cropStore.clear()

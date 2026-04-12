@@ -24,7 +24,8 @@ export function bresenham(
   }
 }
 
-/** Convenience: draw a filled line segment on a layer and flush. */
+/** Convenience: draw a filled line segment on a layer and flush.
+ * Coordinates are CANVAS-SPACE; translates to layer-local internally. */
 export function drawLine(
   renderer: WebGLRenderer,
   layer: WebGLLayer,
@@ -37,13 +38,15 @@ export function drawLine(
   b: number,
   a: number
 ): void {
-  bresenham(x0, y0, x1, y1, (x, y) => renderer.drawPixel(layer, x, y, r, g, b, a))
+  bresenham(x0, y0, x1, y1, (x, y) => renderer.drawCanvasPixel(layer, x, y, r, g, b, a))
 }
 
 /**
  * Porter-Duff "over" composite with incremental coverage tracking.
+ * canvasX/canvasY are CANVAS-SPACE coordinates. Translates to layer-local
+ * internally. Silently ignores pixels outside the layer buffer.
  *
- * `touched` is a Map from pixel-key → max effective-alpha already applied.
+ * `touched` is a Map from canvas-pixel-key → max effective-alpha applied.
  * When provided:
  *   - Compute srcA = (a/255) * (opacity/100)
  *   - If srcA <= existing max: skip (pixel is already more fully covered)
@@ -55,8 +58,8 @@ export function drawLine(
 function blendPixelOver(
   renderer: WebGLRenderer,
   layer: WebGLLayer,
-  x: number,
-  y: number,
+  canvasX: number,
+  canvasY: number,
   r: number,
   g: number,
   b: number,
@@ -64,30 +67,32 @@ function blendPixelOver(
   opacity: number, // 0-100, already includes geometric coverage for AA paths
   touched?: Map<number, number>,
 ): void {
-  if (x < 0 || x >= renderer.pixelWidth || y < 0 || y >= renderer.pixelHeight) return
+  const lx = canvasX - layer.offsetX
+  const ly = canvasY - layer.offsetY
+  if (lx < 0 || lx >= layer.layerWidth || ly < 0 || ly >= layer.layerHeight) return
   const srcA = (a / 255) * (opacity / 100)
   if (srcA <= 0) return
 
   let blendA = srcA
   if (touched !== undefined) {
-    const key = y * renderer.pixelWidth + x
+    // Key in canvas-space so it stays stable across layer growth within a stroke
+    const key = canvasY * renderer.pixelWidth + canvasX
     const existingA = touched.get(key) ?? 0
     if (srcA <= existingA) return
-    // Incremental: only blend the portion not yet covered
     blendA = existingA < 1 ? (srcA - existingA) / (1 - existingA) : 0
     if (blendA <= 0) return
     touched.set(key, srcA)
   }
 
-  const [er, eg, eb, ea] = renderer.samplePixel(layer, x, y)
+  const [er, eg, eb, ea] = renderer.samplePixel(layer, lx, ly)
   const dstA = ea / 255
   const outA = blendA + dstA * (1 - blendA)
   if (outA <= 0) {
-    renderer.drawPixel(layer, x, y, 0, 0, 0, 0)
+    renderer.drawPixel(layer, lx, ly, 0, 0, 0, 0)
   } else {
     const dstBlend = dstA * (1 - blendA)
     renderer.drawPixel(
-      layer, x, y,
+      layer, lx, ly,
       Math.round((r * blendA + er * dstBlend) / outA),
       Math.round((g * blendA + eg * dstBlend) / outA),
       Math.round((b * blendA + eb * dstBlend) / outA),
@@ -288,7 +293,8 @@ export function drawAALine(
   })
 }
 
-/** Convenience: erase a filled line segment on a layer and flush. */
+/** Convenience: erase a filled line segment on a layer and flush.
+ * Coordinates are CANVAS-SPACE; translates to layer-local internally. */
 export function eraseLine(
   renderer: WebGLRenderer,
   layer: WebGLLayer,
@@ -297,5 +303,11 @@ export function eraseLine(
   x1: number,
   y1: number
 ): void {
-  bresenham(x0, y0, x1, y1, (x, y) => renderer.erasePixel(layer, x, y))
+  bresenham(x0, y0, x1, y1, (x, y) => {
+    const lx = x - layer.offsetX
+    const ly = y - layer.offsetY
+    if (lx >= 0 && ly >= 0 && lx < layer.layerWidth && ly < layer.layerHeight) {
+      renderer.erasePixel(layer, lx, ly)
+    }
+  })
 }

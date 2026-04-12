@@ -10,6 +10,12 @@ export interface ToolContext {
   layers: WebGLLayer[]
   primaryColor: RGBAColor
   render: (layers: WebGLLayer[]) => void
+  /**
+   * Grow the active layer's buffer if the given canvas-space point (with
+   * optional extra radius) would fall outside it. Call before writing pixels
+   * at canvas coords near the edge.
+   */
+  growLayerToFit: (canvasX: number, canvasY: number, extraRadius?: number) => void
 }
 
 // ─── Pointer position passed to tool handlers ─────────────────────────────────

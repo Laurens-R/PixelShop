@@ -26,11 +26,15 @@ export const IMAGE_FRAG = /* glsl */ `#version 300 es
   precision mediump float;
 
   uniform sampler2D u_image;   // current layer (src)
-  uniform sampler2D u_dst;     // composited result so far (dst)
+  uniform sampler2D u_dst;     // composited result so far (dst), full-canvas UV
   uniform float u_opacity;
   uniform int u_blendMode;
   // 0=normal 1=multiply 2=screen 3=overlay 4=soft-light 5=hard-light
   // 6=darken 7=lighten 8=difference 9=exclusion 10=color-dodge 11=color-burn
+
+  // Layer's rect in canvas UV space: (offsetX/W, offsetY/H, layerW/W, layerH/H)
+  // Used to remap layer-local v_texCoord → canvas UV for sampling u_dst.
+  uniform vec4 u_dstRect;
 
   in vec2 v_texCoord;
   out vec4 fragColor;
@@ -58,9 +62,11 @@ export const IMAGE_FRAG = /* glsl */ `#version 300 es
   void main() {
     vec4 src = texture(u_image, v_texCoord);
     src.a *= u_opacity;
-    if (src.a < 0.0001) { fragColor = texture(u_dst, v_texCoord); return; }
+    // Remap layer-local UV (v_texCoord) to full-canvas UV for sampling u_dst
+    vec2 dstUV = u_dstRect.xy + v_texCoord * u_dstRect.zw;
+    if (src.a < 0.0001) { fragColor = texture(u_dst, dstUV); return; }
 
-    vec4 dst = texture(u_dst, v_texCoord);
+    vec4 dst = texture(u_dst, dstUV);
 
     vec3 s = src.rgb;
     vec3 d = dst.rgb;
@@ -131,6 +137,20 @@ export const BLIT_VERT = /* glsl */ `#version 300 es
   void main() {
     vec2 clipSpace = ((a_position / u_resolution) * 2.0) - 1.0;
     gl_Position = vec4(clipSpace * vec2(1.0, -1.0), 0.0, 1.0);
+    v_texCoord = a_texCoord;
+  }
+` as const
+
+// ─── Vertex shader – blit a texture to an FBO (no Y-flip) ─────────────────────
+
+export const FBO_BLIT_VERT = /* glsl */ `#version 300 es
+  in vec2 a_position;
+  in vec2 a_texCoord;
+  uniform vec2 u_resolution;
+  out vec2 v_texCoord;
+  void main() {
+    vec2 clipSpace = ((a_position / u_resolution) * 2.0) - 1.0;
+    gl_Position = vec4(clipSpace, 0.0, 1.0);
     v_texCoord = a_texCoord;
   }
 ` as const

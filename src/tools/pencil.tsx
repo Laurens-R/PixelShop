@@ -17,9 +17,14 @@ function createPencilHandler(): ToolHandler {
 
   function stamp(
     x0: number, y0: number, x1: number, y1: number,
-    { renderer, layer, layers, primaryColor, render }: ToolContext
+    ctx: ToolContext
   ): void {
+    const { renderer, layer, layers, primaryColor, render, growLayerToFit } = ctx
     const { r, g, b, a } = primaryColor
+    const radius = pencilOptions.size / 2
+    // Grow the layer to cover both endpoints (plus brush radius)
+    growLayerToFit(x0, y0, Math.ceil(radius))
+    if (x1 !== x0 || y1 !== y0) growLayerToFit(x1, y1, Math.ceil(radius))
     drawThickLine(renderer, layer, x0, y0, x1, y1, pencilOptions.size, r, g, b, a, pencilOptions.opacity, touched ?? undefined, pencilOptions.antiAlias)
     renderer.flushLayer(layer)
     render(layers)

@@ -13,27 +13,30 @@ import styles from './Canvas.module.scss'
 // ─── Public handle (for save / export / clipboard) ─────────────────────────
 
 export interface CanvasHandle {
-  /** Encode a layer's pixel data to a PNG data-URL synchronously. */
-  exportLayerPng: (layerId: string) => string | null
+  /** Encode a layer's pixel data to a PNG data-URL synchronously. Returns layer-local PNG + geometry. */
+  exportLayerPng: (layerId: string) => { png: string; layerWidth: number; layerHeight: number; offsetX: number; offsetY: number } | null
   /**
    * Composite all visible layers (in state order) and return the raw RGBA
    * pixel data together with the image dimensions.
    * Returns null when the renderer is not yet initialised.
    */
   exportFlatPixels: () => { data: Uint8Array; width: number; height: number } | null
-  /** Return a copy of a layer's raw RGBA pixel data. */
+  /** Return a copy of a layer's raw RGBA pixel data IN CANVAS-SIZE buffer (pixels outside layer bounds are transparent). */
   getLayerPixels: (layerId: string) => Uint8Array | null
   /**
    * Create a new GL layer, fill it with data, and render.
-   * Call BEFORE dispatching ADD_LAYER so the sync effect is a no-op.
+   * data is canvas-size RGBA. Call BEFORE dispatching ADD_LAYER so the sync effect is a no-op.
+   * offsetX/offsetY/lw/lh let you specify exact layer bounds (for paste from clipboard).
    */
-  prepareNewLayer: (layerId: string, name: string, data: Uint8Array) => void
-  /** Zero out every pixel in a layer that is covered by the selection mask, then flush+render. */
+  prepareNewLayer: (layerId: string, name: string, data: Uint8Array, lw?: number, lh?: number, ox?: number, oy?: number) => void
+  /** Zero out every pixel in a layer that is covered by the selection mask (canvas-space), then flush+render. */
   clearLayerPixels: (layerId: string, mask: Uint8Array) => void
-  /** Snapshot all current layers' raw pixel data for history (returns copies). */
+  /** Snapshot all current layers' raw pixel data + geometry for history. */
   captureAllLayerPixels: () => Map<string, Uint8Array>
-  /** Restore previously snapshotted pixel data and flush+render for each layer. */
-  restoreAllLayerPixels: (data: Map<string, Uint8Array>) => void
+  /** Snapshot per-layer geometry (width/height/offset). */
+  captureAllLayerGeometry: () => Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>
+  /** Restore previously snapshotted pixel data + geometry and flush+render for each layer. */
+  restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>) => void
 }
 
 // ─── PNG helpers ──────────────────────────────────────────────────────────────
@@ -112,13 +115,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   // ── Expose handle for save / export / clipboard ────────────────
   useImperativeHandle(ref, () => ({
-    exportLayerPng: (layerId: string): string | null => {
+    exportLayerPng: (layerId: string) => {
       const renderer = rendererRef.current
       const layer = glLayersRef.current.get(layerId)
       if (!renderer || !layer) return null
-      const w = renderer.pixelWidth
-      const h = renderer.pixelHeight
-      return encodePng(renderer.readLayerPixels(layer), w, h)
+      const png = encodePng(renderer.readLayerPixels(layer), layer.layerWidth, layer.layerHeight)
+      return { png, layerWidth: layer.layerWidth, layerHeight: layer.layerHeight, offsetX: layer.offsetX, offsetY: layer.offsetY }
     },
     exportFlatPixels: (): { data: Uint8Array; width: number; height: number } | null => {
       const renderer = rendererRef.current
@@ -133,16 +135,37 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       const renderer = rendererRef.current
       const layer = glLayersRef.current.get(layerId)
       if (!renderer || !layer) return null
-      return renderer.readLayerPixels(layer)
+      // Return canvas-size buffer with layer placed at its offset
+      const w = renderer.pixelWidth
+      const h = renderer.pixelHeight
+      const result = new Uint8Array(w * h * 4)
+      for (let ly = 0; ly < layer.layerHeight; ly++) {
+        const cy = layer.offsetY + ly
+        if (cy < 0 || cy >= h) continue
+        for (let lx = 0; lx < layer.layerWidth; lx++) {
+          const cx = layer.offsetX + lx
+          if (cx < 0 || cx >= w) continue
+          const si = (ly * layer.layerWidth + lx) * 4
+          const di = (cy * w + cx) * 4
+          result[di]     = layer.data[si]
+          result[di + 1] = layer.data[si + 1]
+          result[di + 2] = layer.data[si + 2]
+          result[di + 3] = layer.data[si + 3]
+        }
+      }
+      return result
     },
-    prepareNewLayer: (layerId: string, name: string, data: Uint8Array): void => {
+    prepareNewLayer: (layerId: string, name: string, data: Uint8Array, lw?: number, lh?: number, ox?: number, oy?: number): void => {
       const renderer = rendererRef.current
       if (!renderer) return
-      const layer = renderer.createLayer(layerId, name)
+      const useW = lw ?? renderer.pixelWidth
+      const useH = lh ?? renderer.pixelHeight
+      const useOx = ox ?? 0
+      const useOy = oy ?? 0
+      const layer = renderer.createLayer(layerId, name, useW, useH, useOx, useOy)
       layer.data.set(data)
       renderer.flushLayer(layer)
       glLayersRef.current.set(layerId, layer)
-      // Render with current layers + new one
       const ordered = [
         ...layersStateRef.current
           .map((l) => glLayersRef.current.get(l.id))
@@ -155,17 +178,23 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       const renderer = rendererRef.current
       const layer = glLayersRef.current.get(layerId)
       if (!renderer || !layer) return
+      const w = renderer.pixelWidth
+      // mask is canvas-size; translate each canvas pixel to layer-local
       for (let i = 0; i < mask.length; i++) {
-        if (mask[i]) {
-          const f = 1 - mask[i] / 255
-          layer.data[i * 4]     = Math.round(layer.data[i * 4]     * f)
-          layer.data[i * 4 + 1] = Math.round(layer.data[i * 4 + 1] * f)
-          layer.data[i * 4 + 2] = Math.round(layer.data[i * 4 + 2] * f)
-          layer.data[i * 4 + 3] = Math.round(layer.data[i * 4 + 3] * f)
-        }
+        if (!mask[i]) continue
+        const cx = i % w
+        const cy = Math.floor(i / w)
+        const lx = cx - layer.offsetX
+        const ly = cy - layer.offsetY
+        if (lx < 0 || ly < 0 || lx >= layer.layerWidth || ly >= layer.layerHeight) continue
+        const pi = (ly * layer.layerWidth + lx) * 4
+        const f = 1 - mask[i] / 255
+        layer.data[pi]     = Math.round(layer.data[pi]     * f)
+        layer.data[pi + 1] = Math.round(layer.data[pi + 1] * f)
+        layer.data[pi + 2] = Math.round(layer.data[pi + 2] * f)
+        layer.data[pi + 3] = Math.round(layer.data[pi + 3] * f)
       }
       renderer.flushLayer(layer)
-      // Use layersStateRef so we get the current layer order, not a stale closure
       const ordered = layersStateRef.current
         .map((l) => glLayersRef.current.get(l.id))
         .filter((l): l is WebGLLayer => !!l)
@@ -179,11 +208,31 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
       return result
     },
-    restoreAllLayerPixels: (data: Map<string, Uint8Array>): void => {
+    captureAllLayerGeometry: (): Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }> => {
+      const result = new Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>()
+      for (const ls of layersStateRef.current) {
+        const layer = glLayersRef.current.get(ls.id)
+        if (layer) result.set(ls.id, { layerWidth: layer.layerWidth, layerHeight: layer.layerHeight, offsetX: layer.offsetX, offsetY: layer.offsetY })
+      }
+      return result
+    },
+    restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>): void => {
       const renderer = rendererRef.current
       if (!renderer) return
       for (const [id, pixels] of data) {
+        const geo = geometry?.get(id)
         let layer = glLayersRef.current.get(id)
+        if (geo) {
+          // Geometry changed: must recreate the GL texture at the right size
+          if (!layer || layer.layerWidth !== geo.layerWidth || layer.layerHeight !== geo.layerHeight) {
+            if (layer) renderer.destroyLayer(layer)
+            layer = renderer.createLayer(id, layer?.name ?? 'Restored', geo.layerWidth, geo.layerHeight, geo.offsetX, geo.offsetY)
+            glLayersRef.current.set(id, layer)
+          } else {
+            layer.offsetX = geo.offsetX
+            layer.offsetY = geo.offsetY
+          }
+        }
         if (!layer) {
           layer = renderer.createLayer(id, 'Restored')
           glLayersRef.current.set(id, layer)
@@ -191,8 +240,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         layer.data.set(pixels)
         renderer.flushLayer(layer)
       }
-      // Render immediately — when only pixels changed (no layer add/remove),
-      // state.layers reference is unchanged so the sync effect won't fire.
       const ordered = layersStateRef.current
         .map((l) => glLayersRef.current.get(l.id))
         .filter((l): l is WebGLLayer => !!l)
@@ -374,24 +421,39 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     hasInitializedRef.current = true
 
     const init = async (): Promise<void> => {
-      const { pixelWidth: w, pixelHeight: h } = renderer
+      const { pixelWidth: cw, pixelHeight: ch } = renderer
       for (let i = 0; i < state.layers.length; i++) {
         const ls = state.layers[i]
-        const layer = renderer.createLayer(ls.id, ls.name)
-        layer.opacity = ls.opacity
-        layer.visible = ls.visible
-        layer.blendMode = ls.blendMode
 
+        let layer
         const pngData = initialLayerData?.get(ls.id)
         if (pngData) {
-          try {
-            const rgba = await decodePng(pngData, w, h)
-            layer.data.set(rgba)
-          } catch (e) {
-            console.error('[Canvas] Failed to load layer PNG:', e)
+          // ── Opening a file: pngData may be layer-local or canvas-size.
+          // We store a JSON-encoded geometry blob alongside or fall back to canvas-size.
+          const geoKey = `${ls.id}:geo`
+          const geoJson = initialLayerData?.get(geoKey)
+          if (geoJson) {
+            const geo = JSON.parse(geoJson) as { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }
+            layer = renderer.createLayer(ls.id, ls.name, geo.layerWidth, geo.layerHeight, geo.offsetX, geo.offsetY)
+            try {
+              const rgba = await decodePng(pngData, geo.layerWidth, geo.layerHeight)
+              layer.data.set(rgba)
+            } catch (e) {
+              console.error('[Canvas] Failed to load layer PNG:', e)
+            }
+          } else {
+            // Legacy / image import: PNG is canvas-sized
+            layer = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+            try {
+              const rgba = await decodePng(pngData, cw, ch)
+              layer.data.set(rgba)
+            } catch (e) {
+              console.error('[Canvas] Failed to load layer PNG:', e)
+            }
           }
         } else if (i === 0 && !initialLayerData) {
-          // New document — apply background fill to first layer only
+          // New document — background layer covers the full canvas
+          layer = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
           const bg = state.canvas.backgroundFill
           if (bg === 'white') {
             layer.data.fill(255)
@@ -400,8 +462,18 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
               layer.data[j] = 0; layer.data[j + 1] = 0; layer.data[j + 2] = 0; layer.data[j + 3] = 255
             }
           }
+        } else {
+          // New blank layer — start at 128×128 centered on the canvas
+          const initW = Math.min(128, cw)
+          const initH = Math.min(128, ch)
+          const ox = Math.round((cw - initW) / 2)
+          const oy = Math.round((ch - initH) / 2)
+          layer = renderer.createLayer(ls.id, ls.name, initW, initH, ox, oy)
         }
 
+        layer.opacity = ls.opacity
+        layer.visible = ls.visible
+        layer.blendMode = ls.blendMode
         renderer.flushLayer(layer)
         glLayersRef.current.set(ls.id, layer)
       }
@@ -424,7 +496,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
     for (const ls of state.layers) {
       if (!map.has(ls.id)) {
-        const gl = renderer.createLayer(ls.id, ls.name)
+        // New layers start at 128×128 centered on the canvas
+        const cw = renderer.pixelWidth
+        const ch = renderer.pixelHeight
+        const initW = Math.min(128, cw)
+        const initH = Math.min(128, ch)
+        const ox = Math.round((cw - initW) / 2)
+        const oy = Math.round((ch - initH) / 2)
+        const gl = renderer.createLayer(ls.id, ls.name, initW, initH, ox, oy)
         map.set(ls.id, gl)
       }
     }
@@ -470,7 +549,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
     if (!activeLayer) return null
     // Only block pixel-modifying tools on locked layers.
-    // Selection tools (select, lasso, magic-wand) must work regardless of locking.
     if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
       if (stateMeta?.locked) return null
@@ -480,7 +558,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       layer: activeLayer,
       layers: buildOrderedGLLayers(),
       primaryColor: state.primaryColor,
-      render
+      render,
+      growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
+        renderer.growLayerToFit(activeLayer, canvasX, canvasY, extraRadius)
+      },
     }
   }
 
