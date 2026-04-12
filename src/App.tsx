@@ -3,6 +3,7 @@ import { AppProvider } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
 import { selectionStore } from '@/store/selectionStore'
 import { clipboardStore } from '@/store/clipboardStore'
+import { historyStore } from '@/store/historyStore'
 import { TopBar } from '@/components/window/TopBar/TopBar'
 import { ToolOptionsBar } from '@/components/window/ToolOptionsBar/ToolOptionsBar'
 import { TabBar } from '@/components/window/TabBar/TabBar'
@@ -55,6 +56,77 @@ const INITIAL_SNAPSHOT: TabSnapshot = {
 function AppContent(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const canvasHandleRef = useRef<CanvasHandle>(null)
+
+  // ── History ─────────────────────────────────────────────────────────────
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const isRestoringRef = useRef(false)
+  const pendingLayerLabelRef = useRef<string | null>(null)
+  const prevLayersRef = useRef(state.layers)
+
+  const captureHistory = useCallback((label: string): void => {
+    if (isRestoringRef.current) return
+    const layerPixels = canvasHandleRef.current?.captureAllLayerPixels()
+    if (!layerPixels || layerPixels.size === 0) return
+    const s = stateRef.current
+    historyStore.push({
+      id: `hist-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      label,
+      timestamp: Date.now(),
+      layerPixels,
+      layerState: s.layers,
+      activeLayerId: s.activeLayerId,
+      canvasWidth: s.canvas.width,
+      canvasHeight: s.canvas.height,
+    })
+  }, [])
+
+  useEffect(() => {
+    historyStore.onPreview = (index: number): void => {
+      const entry = historyStore.entries[index]
+      if (!entry) return
+      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
+    }
+    return () => { historyStore.onPreview = null }
+  }, [])
+
+  useEffect(() => {
+    historyStore.onJumpTo = (index: number): void => {
+      const entry = historyStore.entries[index]
+      if (!entry) return
+      isRestoringRef.current = true
+      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels)
+      dispatch({
+        type: 'RESTORE_LAYERS',
+        payload: {
+          layers: entry.layerState,
+          activeLayerId: entry.activeLayerId,
+        },
+      })
+      historyStore.setCurrent(index)
+      setTimeout(() => { isRestoringRef.current = false }, 200)
+    }
+    return () => { historyStore.onJumpTo = null }
+  }, [dispatch])
+
+  useEffect(() => {
+    if (isRestoringRef.current) {
+      prevLayersRef.current = state.layers
+      isRestoringRef.current = false
+      return
+    }
+    const prev = prevLayersRef.current
+    const curr = state.layers
+    if (prev !== curr) {
+      if (curr.length > prev.length) {
+        captureHistory(pendingLayerLabelRef.current ?? 'New Layer')
+        pendingLayerLabelRef.current = null
+      } else if (curr.length < prev.length) {
+        captureHistory('Delete Layer')
+      }
+      prevLayersRef.current = curr
+    }
+  }, [state.layers, captureHistory])
 
   const [untitledCounter, setUntitledCounter] = useState(1)
   const [showNewImageDialog, setShowNewImageDialog] = useState(false)
@@ -251,30 +323,37 @@ function AppContent(): React.JSX.Element {
     const totalPixels = state.canvas.width * state.canvas.height
     const mask = selectionStore.mask ?? new Uint8Array(totalPixels).fill(1)
     canvasHandleRef.current?.clearLayerPixels(activeId, mask)
-  }, [state.activeLayerId, state.canvas, handleCopy])
+    captureHistory('Cut')
+  }, [state.activeLayerId, state.canvas, handleCopy, captureHistory])
 
   const handlePaste = useCallback((): void => {
     const clip = clipboardStore.current
     if (!clip) return
     const newId = makeTabId()
     canvasHandleRef.current?.prepareNewLayer(newId, 'Paste', clip.data)
+    pendingLayerLabelRef.current = 'Paste'
     dispatch({
       type: 'ADD_LAYER',
       payload: { id: newId, name: 'Paste', visible: true, opacity: 1, locked: false, blendMode: 'normal' }
     })
   }, [dispatch])
 
+  const handleUndo = useCallback((): void => { historyStore.undo() }, [])
+  const handleRedo = useCallback((): void => { historyStore.redo() }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!e.ctrlKey) return
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if (e.key === 'c') { e.preventDefault(); handleCopy() }
+      if (e.key === 'z') { e.preventDefault(); handleUndo() }
+      else if (e.key === 'y') { e.preventDefault(); handleRedo() }
+      else if (e.key === 'c') { e.preventDefault(); handleCopy() }
       else if (e.key === 'x') { e.preventDefault(); handleCut() }
       else if (e.key === 'v') { e.preventDefault(); handlePaste() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleCopy, handleCut, handlePaste])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste])
 
   // ── Export ────────────────────────────────────────────────────────
   const handleExportConfirm = useCallback(async (settings: ExportSettings): Promise<void> => {
@@ -309,6 +388,8 @@ function AppContent(): React.JSX.Element {
         onSave={() => handleSave(false)}
         onSaveAs={() => handleSave(true)}
         onExport={() => setShowExportDialog(true)}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
         onCopy={handleCopy}
         onCut={handleCut}
         onPaste={handlePaste}
@@ -334,6 +415,8 @@ function AppContent(): React.JSX.Element {
             width={state.canvas.width}
             height={state.canvas.height}
             initialLayerData={pendingLayerData ?? undefined}
+            onStrokeEnd={captureHistory}
+            onReady={() => captureHistory('Initial State')}
           />
         </main>
         <RightPanel />

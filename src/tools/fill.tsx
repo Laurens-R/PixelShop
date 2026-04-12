@@ -32,4 +32,5 @@ function FillOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
 export const fillTool: ToolDefinition = {
   createHandler: createFillHandler,
   Options: FillOptions,
+  modifiesPixels: true,
 }

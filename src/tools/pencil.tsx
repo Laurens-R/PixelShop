@@ -91,6 +91,7 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
 export const pencilTool: ToolDefinition = {
   createHandler: createPencilHandler,
   Options: PencilOptions,
+  modifiesPixels: true,
 }
 
 // Expose for reuse by brush (shares the same drawing engine for now)

@@ -1,5 +1,6 @@
 export { Canvas } from './window/Canvas/Canvas'
 export type { CanvasHandle } from './window/Canvas/Canvas'
+export { HistoryPanel } from './panels/History/HistoryPanel'
 export { SliderInput } from './widgets/SliderInput/SliderInput'
 export { ColorPicker } from './panels/ColorPicker/ColorPicker'
 export { LayerPanel } from './panels/LayerPanel/LayerPanel'

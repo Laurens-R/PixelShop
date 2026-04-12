@@ -48,4 +48,5 @@ function EraserOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
 export const eraserTool: ToolDefinition = {
   createHandler: createEraserHandler,
   Options: EraserOptions,
+  modifiesPixels: true,
 }

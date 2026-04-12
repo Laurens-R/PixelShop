@@ -47,4 +47,6 @@ export interface ToolOptionsStyles {
 export interface ToolDefinition {
   createHandler(): ToolHandler
   Options(props: { styles: ToolOptionsStyles }): React.JSX.Element
+  /** True for tools that write pixels; Canvas uses this to trigger history capture. */
+  modifiesPixels?: boolean
 }

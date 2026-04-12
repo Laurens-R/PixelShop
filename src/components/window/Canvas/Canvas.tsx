@@ -29,6 +29,10 @@ export interface CanvasHandle {
   prepareNewLayer: (layerId: string, name: string, data: Uint8Array) => void
   /** Zero out every pixel in a layer that is covered by the selection mask, then flush+render. */
   clearLayerPixels: (layerId: string, mask: Uint8Array) => void
+  /** Snapshot all current layers' raw pixel data for history (returns copies). */
+  captureAllLayerPixels: () => Map<string, Uint8Array>
+  /** Restore previously snapshotted pixel data and flush+render for each layer. */
+  restoreAllLayerPixels: (data: Map<string, Uint8Array>) => void
 }
 
 // ─── PNG helpers ──────────────────────────────────────────────────────────────
@@ -63,10 +67,14 @@ interface CanvasProps {
   height: number
   /** Per-layer base64 PNG data URLs to populate on mount (used when opening a file). */
   initialLayerData?: Map<string, string>
+  /** Called with the tool label after a pixel-modifying stroke completes. */
+  onStrokeEnd?: (label: string) => void
+  /** Called once after the canvas has finished its first initialization render. */
+  onReady?: () => void
 }
 
 export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
-  { width, height, initialLayerData },
+  { width, height, initialLayerData, onStrokeEnd, onReady },
   ref
 ) {
   const { state } = useAppContext()
@@ -85,6 +93,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // up-to-date ordering and visibility without being re-created on every render.
   const layersStateRef = useRef(state.layers)
   layersStateRef.current = state.layers
+  const onStrokeEndRef = useRef(onStrokeEnd)
+  onStrokeEndRef.current = onStrokeEnd
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
 
   // ── Expose handle for save / export / clipboard ────────────────
   useImperativeHandle(ref, () => ({
@@ -139,6 +151,33 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
       renderer.flushLayer(layer)
       // Use layersStateRef so we get the current layer order, not a stale closure
+      const ordered = layersStateRef.current
+        .map((l) => glLayersRef.current.get(l.id))
+        .filter((l): l is WebGLLayer => !!l)
+      render(ordered)
+    },
+    captureAllLayerPixels: (): Map<string, Uint8Array> => {
+      const result = new Map<string, Uint8Array>()
+      for (const ls of layersStateRef.current) {
+        const layer = glLayersRef.current.get(ls.id)
+        if (layer) result.set(ls.id, layer.data.slice())
+      }
+      return result
+    },
+    restoreAllLayerPixels: (data: Map<string, Uint8Array>): void => {
+      const renderer = rendererRef.current
+      if (!renderer) return
+      for (const [id, pixels] of data) {
+        let layer = glLayersRef.current.get(id)
+        if (!layer) {
+          layer = renderer.createLayer(id, 'Restored')
+          glLayersRef.current.set(id, layer)
+        }
+        layer.data.set(pixels)
+        renderer.flushLayer(layer)
+      }
+      // Render immediately — when only pixels changed (no layer add/remove),
+      // state.layers reference is unchanged so the sync effect won't fire.
       const ordered = layersStateRef.current
         .map((l) => glLayersRef.current.get(l.id))
         .filter((l): l is WebGLLayer => !!l)
@@ -263,6 +302,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         glLayersRef.current.set(ls.id, layer)
       }
       render(buildOrderedGLLayers())
+      onReadyRef.current?.()
     }
 
     init()
@@ -344,6 +384,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     onPointerUp: (pos) => {
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onPointerUp(pos, ctx)
+      if (TOOL_REGISTRY[state.activeTool].modifiesPixels && ctx) {
+        const label = state.activeTool.charAt(0).toUpperCase() + state.activeTool.slice(1)
+        onStrokeEndRef.current?.(label)
+      }
     },
   })
 

@@ -1,0 +1,95 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+.container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.list {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.empty {
+  padding: vars.$spacing-3;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  text-align: center;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 3px vars.$spacing-2;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color vars.$transition-fast;
+  white-space: nowrap;
+  overflow: hidden;
+
+  &:hover {
+    background-color: vars.$color-surface-hover;
+  }
+}
+
+// The entry that is currently applied on canvas
+.current {
+  font-weight: 600;
+
+  .icon { color: vars.$color-accent-blue; }
+}
+
+// Entries above currentIndex — the redo chain
+.redo {
+  opacity: 0.45;
+}
+
+// The entry that is highlighted/selected in the list
+.selected {
+  background-color: vars.$color-accent;
+  outline: 1px solid vars.$color-accent-border;
+  outline-offset: -1px;
+}
+
+.icon {
+  width: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: vars.$color-text-muted;
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  flex-shrink: 0;
+  padding: vars.$spacing-2;
+  border-top: 1px solid vars.$color-border;
+}

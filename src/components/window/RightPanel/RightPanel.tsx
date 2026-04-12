@@ -4,17 +4,18 @@ import { ColorPicker } from '@/components/panels/ColorPicker/ColorPicker'
 import { LayerPanel } from '@/components/panels/LayerPanel/LayerPanel'
 import { Navigator } from '@/components/panels/Navigator/Navigator'
 import { SwatchPanel } from '@/components/panels/Swatch/SwatchPanel'
+import { HistoryPanel } from '@/components/panels/History/HistoryPanel'
 import styles from './RightPanel.module.scss'
 
 type ColorTab = 'Color' | 'Swatches' | 'Navigator'
-type LayerTab = 'Layers' | 'Info'
+type LayerTab = 'Layers' | 'History' | 'Info'
 
 export function RightPanel(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
   const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
-  const [layerTabs, setLayerTabs] = useState<LayerTab[]>(['Layers', 'Info'])
+  const [layerTabs, setLayerTabs] = useState<LayerTab[]>(['Layers', 'History', 'Info'])
 
   const colorDragSrc = useRef<number | null>(null)
   const layerDragSrc = useRef<number | null>(null)
@@ -143,6 +144,7 @@ export function RightPanel(): React.JSX.Element {
 
         {layerTab === 'Layers' && (
           <LayerPanel
+
             layers={state.layers}
             activeLayerId={state.activeLayerId ?? undefined}
             onActiveLayerChange={(id) => dispatch({ type: 'SET_ACTIVE_LAYER', payload: id })}
@@ -177,7 +179,10 @@ export function RightPanel(): React.JSX.Element {
             }
           />
         )}
-        {layerTab !== 'Layers' && (
+        {layerTab === 'History' && (
+          <HistoryPanel />
+        )}
+        {layerTab === 'Info' && (
           <div className={styles.placeholder}>{layerTab}</div>
         )}
       </div>

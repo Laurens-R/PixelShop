@@ -12,12 +12,14 @@ interface TopBarProps {
   onSave?: () => void
   onSaveAs?: () => void
   onExport?: () => void
+  onUndo?: () => void
+  onRedo?: () => void
   onCut?: () => void
   onCopy?: () => void
   onPaste?: () => void
 }
 
-export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onCut, onCopy, onPaste }: TopBarProps): React.JSX.Element {
+export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -35,8 +37,8 @@ export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onCut, onCop
     {
       label: 'Edit',
       items: [
-        { label: 'Undo', shortcut: 'Ctrl+Z' },
-        { label: 'Redo', shortcut: 'Ctrl+Y' },
+        { label: 'Undo', shortcut: 'Ctrl+Z', action: onUndo },
+        { label: 'Redo', shortcut: 'Ctrl+Y', action: onRedo },
         { separator: true, label: '' },
         { label: 'Cut',   shortcut: 'Ctrl+X', action: onCut },
         { label: 'Copy',  shortcut: 'Ctrl+C', action: onCopy },
@@ -68,7 +70,7 @@ export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport, onCut, onCop
       label: 'Help',
       items: [{ label: 'About PixelShop' }, { label: 'Keyboard Shortcuts' }]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onCut, onCopy, onPaste])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste])
 
   return (
     <div className={styles.topBar}>

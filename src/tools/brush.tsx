@@ -27,4 +27,5 @@ function BrushOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
 export const brushTool: ToolDefinition = {
   createHandler: createPencilHandler,
   Options: BrushOptions,
+  modifiesPixels: true,
 }
