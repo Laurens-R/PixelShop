@@ -21,6 +21,10 @@ npm run typecheck    # Type-check both main (Node) and renderer (web) processes
 | Electron preload | `electron/preload/` | Exposes safe APIs to renderer |
 | Renderer (React) | `src/` | All UI and drawing logic |
 | Components | `src/components/` | One folder per component; each has `Component.tsx` + `Component.module.scss` |
+| — Panels | `src/components/panels/` | Self-contained data-connected panels: `ColorPicker`, `LayerPanel`, `Navigator`, `SwatchPanel` |
+| — Widgets | `src/components/widgets/` | Reusable, stateless UI primitives: `SliderInput`, `DialogButton` |
+| — Dialogs | `src/components/dialogs/` | Modal overlays: `ModalDialog`, `NewImageDialog`, `ExportDialog`, `ColorPickerDialog` |
+| — Window | `src/components/window/` | Layout chrome wired to app state: `Canvas`, `MenuBar`, `RightPanel`, `StatusBar`, `TabBar`, `Toolbar`, `ToolOptionsBar`, `TopBar` |
 | Tools | `src/tools/` | Each tool exports a handler factory + options UI component |
 | Algorithms | `src/tools/algorithm/` | Graphic manipulation algorithms |
 | **WASM C++ source** | `wasm/src/` | C++17 implementations of CPU-intensive ops |
@@ -40,11 +44,23 @@ npm run typecheck    # Type-check both main (Node) and renderer (web) processes
 - Class names accessed as: `styles.myClass`
 
 ### Components
-- One component per folder under `src/components/`.
-- Folder name = component name (PascalCase).
-- Each folder contains exactly: `ComponentName.tsx` and `ComponentName.module.scss`.
-- Export components from `src/components/index.ts`.
-- Prefer to reuse components as much possible. Create new components when needed.
+
+Components are organized into four sub-categories under `src/components/`:
+
+| Category | Path | Purpose |
+|---|---|---|
+| **Panels** | `panels/` | Self-contained panels that connect directly to `AppContext`. Each reads its own state and dispatches its own actions. |
+| **Widgets** | `widgets/` | Primitive, fully reusable UI elements with no knowledge of app state. Accept only props. |
+| **Dialogs** | `dialogs/` | Modal overlays that wrap `ModalDialog` and compose widgets/panels. |
+| **Window** | `window/` | Top-level layout chrome components. May use other panels and widgets; should not duplicate logic already in a panel. |
+
+**Folder conventions:** One component per folder (PascalCase name). Each folder contains exactly `ComponentName.tsx` and `ComponentName.module.scss`. Export all components from `src/components/index.ts`.
+
+**Component reuse rules:**
+- **Always check `src/components/` before building new UI.** Prefer composing existing panels, widgets, and dialogs over writing new ones.
+- Window components should embed panels (e.g. `RightPanel` hosts `ColorPicker`, `SwatchPanel`, `Navigator`, `LayerPanel`) rather than re-implementing their content inline.
+- Widgets (`SliderInput`, `DialogButton`) must remain stateless and prop-driven so they can be used anywhere.
+- When extracting repeated UI into a new component, place it in the most appropriate sub-category above and export it from `src/components/index.ts`.
 
 ### Tools
 - Each tool supplies a **handler factory** (e.g. `createPencilHandler()`) and a **React options UI** component.

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { SliderInput } from '@/components/SliderInput/SliderInput'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolOptionsStyles } from './types'
 
 function createFillHandler(): ToolHandler {

@@ -10,6 +10,8 @@ declare global {
       savePxshopDialog: (defaultPath?: string) => Promise<string | null>
       openPxshopFile: (path: string) => Promise<string>
       savePxshopFile: (path: string, data: string) => Promise<void>
+      exportBrowse: (ext: string) => Promise<string | null>
+      exportImage: (path: string, base64: string) => Promise<void>
     }
   }
 }

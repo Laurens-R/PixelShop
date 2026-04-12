@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import type { RGBAColor } from '@/types'
-import { DialogButton } from './../DialogButton/DialogButton'
+import { DialogButton } from '../../widgets/DialogButton/DialogButton'
+import { ModalDialog } from '../ModalDialog/ModalDialog'
 import styles from './ColorPickerDialog.module.scss'
 
 interface DialogButtonRowProps {
@@ -305,16 +305,15 @@ export function ColorPickerDialog({
   // Keep hex text in sync with canvas / numeric field changes
   useEffect(() => { setHexText(toHex6(r, g, b)) }, [r, g, b])
 
-  // Escape / Enter keyboard handling
+  // Escape / Enter keyboard handling (Escape delegated to ModalDialog)
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onCancel()
-      if (e.key === 'Enter')  onConfirm({ r, g, b, a: 255 })
+      if (e.key === 'Enter') onConfirm({ r, g, b, a: 255 })
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onCancel, onConfirm, r, g, b])
+  }, [open, onConfirm, r, g, b])
 
   // Redraw gradient canvas
   useEffect(() => {
@@ -421,15 +420,8 @@ export function ColorPickerDialog({
 
   if (!open) return null
 
-  return createPortal(
-    <div
-      className={styles.backdrop}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel() }}
-    >
-      <div className={styles.dialog} role="dialog" aria-modal aria-label={title}>
-
-        {/* Title bar */}
-        <div className={styles.titleBar}>{title}</div>
+  return (
+    <ModalDialog open={open} title={title} width={520} onClose={onCancel}>
 
         {/* Body */}
         <div className={styles.body}>
@@ -604,8 +596,6 @@ export function ColorPickerDialog({
             </div>
           </div>
         </div>
-      </div>
-    </div>,
-    document.body
+    </ModalDialog>
   )
 }

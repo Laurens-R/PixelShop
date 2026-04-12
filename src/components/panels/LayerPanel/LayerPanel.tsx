@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react'
 import type { LayerState, BlendMode } from '@/types'
-import { SliderInput } from '@/components/SliderInput/SliderInput'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './LayerPanel.module.scss'
 
 // ─── Constants ────────────────────────────────────────────────────────────────

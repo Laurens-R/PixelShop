@@ -64,9 +64,10 @@ interface TopBarProps {
   onOpen?: () => void
   onSave?: () => void
   onSaveAs?: () => void
+  onExport?: () => void
 }
 
-export function TopBar({ onNew, onOpen, onSave, onSaveAs }: TopBarProps): React.JSX.Element {
+export function TopBar({ onNew, onOpen, onSave, onSaveAs, onExport }: TopBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const barRef = useRef<HTMLDivElement>(null)
 
@@ -81,13 +82,13 @@ export function TopBar({ onNew, onOpen, onSave, onSaveAs }: TopBarProps): React.
         { separator: true, label: '' },
         { label: 'Save',           shortcut: 'Ctrl+S',       action: onSave },
         { label: 'Save As\u2026',  shortcut: 'Ctrl+Shift+S', action: onSaveAs },
-        { label: 'Export As\u2026',shortcut: 'Ctrl+E' },
+        { label: 'Export As\u2026',shortcut: 'Ctrl+E',       action: onExport },
         { separator: true, label: '' },
         { label: 'Quit',           shortcut: 'Ctrl+Q' }
       ]
     },
     ...STATIC_MENUS_TAIL
-  ], [onNew, onOpen, onSave, onSaveAs])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport])
 
   useEffect(() => {
     const down = (e: MouseEvent): void => {

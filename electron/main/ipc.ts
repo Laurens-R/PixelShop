@@ -46,4 +46,18 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('file:savePxshop', async (_event, path: string, data: string) => {
     await writeFile(path, data, 'utf-8')
   })
+
+  ipcMain.handle('dialog:exportBrowse', async (_event, ext: string) => {
+    const filters =
+      ext === 'png'
+        ? [{ name: 'PNG Image', extensions: ['png'] }]
+        : [{ name: 'JPEG Image', extensions: ['jpg', 'jpeg'] }]
+    const { canceled, filePath } = await dialog.showSaveDialog({ filters })
+    return canceled ? null : filePath
+  })
+
+  ipcMain.handle('file:exportImage', async (_event, path: string, base64: string) => {
+    const buffer = Buffer.from(base64, 'base64')
+    await writeFile(path, buffer)
+  })
 }

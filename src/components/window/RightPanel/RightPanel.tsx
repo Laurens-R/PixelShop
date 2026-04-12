@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import { ColorPicker } from '@/components/ColorPicker/ColorPicker'
-import { LayerPanel } from '@/components/LayerPanel/LayerPanel'
-import { Navigator } from '@/components/Navigator/Navigator'
+import { ColorPicker } from '@/components/panels/ColorPicker/ColorPicker'
+import { LayerPanel } from '@/components/panels/LayerPanel/LayerPanel'
+import { Navigator } from '@/components/panels/Navigator/Navigator'
+import { SwatchPanel } from '@/components/panels/Swatch/SwatchPanel'
 import styles from './RightPanel.module.scss'
 
 type ColorTab = 'Color' | 'Swatches' | 'Navigator'
@@ -98,28 +99,7 @@ export function RightPanel(): React.JSX.Element {
           />
         )}
         {colorTab === 'Swatches' && (
-          <div className={styles.swatchesPanel}>
-            {state.swatches.map((sw, i) => {
-              const hex = `#${[sw.r, sw.g, sw.b].map((v) => v.toString(16).padStart(2, '0')).join('')}`
-              return (
-                <button
-                  key={i}
-                  className={styles.swatchCell}
-                  style={{ background: hex }}
-                  title={hex.toUpperCase()}
-                  aria-label={`Swatch ${hex.toUpperCase()}`}
-                  onClick={() => dispatch({ type: 'SET_PRIMARY_COLOR', payload: sw })}
-                  onContextMenu={(e) => {
-                    e.preventDefault()
-                    dispatch({ type: 'REMOVE_SWATCH', payload: i })
-                  }}
-                />
-              )
-            })}
-            {state.swatches.length === 0 && (
-              <span className={styles.swatchesEmpty}>No swatches yet. Add colors from the Color Picker.</span>
-            )}
-          </div>
+          <SwatchPanel />
         )}
         {colorTab === 'Navigator' && (
           <Navigator />

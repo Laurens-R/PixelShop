@@ -1,0 +1,242 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+.body {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px 14px;
+  gap: 0;
+}
+
+.sectionTitle {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+// ─── Form rows ────────────────────────────────────────────────────────────────
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  margin-bottom: 12px;
+}
+
+.fieldLabel {
+  width: 80px;
+  flex-shrink: 0;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  text-align: right;
+}
+
+// ─── Text input ───────────────────────────────────────────────────────────────
+
+.textInput {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 7px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+
+  &:focus {
+    outline: 1px solid vars.$color-accent-solid;
+    outline-offset: 0;
+  }
+}
+
+// ─── Browse button ────────────────────────────────────────────────────────────
+
+.browseBtn {
+  padding: 4px 10px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text-dim;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background-color vars.$transition-fast, color vars.$transition-fast;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+// ─── Select / dropdown ────────────────────────────────────────────────────────
+
+.select {
+  flex: 1;
+  padding: 4px 7px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237a7a7a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+  cursor: pointer;
+
+  &:focus {
+    outline: 1px solid vars.$color-accent-solid;
+    outline-offset: 0;
+  }
+
+  option {
+    background: vars.$color-surface;
+  }
+}
+
+// ─── Options section ──────────────────────────────────────────────────────────
+
+.optionsDivider {
+  height: 1px;
+  background: vars.$color-border;
+  margin: 8px 0 14px;
+}
+
+.optionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+// ─── Slider row ───────────────────────────────────────────────────────────────
+
+.sliderGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.slider {
+  flex: 1;
+  height: 3px;
+  accent-color: vars.$color-accent-solid;
+  cursor: pointer;
+}
+
+.sliderValue {
+  width: 36px;
+  padding: 4px 5px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  text-align: right;
+
+  &:focus {
+    outline: 1px solid vars.$color-accent-solid;
+    outline-offset: 0;
+  }
+
+  // Hide native spinners
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
+// ─── Color swatch input ───────────────────────────────────────────────────────
+
+.colorInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.colorSwatch {
+  width: 28px;
+  height: 22px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  cursor: pointer;
+  padding: 0;
+  background: none;
+  overflow: hidden;
+
+  // Native colour input — fill the entire button area
+  input[type='color'] {
+    width: 100%;
+    height: 100%;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: none;
+  }
+}
+
+.colorHex {
+  width: 64px;
+  padding: 4px 6px;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-mono;
+
+  &:focus {
+    outline: 1px solid vars.$color-accent-solid;
+    outline-offset: 0;
+  }
+}
+
+.staticNote {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  font-style: italic;
+  padding: 2px 0;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid vars.$color-border;
+  flex-shrink: 0;
+
+  button {
+    width: auto;
+    padding: 5px 20px;
+  }
+}
+
+// ─── Screen-reader only ───────────────────────────────────────────────────────
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

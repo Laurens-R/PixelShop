@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import type { BackgroundFill } from '@/types'
-import { DialogButton } from '../DialogButton/DialogButton'
+import { DialogButton } from '../../widgets/DialogButton/DialogButton'
+import { ModalDialog } from '../ModalDialog/ModalDialog'
 import styles from './NewImageDialog.module.scss'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -104,16 +104,15 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
 
   const isPortrait = width <= height
 
-  // Keyboard: Esc = cancel, Enter = confirm
+  // Enter = confirm (Escape handled by ModalDialog)
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') { e.stopPropagation(); onCancel() }
-      if (e.key === 'Enter')  { e.stopPropagation(); handleConfirm() }
+      if (e.key === 'Enter') { e.stopPropagation(); handleConfirm() }
     }
     document.addEventListener('keydown', onKey, true)
     return () => document.removeEventListener('keydown', onKey, true)
-  }, [open, onCancel, handleConfirm])
+  }, [open, handleConfirm])
 
   // Memoised size string shown in details header
   const sizeLabel = useMemo(
@@ -121,18 +120,8 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
     [width, height]
   )
 
-  if (!open) return null
-
-  return createPortal(
-    <div
-      className={styles.backdrop}
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel() }}
-      role="presentation"
-    >
-      <div className={styles.dialog} role="dialog" aria-modal="true" aria-label="New Document">
-
-        {/* ── Title bar ────────────────────────────────────────────── */}
-        <div className={styles.titleBar}>New Document</div>
+  return (
+    <ModalDialog open={open} title="New Document" width={560} onClose={onCancel}>
 
         {/* ── Body ─────────────────────────────────────────────────── */}
         <div className={styles.body}>
@@ -284,8 +273,6 @@ export function NewImageDialog({ open, onConfirm, onCancel }: NewImageDialogProp
           <DialogButton onClick={handleConfirm} primary>Create</DialogButton>
         </div>
 
-      </div>
-    </div>,
-    document.body
+    </ModalDialog>
   )
 }

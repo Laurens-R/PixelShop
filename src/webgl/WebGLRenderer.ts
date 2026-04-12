@@ -265,6 +265,57 @@ export class WebGLRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
 
+  // ─── Flatten / export ──────────────────────────────────────────────────────
+
+  /**
+   * Composite `layers` without the checkerboard and return the raw RGBA pixels
+   * (top-row-first, suitable for ImageData / canvas export).
+   *
+   * This runs the same ping-pong compositing used by `render()` but writes
+   * into the existing framebuffers and reads back via `readPixels`.  WebGL
+   * stores rows bottom-up, so the result is flipped before returning.
+   */
+  readFlattenedPixels(layers: WebGLLayer[]): Uint8Array {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb0)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb1)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    let srcFb = this.fb1; let srcTex = this.fbTex1
+    let dstFb = this.fb0; let dstTex = this.fbTex0
+
+    for (const layer of layers) {
+      if (!layer.visible || layer.opacity === 0) continue
+      this.compositeLayer(layer, srcTex, dstFb, w, h)
+      ;[srcFb, dstFb] = [dstFb, srcFb]
+      ;[srcTex, dstTex] = [dstTex, srcTex]
+    }
+
+    // Read back from the framebuffer that holds the final composite.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, srcFb)
+    const pixels = new Uint8Array(w * h * 4)
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+
+    // WebGL rows are stored bottom-up — flip vertically.
+    const rowBytes = w * 4
+    const tmp = new Uint8Array(rowBytes)
+    for (let y = 0; y < Math.floor(h / 2); y++) {
+      const topOff = y * rowBytes
+      const botOff = (h - 1 - y) * rowBytes
+      tmp.set(pixels.subarray(topOff, topOff + rowBytes))
+      pixels.copyWithin(topOff, botOff, botOff + rowBytes)
+      pixels.set(tmp, botOff)
+    }
+
+    return pixels
+  }
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   resize(_canvasWidth: number, _canvasHeight: number): void {}

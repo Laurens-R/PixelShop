@@ -24,12 +24,13 @@
   gap: 6px;
   height: 100%;
   padding: 0 8px 0 10px;
-  background: vars.$color-bg;
+  background: vars.$color-surface;
   border-right: 1px solid vars.$color-border;
   border-radius: 4px 4px 0 0;
-  cursor: default;
+  cursor: pointer;
   position: relative;
   max-width: 300px;
+  min-width: 80px;
 
   &::before {
     content: '';
@@ -38,7 +39,28 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: vars.$color-text-dim;
+    background: transparent;
+  }
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}
+
+.tabActive {
+  background: vars.$color-bg;
+  cursor: default;
+
+  &::before {
+    background: vars.$color-accent-solid;
+  }
+
+  &:hover {
+    background: vars.$color-bg;
+  }
+
+  .tabName {
+    color: vars.$color-text;
   }
 }
 

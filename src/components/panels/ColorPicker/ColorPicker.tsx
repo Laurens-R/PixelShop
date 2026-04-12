@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState, useId } from 'react'
 import type { RGBAColor } from '@/types'
-import { SliderInput } from '@/components/SliderInput/SliderInput'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './ColorPicker.module.scss'
 
 // ─── Color math ───────────────────────────────────────────────────────────────

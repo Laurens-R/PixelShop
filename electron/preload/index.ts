@@ -9,7 +9,11 @@ const api = {
     ipcRenderer.invoke('dialog:savePxshop', defaultPath),
   openPxshopFile: (path: string): Promise<string> => ipcRenderer.invoke('file:openPxshop', path),
   savePxshopFile: (path: string, data: string): Promise<void> =>
-    ipcRenderer.invoke('file:savePxshop', path, data)
+    ipcRenderer.invoke('file:savePxshop', path, data),
+  exportBrowse: (ext: string): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:exportBrowse', ext),
+  exportImage: (path: string, base64: string): Promise<void> =>
+    ipcRenderer.invoke('file:exportImage', path, base64)
 }
 
 if (process.contextIsolated) {

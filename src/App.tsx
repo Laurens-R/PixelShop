@@ -1,31 +1,210 @@
-import React, { useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { AppProvider } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
-import { TopBar } from '@/components/TopBar/TopBar'
-import { ToolOptionsBar } from '@/components/ToolOptionsBar/ToolOptionsBar'
-import { TabBar } from '@/components/TabBar/TabBar'
-import { Toolbar } from '@/components/Toolbar/Toolbar'
-import { Canvas } from '@/components/Canvas/Canvas'
-import type { CanvasHandle } from '@/components/Canvas/Canvas'
-import { RightPanel } from '@/components/RightPanel/RightPanel'
-import { StatusBar } from '@/components/StatusBar/StatusBar'
-import { NewImageDialog } from '@/components/NewImageDialog/NewImageDialog'
+import { TopBar } from '@/components/window/TopBar/TopBar'
+import { ToolOptionsBar } from '@/components/window/ToolOptionsBar/ToolOptionsBar'
+import { TabBar } from '@/components/window/TabBar/TabBar'
+import type { TabInfo } from '@/components/window/TabBar/TabBar'
+import { Toolbar } from '@/components/window/Toolbar/Toolbar'
+import { Canvas } from '@/components/window/Canvas/Canvas'
+import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import { RightPanel } from '@/components/window/RightPanel/RightPanel'
+import { StatusBar } from '@/components/window/StatusBar/StatusBar'
+import { NewImageDialog } from '@/components/dialogs/NewImageDialog/NewImageDialog'
+import { ExportDialog } from '@/components/dialogs/ExportDialog/ExportDialog'
+import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
 import { useAppContext } from '@/store/AppContext'
-import type { LayerState } from '@/types'
+import type { LayerState, BackgroundFill } from '@/types'
+import { exportPng } from '@/export/exportPng'
+import { exportJpeg } from '@/export/exportJpeg'
 import styles from './App.module.scss'
+
+// ─── Tab types ────────────────────────────────────────────────────────────────
+
+interface TabSnapshot {
+  canvasWidth: number
+  canvasHeight: number
+  backgroundFill: BackgroundFill
+  layers: LayerState[]
+  activeLayerId: string | null
+  zoom: number
+}
+
+interface TabRecord {
+  id: string
+  title: string
+  filePath: string | null
+  snapshot: TabSnapshot
+  /** Pixel data for each layer — null while tab is active (data lives in WebGL) */
+  savedLayerData: Map<string, string> | null
+}
+
+function makeTabId(): string { return `tab-${Date.now()}-${Math.random().toString(36).slice(2)}` }
+function fileTitle(p: string): string { return p.split(/[\\/]/).pop() ?? 'Untitled' }
+
+const INITIAL_SNAPSHOT: TabSnapshot = {
+  canvasWidth: 512, canvasHeight: 512, backgroundFill: 'white',
+  layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
+  activeLayerId: 'layer-0', zoom: 1
+}
+
+// ─── AppContent ───────────────────────────────────────────────────────────────
 
 function AppContent(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
-  const [showNewImageDialog, setShowNewImageDialog] = useState(false)
   const canvasHandleRef = useRef<CanvasHandle>(null)
-  const [currentFilePath, setCurrentFilePath] = useState<string | null>(null)
+
+  const [untitledCounter, setUntitledCounter] = useState(1)
+  const [showNewImageDialog, setShowNewImageDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
   const [pendingLayerData, setPendingLayerData] = useState<Map<string, string> | null>(null)
 
+  const initialTabId = useRef(makeTabId()).current
+  const [tabs, setTabs] = useState<TabRecord[]>([{
+    id: initialTabId,
+    title: 'Untitled-1',
+    filePath: null,
+    snapshot: INITIAL_SNAPSHOT,
+    savedLayerData: null,
+  }])
+  const [activeTabId, setActiveTabId] = useState(initialTabId)
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  const captureActiveSnapshot = useCallback((): TabSnapshot => ({
+    canvasWidth: state.canvas.width,
+    canvasHeight: state.canvas.height,
+    backgroundFill: state.canvas.backgroundFill,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
+    zoom: state.canvas.zoom,
+  }), [state])
+
+  const captureActiveLayerData = useCallback((): Map<string, string> => {
+    const map = new Map<string, string>()
+    for (const layer of state.layers) {
+      const png = canvasHandleRef.current?.exportLayerPng(layer.id)
+      if (png) map.set(layer.id, png)
+    }
+    return map
+  }, [state.layers])
+
+  // ── Switch tab ────────────────────────────────────────────────────
+  const switchToTab = useCallback((toId: string, tabs_: TabRecord[]): void => {
+    const toTab = tabs_.find(t => t.id === toId)
+    if (!toTab) return
+    const data = toTab.savedLayerData
+    setPendingLayerData(data)
+    setActiveTabId(toId)
+    dispatch({
+      type: 'RESTORE_TAB',
+      payload: {
+        width: toTab.snapshot.canvasWidth,
+        height: toTab.snapshot.canvasHeight,
+        backgroundFill: toTab.snapshot.backgroundFill,
+        layers: toTab.snapshot.layers,
+        activeLayerId: toTab.snapshot.activeLayerId,
+        zoom: toTab.snapshot.zoom,
+      }
+    })
+  }, [dispatch])
+
+  const handleSwitchTab = useCallback((toId: string): void => {
+    if (toId === activeTabId) return
+    const snapshot = captureActiveSnapshot()
+    const layerData = captureActiveLayerData()
+    const updated = tabs.map(t =>
+      t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData } : t
+    )
+    setTabs(updated)
+    switchToTab(toId, updated)
+  }, [activeTabId, tabs, captureActiveSnapshot, captureActiveLayerData, switchToTab])
+
+  // ── Close tab ─────────────────────────────────────────────────────
+  const handleCloseTab = useCallback((tabId: string): void => {
+    if (tabs.length === 1) return // never close the last tab
+    const idx = tabs.findIndex(t => t.id === tabId)
+    const next = tabs.filter(t => t.id !== tabId)
+    setTabs(next)
+    if (tabId === activeTabId) {
+      const fallback = next[Math.min(idx, next.length - 1)]
+      switchToTab(fallback.id, next)
+    }
+  }, [tabs, activeTabId, switchToTab])
+
+  // ── New ───────────────────────────────────────────────────────────
+  const handleNewConfirm = useCallback(({ width, height, backgroundFill }: { width: number; height: number; backgroundFill: BackgroundFill }): void => {
+    const snapshot = captureActiveSnapshot()
+    const layerData = captureActiveLayerData()
+    const n = untitledCounter
+    setUntitledCounter(n + 1)
+    const newId = makeTabId()
+    const newSnapshot: TabSnapshot = {
+      canvasWidth: width, canvasHeight: height, backgroundFill,
+      layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
+      activeLayerId: 'layer-0', zoom: 1,
+    }
+    const updated: TabRecord[] = [
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: layerData } : t),
+      { id: newId, title: `Untitled-${n + 1}`, filePath: null, snapshot: newSnapshot, savedLayerData: null }
+    ]
+    setTabs(updated)
+    setActiveTabId(newId)
+    setPendingLayerData(null)
+    dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
+    setShowNewImageDialog(false)
+  }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, captureActiveLayerData, dispatch])
+
+  // ── Open ──────────────────────────────────────────────────────────
+  const handleOpen = useCallback(async (): Promise<void> => {
+    const path = await window.api.openPxshopDialog()
+    if (!path) return
+
+    // Already open? Just switch.
+    const existing = tabs.find(t => t.filePath === path)
+    if (existing) { handleSwitchTab(existing.id); return }
+
+    const json = await window.api.openPxshopFile(path)
+    const doc = JSON.parse(json) as {
+      version: number
+      canvas: { width: number; height: number; backgroundFill?: BackgroundFill }
+      activeLayerId: string | null
+      layers: Array<LayerState & { pngData?: string | null }>
+    }
+
+    const layerData = new Map<string, string>()
+    const layers: LayerState[] = doc.layers.map(({ pngData, ...meta }) => {
+      if (pngData) layerData.set(meta.id, pngData)
+      return meta
+    })
+    const title = fileTitle(path)
+    const bg = doc.canvas.backgroundFill ?? 'transparent'
+    const newSnapshot: TabSnapshot = {
+      canvasWidth: doc.canvas.width, canvasHeight: doc.canvas.height, backgroundFill: bg,
+      layers, activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null, zoom: 1,
+    }
+
+    const snapshot = captureActiveSnapshot()
+    const currentLayerData = captureActiveLayerData()
+    const newId = makeTabId()
+    const updated: TabRecord[] = [
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedLayerData: currentLayerData } : t),
+      { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: null }
+    ]
+    setTabs(updated)
+    setActiveTabId(newId)
+    setPendingLayerData(layerData)
+    dispatch({
+      type: 'RESTORE_TAB',
+      payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 }
+    })
+  }, [tabs, activeTabId, captureActiveSnapshot, captureActiveLayerData, handleSwitchTab, dispatch])
+
   // ── Save ──────────────────────────────────────────────────────────
-  const handleSave = async (saveAs = false): Promise<void> => {
-    let path = saveAs ? null : currentFilePath
+  const handleSave = useCallback(async (saveAs = false): Promise<void> => {
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    let path = saveAs ? null : (activeTab?.filePath ?? null)
     if (!path) {
-      path = await window.api.savePxshopDialog(currentFilePath ?? undefined)
+      path = await window.api.savePxshopDialog(activeTab?.filePath ?? undefined)
       if (!path) return
     }
 
@@ -37,68 +216,64 @@ function AppContent(): React.JSX.Element {
 
     const doc = {
       version: 1,
-      canvas: { width: state.canvas.width, height: state.canvas.height },
+      canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
       layers: state.layers.map((l) => ({ ...l, pngData: layerPngs[l.id] ?? null }))
     }
-
     await window.api.savePxshopFile(path, JSON.stringify(doc))
-    setCurrentFilePath(path)
-  }
 
-  // ── Open ──────────────────────────────────────────────────────────
-  const handleOpen = async (): Promise<void> => {
-    const path = await window.api.openPxshopDialog()
-    if (!path) return
+    const title = fileTitle(path)
+    setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, filePath: path, title } : t))
+  }, [tabs, activeTabId, state])
 
-    const json = await window.api.openPxshopFile(path)
-    const doc = JSON.parse(json) as {
-      version: number
-      canvas: { width: number; height: number }
-      activeLayerId: string | null
-      layers: Array<LayerState & { pngData?: string | null }>
+  // ── Export ────────────────────────────────────────────────────────
+  const handleExportConfirm = useCallback(async (settings: ExportSettings): Promise<void> => {
+    setShowExportDialog(false)
+    const flat = canvasHandleRef.current?.exportFlatPixels()
+    if (!flat) return
+    const { data, width, height } = flat
+
+    let dataUrl: string
+    if (settings.format === 'png') {
+      dataUrl = exportPng(data, width, height)
+    } else {
+      dataUrl = exportJpeg(data, width, height, {
+        quality: settings.jpegQuality,
+        background: settings.jpegBackground,
+      })
     }
 
-    const layerData = new Map<string, string>()
-    const layers: LayerState[] = doc.layers.map(({ pngData, ...meta }) => {
-      if (pngData) layerData.set(meta.id, pngData)
-      return meta
-    })
+    // Strip the data URL prefix to get the raw base64 payload.
+    const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '')
+    await window.api.exportImage(settings.filePath, base64)
+  }, [])
 
-    setPendingLayerData(layerData)
-    dispatch({
-      type: 'OPEN_FILE',
-      payload: {
-        width: doc.canvas.width,
-        height: doc.canvas.height,
-        layers,
-        activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null
-      }
-    })
-    setCurrentFilePath(path)
-  }
+  // ── Tab info for TabBar ───────────────────────────────────────────
+  const tabInfos: TabInfo[] = tabs.map(t => ({ id: t.id, title: t.title }))
 
   return (
     <div className={styles.app}>
-      {/* ── Chrome rows ───────────────────────────────────────────────── */}
       <TopBar
         onNew={() => setShowNewImageDialog(true)}
         onOpen={handleOpen}
         onSave={() => handleSave(false)}
         onSaveAs={() => handleSave(true)}
+        onExport={() => setShowExportDialog(true)}
       />
       <ToolOptionsBar />
-      <TabBar />
+      <TabBar
+        tabs={tabInfos}
+        activeTabId={activeTabId}
+        activeZoom={state.canvas.zoom}
+        onSwitch={handleSwitchTab}
+        onClose={handleCloseTab}
+      />
 
-      {/* ── Main workspace ────────────────────────────────────────────── */}
       <div className={styles.workspace}>
-        {/* Left: tools */}
         <Toolbar
           activeTool={state.activeTool}
           onToolChange={(tool) => dispatch({ type: 'SET_TOOL', payload: tool })}
         />
-
-        {/* Center: canvas */}
         <main className={styles.canvasArea}>
           <Canvas
             key={state.canvas.key}
@@ -108,23 +283,21 @@ function AppContent(): React.JSX.Element {
             initialLayerData={pendingLayerData ?? undefined}
           />
         </main>
-
-        {/* Right: color + layers */}
         <RightPanel />
       </div>
 
-      {/* ── Status bar ────────────────────────────────────────────────── */}
       <StatusBar />
 
-      {/* ── Dialogs ─────────────────────────────────────────────────── */}
       <NewImageDialog
         open={showNewImageDialog}
         onCancel={() => setShowNewImageDialog(false)}
-        onConfirm={({ width, height, backgroundFill }) => {
-          setPendingLayerData(null)
-          dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
-          setShowNewImageDialog(false)
-        }}
+        onConfirm={handleNewConfirm}
+      />
+
+      <ExportDialog
+        open={showExportDialog}
+        onCancel={() => setShowExportDialog(false)}
+        onConfirm={handleExportConfirm}
       />
     </div>
   )

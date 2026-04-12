@@ -8,11 +8,17 @@ import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import styles from './Canvas.module.scss'
 
-// ─── Public handle (for save) ─────────────────────────────────────────────────
+// ─── Public handle (for save / export) ──────────────────────────────────────
 
 export interface CanvasHandle {
   /** Encode a layer's pixel data to a PNG data-URL synchronously. */
   exportLayerPng: (layerId: string) => string | null
+  /**
+   * Composite all visible layers (in state order) and return the raw RGBA
+   * pixel data together with the image dimensions.
+   * Returns null when the renderer is not yet initialised.
+   */
+  exportFlatPixels: () => { data: Uint8Array; width: number; height: number } | null
 }
 
 // ─── PNG helpers ──────────────────────────────────────────────────────────────
@@ -64,7 +70,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
   const hasInitializedRef = useRef(false)
 
-  // ── Expose handle for save ───────────────────────────────────────
+  // Keep a ref to the current layer list so the imperative handle can access
+  // up-to-date ordering and visibility without being re-created on every render.
+  const layersStateRef = useRef(state.layers)
+  layersStateRef.current = state.layers
+
+  // ── Expose handle for save / export ─────────────────────────────
   useImperativeHandle(ref, () => ({
     exportLayerPng: (layerId: string): string | null => {
       const layer = glLayersRef.current.get(layerId)
@@ -72,6 +83,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       const w = rendererRef.current?.pixelWidth ?? width
       const h = rendererRef.current?.pixelHeight ?? height
       return encodePng(layer.data, w, h)
+    },
+    exportFlatPixels: (): { data: Uint8Array; width: number; height: number } | null => {
+      const renderer = rendererRef.current
+      if (!renderer) return null
+      const glLayers = layersStateRef.current
+        .map((l) => glLayersRef.current.get(l.id))
+        .filter((l): l is WebGLLayer => l !== undefined)
+      const data = renderer.readFlattenedPixels(glLayers)
+      return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
     }
   }), [width, height])
 

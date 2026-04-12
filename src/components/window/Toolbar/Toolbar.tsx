@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import type { Tool, RGBAColor } from '@/types'
 import { useAppContext } from '@/store/AppContext'
-import { ColorPickerDialog } from '@/components/ColorPickerDialog/ColorPickerDialog'
+import { ColorPickerDialog } from '@/components/dialogs/ColorPickerDialog/ColorPickerDialog'
 import styles from './Toolbar.module.scss'
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────

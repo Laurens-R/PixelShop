@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { createPencilHandler } from './pencil'
-import { SliderInput } from '@/components/SliderInput/SliderInput'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolOptionsStyles } from './types'
 
 // Brush shares pencil's Bresenham engine for now.
