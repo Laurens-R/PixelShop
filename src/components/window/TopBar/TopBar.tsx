@@ -21,9 +21,20 @@ interface TopBarProps {
   onDelete?: () => void
   onResizeImage?: () => void
   onResizeCanvas?: () => void
+  onZoomIn?: () => void
+  onZoomOut?: () => void
+  onFitToWindow?: () => void
+  onToggleGrid?: () => void
+  showGrid?: boolean
+  onNewLayer?: () => void
+  onDuplicateLayer?: () => void
+  onDeleteLayer?: () => void
+  onMergeDown?: () => void
+  onMergeVisible?: () => void
+  onFlattenImage?: () => void
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -56,29 +67,30 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
     {
       label: 'View',
       items: [
-        { label: 'Zoom In', shortcut: 'Ctrl+=' },
-        { label: 'Zoom Out', shortcut: 'Ctrl+-' },
-        { label: 'Fit to Window', shortcut: 'Ctrl+0' },
+        { label: 'Zoom In',       shortcut: 'Ctrl+=', action: onZoomIn },
+        { label: 'Zoom Out',      shortcut: 'Ctrl+-', action: onZoomOut },
+        { label: 'Fit to Window', shortcut: 'Ctrl+0', action: onFitToWindow },
         { separator: true, label: '' },
-        { label: 'Show Grid', shortcut: 'Ctrl+G' }
+        { label: 'Show Grid', shortcut: 'Ctrl+G', action: onToggleGrid, checked: showGrid }
       ]
     },
     {
       label: 'Layer',
       items: [
-        { label: 'New Layer', shortcut: 'Ctrl+Shift+N' },
-        { label: 'Duplicate Layer' },
-        { label: 'Delete Layer' },
+        { label: 'New Layer',       shortcut: 'Ctrl+Shift+N', action: onNewLayer },
+        { label: 'Duplicate Layer',                           action: onDuplicateLayer },
+        { label: 'Delete Layer',                              action: onDeleteLayer },
         { separator: true, label: '' },
-        { label: 'Merge Down' },
-        { label: 'Flatten Image' }
+        { label: 'Merge Down',    action: onMergeDown },
+        { label: 'Merge Visible', action: onMergeVisible },
+        { label: 'Flatten Image', action: onFlattenImage },
       ]
     },
     {
       label: 'Help',
       items: [{ label: 'About PixelShop' }, { label: 'Keyboard Shortcuts' }]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage])
 
   return (
     <div className={styles.topBar}>

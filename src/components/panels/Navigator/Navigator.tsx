@@ -36,7 +36,7 @@ export function Navigator(): React.JSX.Element {
   // ─── Viewport rect via bounding-rect intersection ────────────────
   const getViewportRect = useCallback((): React.CSSProperties => {
     const canvas = canvasElRef.current
-    const container = document.querySelector<HTMLElement>('[data-canvas-viewport]')
+    const container = document.querySelector<HTMLElement>('[data-active-viewport]')
     if (!canvas || !container) return { display: 'none' }
 
     const cr = canvas.getBoundingClientRect()   // canvas position on screen
@@ -95,7 +95,7 @@ export function Navigator(): React.JSX.Element {
   const [viewRect, setViewRect] = useState<React.CSSProperties>({ display: 'none' })
   useEffect(() => {
     // Keep containerRef in sync for the click-to-pan handler
-    const el = document.querySelector<HTMLDivElement>('[data-canvas-viewport]')
+    const el = document.querySelector<HTMLDivElement>('[data-active-viewport]')
     containerRef.current = el
   }, [])
 
@@ -108,7 +108,7 @@ export function Navigator(): React.JSX.Element {
     const ny = (e.clientY - thumbRect.top)  / thumbRect.height
 
     const canvas = canvasElRef.current
-    const container = document.querySelector<HTMLDivElement>('[data-canvas-viewport]')
+    const container = document.querySelector<HTMLDivElement>('[data-active-viewport]')
     if (!canvas || !container) return
 
     // Screen position of the target point on the canvas

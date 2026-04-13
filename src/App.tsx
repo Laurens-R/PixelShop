@@ -587,6 +587,213 @@ function AppContent(): React.JSX.Element {
   const handleUndo = useCallback((): void => { historyStore.undo() }, [])
   const handleRedo = useCallback((): void => { historyStore.redo() }, [])
 
+  // ── Merge helpers ──────────────────────────────────────────────────────────
+  // All merge functions read from stateRef.current so they never have stale closures.
+
+  function compositeLayers(layerList: LayerState[]): Uint8Array {
+    const { width, height } = stateRef.current.canvas
+
+    // Blend mode functions operating on [0,1] channel values (matching the GLSL shader)
+    type V3 = [number, number, number]
+    const blendNormal    = (_s: V3, _d: V3): V3 => _s
+    const blendMultiply  = (s: V3, d: V3): V3 => [s[0]*d[0], s[1]*d[1], s[2]*d[2]]
+    const blendScreen    = (s: V3, d: V3): V3 => [s[0]+d[0]-s[0]*d[0], s[1]+d[1]-s[1]*d[1], s[2]+d[2]-s[2]*d[2]]
+    const blendOverlay   = (s: V3, d: V3): V3 => d.map((dc, i) => dc < 0.5 ? 2*s[i]*dc : 1-2*(1-s[i])*(1-dc)) as V3
+    const blendSoftLight = (s: V3, d: V3): V3 => d.map((dc, i) => {
+      const sc = s[i]; const q = sc < 0.5 ? dc : Math.sqrt(dc)
+      return sc < 0.5 ? dc - (1-2*sc)*dc*(1-dc) : dc + (2*sc-1)*(q-dc)
+    }) as V3
+    const blendHardLight = (s: V3, d: V3): V3 => s.map((sc, i) => sc < 0.5 ? 2*sc*d[i] : 1-2*(1-sc)*(1-d[i])) as V3
+    const blendDarken    = (s: V3, d: V3): V3 => [Math.min(s[0],d[0]), Math.min(s[1],d[1]), Math.min(s[2],d[2])]
+    const blendLighten   = (s: V3, d: V3): V3 => [Math.max(s[0],d[0]), Math.max(s[1],d[1]), Math.max(s[2],d[2])]
+    const blendDiff      = (s: V3, d: V3): V3 => [Math.abs(d[0]-s[0]), Math.abs(d[1]-s[1]), Math.abs(d[2]-s[2])]
+    const blendExcl      = (s: V3, d: V3): V3 => [s[0]+d[0]-2*s[0]*d[0], s[1]+d[1]-2*s[1]*d[1], s[2]+d[2]-2*s[2]*d[2]]
+    const blendDodge     = (s: V3, d: V3): V3 => s.map((sc, i) => Math.min(d[i] / Math.max(1-sc, 0.0001), 1)) as V3
+    const blendBurn      = (s: V3, d: V3): V3 => s.map((sc, i) => 1 - Math.min((1-d[i]) / Math.max(sc, 0.0001), 1)) as V3
+
+    const modeToFn: Record<string, (s: V3, d: V3) => V3> = {
+      normal:       blendNormal,
+      multiply:     blendMultiply,
+      screen:       blendScreen,
+      overlay:      blendOverlay,
+      'soft-light': blendSoftLight,
+      'hard-light': blendHardLight,
+      darken:       blendDarken,
+      lighten:      blendLighten,
+      difference:   blendDiff,
+      exclusion:    blendExcl,
+      'color-dodge': blendDodge,
+      'color-burn':  blendBurn,
+    }
+
+    const out = new Uint8Array(width * height * 4)
+    for (const layer of layerList) {
+      const src = canvasHandleRef.current?.getLayerPixels(layer.id)
+      if (!src) continue
+      const blendFn = modeToFn[layer.blendMode] ?? blendNormal
+      const opacity = layer.opacity
+      for (let i = 0; i < src.length; i += 4) {
+        const srcA = (src[i + 3] / 255) * opacity
+        if (srcA <= 0) continue
+        const dstA = out[i + 3] / 255
+        const outA = srcA + dstA * (1 - srcA)
+        if (outA <= 0) continue
+
+        // Normalise to [0,1] for blend function; dst is un-premultiplied
+        const s: V3 = [src[i] / 255, src[i + 1] / 255, src[i + 2] / 255]
+        const d: V3 = dstA > 0.0001
+          ? [out[i] / (dstA * 255), out[i + 1] / (dstA * 255), out[i + 2] / (dstA * 255)]
+          : [0, 0, 0]
+
+        const blended = blendFn(s, d)
+
+        // Porter-Duff src-over with blended rgb (same formula as shader)
+        out[i]     = Math.round(Math.min(1, (blended[0] * srcA + d[0] * dstA * (1 - srcA)) / outA) * 255)
+        out[i + 1] = Math.round(Math.min(1, (blended[1] * srcA + d[1] * dstA * (1 - srcA)) / outA) * 255)
+        out[i + 2] = Math.round(Math.min(1, (blended[2] * srcA + d[2] * dstA * (1 - srcA)) / outA) * 255)
+        out[i + 3] = Math.round(outA * 255)
+      }
+    }
+    return out
+  }
+
+  const handleMergeSelected = useCallback((ids: string[]): void => {
+    if (ids.length < 2 || !canvasHandleRef.current) return
+    const layers = stateRef.current.layers
+    const selectedSet = new Set(ids)
+    const selectedLayers = layers.filter((l) => selectedSet.has(l.id))
+    if (selectedLayers.length < 2) return
+    captureHistory('Merge Layers')
+    const merged = compositeLayers(selectedLayers)
+    const topIdx = layers.findLastIndex((l) => selectedSet.has(l.id))
+    const mergedName = selectedLayers[selectedLayers.length - 1].name
+    const newId = `layer-${Date.now()}`
+    canvasHandleRef.current.prepareNewLayer(newId, mergedName, merged)
+    const newLayers: LayerState[] = []
+    for (let i = 0; i < layers.length; i++) {
+      const l = layers[i]
+      if (i === topIdx) {
+        newLayers.push({ id: newId, name: mergedName, visible: true, opacity: 1, locked: false, blendMode: 'normal' })
+      } else if (!selectedSet.has(l.id)) {
+        newLayers.push(l)
+      }
+    }
+    dispatch({ type: 'REORDER_LAYERS', payload: newLayers })
+    dispatch({ type: 'SET_ACTIVE_LAYER', payload: newId })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captureHistory, dispatch])
+
+  const handleMergeDown = useCallback((): void => {
+    const layers = stateRef.current.layers
+    const activeLayerId = stateRef.current.activeLayerId
+    if (!canvasHandleRef.current || !activeLayerId) return
+    const activeIdx = layers.findIndex((l) => l.id === activeLayerId)
+    if (activeIdx <= 0) return
+    const toMerge = layers.slice(0, activeIdx + 1)
+    captureHistory('Merge Down')
+    const merged = compositeLayers(toMerge)
+    const newId = `layer-${Date.now()}`
+    const mergedName = layers[0].name
+    const mergeIds = new Set(toMerge.map((l) => l.id))
+    canvasHandleRef.current.prepareNewLayer(newId, mergedName, merged)
+    const newLayers: LayerState[] = []
+    for (let i = 0; i < layers.length; i++) {
+      const l = layers[i]
+      if (i === 0) {
+        newLayers.push({ id: newId, name: mergedName, visible: true, opacity: 1, locked: false, blendMode: 'normal' })
+      } else if (!mergeIds.has(l.id)) {
+        newLayers.push(l)
+      }
+    }
+    dispatch({ type: 'REORDER_LAYERS', payload: newLayers })
+    dispatch({ type: 'SET_ACTIVE_LAYER', payload: newId })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captureHistory, dispatch])
+
+  const handleMergeVisible = useCallback((): void => {
+    const layers = stateRef.current.layers
+    if (!canvasHandleRef.current) return
+    const visibleLayers = layers.filter((l) => l.visible)
+    if (visibleLayers.length < 2) return
+    captureHistory('Merge Visible')
+    const merged = compositeLayers(visibleLayers)
+    const visibleIds = new Set(visibleLayers.map((l) => l.id))
+    const topIdx = layers.findLastIndex((l) => visibleIds.has(l.id))
+    const newId = `layer-${Date.now()}`
+    canvasHandleRef.current.prepareNewLayer(newId, 'Merged', merged)
+    const newLayers: LayerState[] = []
+    for (let i = 0; i < layers.length; i++) {
+      const l = layers[i]
+      if (i === topIdx) {
+        newLayers.push({ id: newId, name: 'Merged', visible: true, opacity: 1, locked: false, blendMode: 'normal' })
+      } else if (!visibleIds.has(l.id)) {
+        newLayers.push(l)
+      }
+    }
+    dispatch({ type: 'REORDER_LAYERS', payload: newLayers })
+    dispatch({ type: 'SET_ACTIVE_LAYER', payload: newId })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captureHistory, dispatch])
+
+  const handleNewLayer = useCallback((): void => {
+    const id = `layer-${Date.now()}`
+    pendingLayerLabelRef.current = 'New Layer'
+    dispatch({
+      type: 'ADD_LAYER',
+      payload: { id, name: `Layer ${stateRef.current.layers.length + 1}`, visible: true, opacity: 1, locked: false, blendMode: 'normal' }
+    })
+  }, [dispatch])
+
+  const handleDuplicateLayer = useCallback((): void => {
+    const { activeLayerId, layers } = stateRef.current
+    if (!activeLayerId || !canvasHandleRef.current) return
+    const src = layers.find((l) => l.id === activeLayerId)
+    if (!src) return
+    const pixels = canvasHandleRef.current.getLayerPixels(src.id)
+    if (!pixels) return
+    const newId = `layer-${Date.now()}`
+    const name = `${src.name} copy`
+    canvasHandleRef.current.prepareNewLayer(newId, name, pixels)
+    pendingLayerLabelRef.current = 'Duplicate Layer'
+    dispatch({ type: 'ADD_LAYER', payload: { ...src, id: newId, name } })
+  }, [dispatch])
+
+  const handleDeleteActiveLayer = useCallback((): void => {
+    const id = stateRef.current.activeLayerId
+    if (id) dispatch({ type: 'REMOVE_LAYER', payload: id })
+  }, [dispatch])
+
+  const handleFlattenImage = useCallback((): void => {
+    const layers = stateRef.current.layers
+    if (!canvasHandleRef.current || layers.length < 2) return
+    captureHistory('Flatten Image')
+    const merged = compositeLayers(layers)
+    const newId = `layer-${Date.now()}`
+    canvasHandleRef.current.prepareNewLayer(newId, 'Background', merged)
+    dispatch({ type: 'REORDER_LAYERS', payload: [{ id: newId, name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }] })
+    dispatch({ type: 'SET_ACTIVE_LAYER', payload: newId })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [captureHistory, dispatch])
+
+  // ── View actions ────────────────────────────────────────────────────────
+  const handleZoomIn = useCallback((): void => {
+    const newZoom = parseFloat(Math.min(32, stateRef.current.canvas.zoom * 1.25).toFixed(4))
+    dispatch({ type: 'SET_ZOOM', payload: newZoom })
+  }, [dispatch])
+
+  const handleZoomOut = useCallback((): void => {
+    const newZoom = parseFloat(Math.max(0.05, stateRef.current.canvas.zoom * 0.8).toFixed(4))
+    dispatch({ type: 'SET_ZOOM', payload: newZoom })
+  }, [dispatch])
+
+  const handleFitToWindow = useCallback((): void => {
+    canvasHandleRef.current?.fitToWindow()
+  }, [])
+
+  const handleToggleGrid = useCallback((): void => {
+    dispatch({ type: 'TOGGLE_GRID' })
+  }, [dispatch])
+
   const handleResizeImage = useCallback(async (settings: ResizeImageSettings): Promise<void> => {
     setShowResizeDialog(false)
     const { width: newW, height: newH, filter } = settings
@@ -740,10 +947,14 @@ function AppContent(): React.JSX.Element {
       else if (e.key === 'c') { e.preventDefault(); handleCopy() }
       else if (e.key === 'x') { e.preventDefault(); handleCut() }
       else if (e.key === 'v') { e.preventDefault(); handlePaste() }
+      else if (e.key === '=' || e.key === '+') { e.preventDefault(); handleZoomIn() }
+      else if (e.key === '-') { e.preventDefault(); handleZoomOut() }
+      else if (e.key === '0') { e.preventDefault(); handleFitToWindow() }
+      else if (e.key === 'g') { e.preventDefault(); handleToggleGrid() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-}, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete])
+}, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid])
 
   // ── Export ────────────────────────────────────────────────────────
   const handleExportConfirm = useCallback(async (settings: ExportSettings): Promise<void> => {
@@ -789,6 +1000,17 @@ function AppContent(): React.JSX.Element {
         onDelete={handleDelete}
         onResizeImage={() => setShowResizeDialog(true)}
         onResizeCanvas={() => setShowResizeCanvasDialog(true)}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onFitToWindow={handleFitToWindow}
+        onToggleGrid={handleToggleGrid}
+        showGrid={state.canvas.showGrid}
+        onNewLayer={handleNewLayer}
+        onDuplicateLayer={handleDuplicateLayer}
+        onDeleteLayer={handleDeleteActiveLayer}
+        onMergeDown={handleMergeDown}
+        onMergeVisible={handleMergeVisible}
+        onFlattenImage={handleFlattenImage}
       />
       <ToolOptionsBar />
       <TabBar
@@ -834,7 +1056,7 @@ function AppContent(): React.JSX.Element {
             )
           })}
         </main>
-        <RightPanel />
+        <RightPanel onMergeSelected={handleMergeSelected} onMergeVisible={handleMergeVisible} onMergeDown={handleMergeDown} onFlattenImage={handleFlattenImage} />
       </div>
 
       <StatusBar />

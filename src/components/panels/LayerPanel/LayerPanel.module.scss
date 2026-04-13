@@ -105,6 +105,10 @@
       color: rgba(255, 255, 255, 0.8);
     }
   }
+
+  &.itemSelected {
+    background-color: rgba(6, 153, 251, 0.22);
+  }
 }
 
 .eyeBtn {
@@ -173,6 +177,47 @@
 
   &:hover:not(:disabled) {
     color: vars.$color-text;
+  }
+}
+
+// ─── Context menu ─────────────────────────────────────────────────────────────
+
+.menuBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 1000;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-md;
+  padding: 3px 0;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55);
+}
+
+.menuItem {
+  display: block;
+  width: 100%;
+  padding: 5px 14px;
+  text-align: left;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text;
+  background: none;
+  border: none;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: vars.$color-accent-blue;
+    color: #fff;
+  }
+
+  &:disabled {
+    color: vars.$color-text-muted;
+    cursor: default;
   }
 }
 

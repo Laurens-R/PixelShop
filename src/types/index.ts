@@ -110,6 +110,8 @@ export interface CanvasState {
   panX: number
   panY: number
   showGrid: boolean
+  gridSize: number
+  gridColor: string
   backgroundFill: BackgroundFill
   key: number
 }

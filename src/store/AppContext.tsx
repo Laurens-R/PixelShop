@@ -23,6 +23,8 @@ type AppAction =
   | { type: 'UPDATE_TEXT_LAYER'; payload: TextLayerState }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
+  | { type: 'SET_GRID_SIZE'; payload: number }
+  | { type: 'SET_GRID_COLOR'; payload: string }
   | { type: 'SET_HISTORY'; payload: { canUndo: boolean; canRedo: boolean } }
   | { type: 'NEW_CANVAS'; payload: { width: number; height: number; backgroundFill: BackgroundFill } }
   | { type: 'OPEN_FILE'; payload: { width: number; height: number; layers: LayerState[]; activeLayerId: string | null } }
@@ -62,7 +64,7 @@ const initialState: AppState = {
   swatches: DEFAULT_SWATCHES,
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
-  canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, backgroundFill: 'white', key: 0 },
+  canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, gridSize: 16, gridColor: '#808080', backgroundFill: 'white', key: 0 },
   history: { canUndo: false, canRedo: false }
 }
 
@@ -172,6 +174,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'TOGGLE_GRID':
       return { ...state, canvas: { ...state.canvas, showGrid: !state.canvas.showGrid } }
+
+    case 'SET_GRID_SIZE':
+      return { ...state, canvas: { ...state.canvas, gridSize: Math.max(1, action.payload) } }
+
+    case 'SET_GRID_COLOR':
+      return { ...state, canvas: { ...state.canvas, gridColor: action.payload } }
 
     case 'SET_HISTORY':
       return { ...state, history: action.payload }

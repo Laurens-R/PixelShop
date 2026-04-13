@@ -7,6 +7,7 @@ export interface MenuItemDef {
   action?: () => void
   separator?: boolean
   disabled?: boolean
+  checked?: boolean
 }
 
 export interface MenuDef {
@@ -137,6 +138,7 @@ export function MenuBar({ menus = DEFAULT_MENUS }: MenuBarProps): React.JSX.Elem
                       role="menuitem"
                       disabled={item.disabled}
                     >
+                      <span className={styles.checkMark}>{item.checked ? '✓' : ''}</span>
                       <span className={styles.itemLabel}>{item.label}</span>
                       {item.shortcut && (
                         <span className={styles.shortcut}>{item.shortcut}</span>

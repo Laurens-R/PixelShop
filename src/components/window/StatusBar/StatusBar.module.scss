@@ -36,6 +36,32 @@
   flex-shrink: 0;
 }
 
+.gridControls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.gridLabel {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+}
+
+.gridColorInput {
+  width: 22px;
+  height: 18px;
+  padding: 1px 2px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  background: transparent;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+  }
+}
+
 .action {
   display: flex;
   align-items: center;

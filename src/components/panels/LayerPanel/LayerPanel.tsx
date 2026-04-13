@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { LayerState, BlendMode } from '@/types'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './LayerPanel.module.scss'
@@ -75,6 +75,10 @@ interface LayerPanelProps {
   onLayerBlendChange: (id: string, blendMode: BlendMode) => void
   onLayerRename: (id: string, name: string) => void
   onLayersReorder: (layers: LayerState[]) => void
+  onMergeSelected: (ids: string[]) => void
+  onMergeVisible: () => void
+  onMergeDown: () => void
+  onFlattenImage: () => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -91,10 +95,70 @@ export function LayerPanel({
   onLayerBlendChange,
   onLayerRename,
   onLayersReorder,
+  onMergeSelected,
+  onMergeVisible,
+  onMergeDown,
+  onFlattenImage,
 }: LayerPanelProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const dragSrcIdx = useRef<number | null>(null)
+
+  // Close context menu when pressing Escape
+  useEffect(() => {
+    if (!contextMenu) return
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setContextMenu(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [contextMenu])
+
+  const handleLayerClick = (layer: LayerState, e: React.MouseEvent): void => {
+    if (e.ctrlKey || e.metaKey) {
+      const next = new Set(selectedIds)
+      if (next.has(layer.id)) next.delete(layer.id)
+      else next.add(layer.id)
+      setSelectedIds(next)
+    } else {
+      onActiveLayerChange(layer.id)
+      setSelectedIds(new Set())
+    }
+  }
+
+  const handleContextMenu = (e: React.MouseEvent): void => {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  const closeContextMenu = (): void => setContextMenu(null)
+
+  const execMergeSelected = (): void => {
+    closeContextMenu()
+    // Always include the active layer so active + 1 Ctrl-click = 2 layers
+    const effective = new Set(selectedIds)
+    if (activeLayerId) effective.add(activeLayerId)
+    onMergeSelected([...effective])
+    setSelectedIds(new Set())
+  }
+
+  const execMergeVisible = (): void => {
+    closeContextMenu()
+    onMergeVisible()
+    setSelectedIds(new Set())
+  }
+
+  const execMergeDown = (): void => {
+    closeContextMenu()
+    onMergeDown()
+    setSelectedIds(new Set())
+  }
+
+  const execFlattenImage = (): void => {
+    closeContextMenu()
+    onFlattenImage()
+    setSelectedIds(new Set())
+  }
 
   const activeLayer = layers.find((l) => l.id === activeLayerId)
   const canDelete = layers.length > 1
@@ -182,20 +246,25 @@ export function LayerPanel({
       </div>
 
       {/* ── Layer list ────────────────────────────────────────────────── */}
-      <ul className={styles.list} role="listbox" aria-label="Layers">
+      <ul className={styles.list} role="listbox" aria-label="Layers" onContextMenu={handleContextMenu}>
         {displayLayers.map((layer, displayIdx) => {
           const isActive = layer.id === activeLayerId
+          const isSelected = selectedIds.has(layer.id)
           return (
             <li
               key={layer.id}
-              className={`${styles.item} ${isActive ? styles.itemActive : ''}`}
+              className={[
+                styles.item,
+                isActive    ? styles.itemActive   : '',
+                isSelected && !isActive ? styles.itemSelected : '',
+              ].join(' ')}
               role="option"
               aria-selected={isActive}
               draggable
               onDragStart={(e) => handleDragStart(displayIdx, e)}
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(displayIdx, e)}
-              onClick={() => onActiveLayerChange(layer.id)}
+              onClick={(e) => handleLayerClick(layer, e)}
             >
               <button
                 className={styles.eyeBtn}
@@ -250,6 +319,43 @@ export function LayerPanel({
           <DeleteLayerIcon />
         </button>
       </div>
+
+      {/* ── Context menu ──────────────────────────────────────────────── */}
+      {contextMenu && (
+        <>
+          <div className={styles.menuBackdrop} onMouseDown={closeContextMenu} />
+          <div className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
+            <button
+              className={styles.menuItem}
+              disabled={new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])]).size < 2}
+              onMouseDown={execMergeSelected}
+            >
+              Merge Selected
+            </button>
+            <button
+              className={styles.menuItem}
+              disabled={layers.filter((l) => l.visible).length < 2}
+              onMouseDown={execMergeVisible}
+            >
+              Merge Visible
+            </button>
+            <button
+              className={styles.menuItem}
+              disabled={!activeLayerId || layers.findIndex((l) => l.id === activeLayerId) === 0}
+              onMouseDown={execMergeDown}
+            >
+              Merge Down
+            </button>
+            <button
+              className={styles.menuItem}
+              disabled={layers.length < 2}
+              onMouseDown={execFlattenImage}
+            >
+              Flatten Image
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

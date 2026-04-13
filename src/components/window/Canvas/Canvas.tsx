@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState } from 'react'
+import React, { forwardRef, useEffect, useRef, useState } from 'react'
 import { useWebGL } from '@/hooks/useWebGL'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
@@ -8,6 +8,7 @@ import type { TextLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { selectionStore } from '@/store/selectionStore'
+import { cursorStore } from '@/store/cursorStore'
 import { TextLayerEditor } from './TextLayerEditor'
 import { rasterizeTextToLayer } from './textRasterizer'
 import { decodePng } from './pngHelpers'
@@ -75,7 +76,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
 
   // ── Expose handle for save / export / clipboard ────────────────
-  useCanvasHandle({ ref, rendererRef, glLayersRef, layersStateRef, render, width, height })
+  useCanvasHandle({ ref, rendererRef, glLayersRef, layersStateRef, render, width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
 
   // ── Zoom to cursor + scroll save/restore ───────────────────────
   useScrollZoom(
@@ -334,10 +335,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
     },
     onHover: (pos) => {
+      if (isActive) cursorStore.setPosition(pos.x, pos.y)
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onHover?.(pos, ctx)
     },
     onLeave: () => {
+      cursorStore.hide()
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onLeave?.(ctx)
     },
@@ -345,7 +348,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   return (
     <>
-    <div ref={viewportRef} className={styles.viewport} data-canvas-viewport>
+    <div ref={viewportRef} className={styles.viewport} data-canvas-viewport data-active-viewport={isActive ? '' : undefined}>
       <div className={styles.viewportInner}>
         <div
           ref={canvasWrapperRef}
@@ -382,6 +385,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             width={width}
             height={height}
           />
+          {state.canvas.showGrid && (
+            <div
+              className={styles.gridOverlay}
+              style={{
+                '--grid-size': `${state.canvas.gridSize * state.canvas.zoom / window.devicePixelRatio}px`,
+                '--grid-color': state.canvas.gridColor,
+              } as React.CSSProperties}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -1,11 +1,23 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
+import { cursorStore } from '@/store/cursorStore'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './StatusBar.module.scss'
 
 export function StatusBar(): React.JSX.Element {
-  const { state } = useAppContext()
+  const { state, dispatch } = useAppContext()
   const zoom = Math.round(state.canvas.zoom * 100)
-  const { width, height } = state.canvas
+  const { width, height, showGrid, gridSize, gridColor } = state.canvas
+
+  const [cursor, setCursor] = useState<{ x: number; y: number; visible: boolean }>({
+    x: cursorStore.x, y: cursorStore.y, visible: cursorStore.visible,
+  })
+
+  useEffect(() => {
+    const onUpdate = (): void => setCursor({ x: cursorStore.x, y: cursorStore.y, visible: cursorStore.visible })
+    cursorStore.subscribe(onUpdate)
+    return () => cursorStore.unsubscribe(onUpdate)
+  }, [])
 
   return (
     <div className={styles.statusBar}>
@@ -14,7 +26,36 @@ export function StatusBar(): React.JSX.Element {
         <span className={styles.infoItem}>{width} × {height} px</span>
         <span className={styles.sep} />
         <span className={styles.infoItem}>RGB/8</span>
+        {cursor.visible && (
+          <>
+            <span className={styles.sep} />
+            <span className={styles.infoItem}>{cursor.x}, {cursor.y}</span>
+          </>
+        )}
       </div>
+
+      {/* Centre: grid controls — only visible when grid is on */}
+      {showGrid && (
+        <div className={styles.gridControls}>
+          <span className={styles.gridLabel}>Grid:</span>
+          <SliderInput
+            value={gridSize}
+            min={1}
+            max={128}
+            step={1}
+            inputWidth={36}
+            suffix="px"
+            onChange={(v) => dispatch({ type: 'SET_GRID_SIZE', payload: v })}
+          />
+          <input
+            className={styles.gridColorInput}
+            type="color"
+            value={gridColor}
+            title="Grid color"
+            onChange={(e) => dispatch({ type: 'SET_GRID_COLOR', payload: e.target.value })}
+          />
+        </div>
+      )}
 
       {/* Right: zoom */}
       <div className={styles.zoom}>

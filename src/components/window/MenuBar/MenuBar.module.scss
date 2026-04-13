@@ -76,7 +76,7 @@
   color: vars.$color-text;
   border-radius: vars.$radius-lg;
   text-align: left;
-  gap: 24px;
+  gap: 4px;
   transition: background-color 60ms ease;
 
   &:hover:not(:disabled) {
@@ -96,6 +96,13 @@
   &:focus-visible {
     @include m.focus-ring;
   }
+}
+
+.checkMark {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
 }
 
 .itemLabel {

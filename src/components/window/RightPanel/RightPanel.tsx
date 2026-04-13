@@ -10,7 +10,14 @@ import styles from './RightPanel.module.scss'
 type ColorTab = 'Color' | 'Swatches' | 'Navigator'
 type LayerTab = 'Layers' | 'History' | 'Info'
 
-export function RightPanel(): React.JSX.Element {
+interface RightPanelProps {
+  onMergeSelected: (ids: string[]) => void
+  onMergeVisible: () => void
+  onMergeDown: () => void
+  onFlattenImage: () => void
+}
+
+export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage }: RightPanelProps): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
@@ -177,6 +184,10 @@ export function RightPanel(): React.JSX.Element {
             onLayersReorder={(layers) =>
               dispatch({ type: 'REORDER_LAYERS', payload: layers })
             }
+            onMergeSelected={onMergeSelected}
+            onMergeVisible={onMergeVisible}
+            onMergeDown={onMergeDown}
+            onFlattenImage={onFlattenImage}
           />
         )}
         {layerTab === 'History' && (

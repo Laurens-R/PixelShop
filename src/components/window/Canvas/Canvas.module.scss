@@ -41,6 +41,20 @@
   image-rendering: crisp-edges;
 }
 
+.gridOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right,  var(--grid-color, rgba(128,128,128,0.5)) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-color, rgba(128,128,128,0.5)) 1px, transparent 1px);
+  background-size: var(--grid-size, 16px) var(--grid-size, 16px);
+  z-index: 2;
+}
+
 .textEditorRoot {
   box-sizing: content-box;
   border: 2px dashed #0078ff;

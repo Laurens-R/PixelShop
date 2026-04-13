@@ -1,4 +1,5 @@
 import { useImperativeHandle } from 'react'
+import type React from 'react'
 import type { WebGLLayer, WebGLRenderer } from '@/webgl/WebGLRenderer'
 import type { LayerState } from '@/types'
 import { encodePng } from './pngHelpers'
@@ -30,6 +31,8 @@ export interface CanvasHandle {
   captureAllLayerGeometry: () => Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>
   /** Restore previously snapshotted pixel data + geometry and flush+render for each layer. */
   restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>) => void
+  /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
+  fitToWindow: () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -42,6 +45,8 @@ interface UseCanvasHandleParams {
   render: (layers: WebGLLayer[]) => void
   width: number
   height: number
+  viewportRef: React.RefObject<HTMLDivElement | null>
+  onZoom: (zoom: number) => void
 }
 
 export function useCanvasHandle({
@@ -52,6 +57,8 @@ export function useCanvasHandle({
   render,
   width,
   height,
+  viewportRef,
+  onZoom,
 }: UseCanvasHandleParams): void {
   useImperativeHandle(ref, () => ({
     exportLayerPng: (layerId) => {
@@ -158,6 +165,18 @@ export function useCanvasHandle({
         if (layer) result.set(ls.id, { layerWidth: layer.layerWidth, layerHeight: layer.layerHeight, offsetX: layer.offsetX, offsetY: layer.offsetY })
       }
       return result
+    },
+
+    fitToWindow: () => {
+      const vp = viewportRef.current
+      if (!vp) return
+      const dpr = window.devicePixelRatio || 1
+      const margin = 0.9
+      const zoom = Math.min(
+        (vp.clientWidth  / (width  / dpr)) * margin,
+        (vp.clientHeight / (height / dpr)) * margin,
+      )
+      onZoom(parseFloat(Math.max(0.05, Math.min(32, zoom)).toFixed(4)))
     },
 
     restoreAllLayerPixels: (data, geometry?) => {
