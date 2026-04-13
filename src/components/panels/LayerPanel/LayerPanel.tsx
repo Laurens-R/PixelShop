@@ -292,7 +292,7 @@ export function LayerPanel({
                 onClick={(e) => { e.stopPropagation(); onLayerToggleVisibility(layer.id) }}
                 aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
               >
-                {isMask ? <MaskIcon active={isActive} /> : <EyeIcon visible={layer.visible} />}
+                {isMask ? <MaskIcon active={layer.visible} /> : <EyeIcon visible={layer.visible} />}
               </button>
 
               <div className={`${styles.thumb} ${isMask ? styles.maskThumb : ''}`} aria-hidden="true" />
