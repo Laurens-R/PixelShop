@@ -59,6 +59,8 @@ export interface ToolPointerPos {
   pressure: number
   shiftKey: boolean
   altKey: boolean
+  /** Hardware event timestamp (ms, same epoch as performance.now). Used for accurate velocity when coalesced events are replayed. */
+  timeStamp: number
 }
 
 // ─── Stateful handler created fresh for each tool activation ──────────────────

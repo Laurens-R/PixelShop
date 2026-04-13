@@ -5,7 +5,7 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 
 // ─── Module-level options ────────────────────────────────────────────────────
 
-const eraserOptions = {
+export const eraserOptions = {
   size: 20,
   strength: 100,
   antiAlias: true,

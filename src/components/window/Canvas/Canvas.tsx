@@ -7,6 +7,8 @@ import type { WebGLLayer } from '@/webgl/WebGLRenderer'
 import type { TextLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
+import { brushOptions } from '@/tools/brush'
+import { eraserOptions } from '@/tools/eraser'
 import { selectionStore } from '@/store/selectionStore'
 import { cursorStore } from '@/store/cursorStore'
 import { TextLayerEditor } from './TextLayerEditor'
@@ -57,6 +59,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const scrollPosRef = useRef({ left: 0, top: 0 })
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const toolOverlayRef = useRef<HTMLCanvasElement>(null)
+  const brushCursorRef = useRef<HTMLDivElement>(null)
   const canvasWrapperRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(state.canvas.zoom)
@@ -253,6 +256,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       selectionStore.setPending(null)
     }
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
+    // Hide brush cursor when switching away from a circle-cursor tool
+    if (sel !== 'brush' && sel !== 'eraser' && brushCursorRef.current) {
+      brushCursorRef.current.style.display = 'none'
+    }
   }, [state.activeTool, isActive])
 
   const buildCtx = (): ToolContext | null => {
@@ -336,11 +343,28 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     },
     onHover: (pos) => {
       if (isActive) cursorStore.setPosition(pos.x, pos.y)
+      // Update circle cursor for brush / eraser
+      const tool = state.activeTool
+      if ((tool === 'brush' || tool === 'eraser') && brushCursorRef.current) {
+        const dpr = window.devicePixelRatio
+        const zoom = zoomRef.current
+        const size = tool === 'brush' ? brushOptions.size : eraserOptions.size
+        const r = Math.max(1, size / 2 * zoom / dpr)
+        const cx = (pos.x + 0.5) * zoom / dpr
+        const cy = (pos.y + 0.5) * zoom / dpr
+        const el = brushCursorRef.current
+        el.style.left   = `${cx - r}px`
+        el.style.top    = `${cy - r}px`
+        el.style.width  = `${r * 2}px`
+        el.style.height = `${r * 2}px`
+        el.style.display = 'block'
+      }
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onHover?.(pos, ctx)
     },
     onLeave: () => {
       cursorStore.hide()
+      if (brushCursorRef.current) brushCursorRef.current.style.display = 'none'
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onLeave?.(ctx)
     },
@@ -366,6 +390,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             style={{
               width:  width  * state.canvas.zoom / window.devicePixelRatio,
               height: height * state.canvas.zoom / window.devicePixelRatio,
+              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none' : undefined,
             }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -379,6 +404,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             width={width}
             height={height}
           />
+          <div ref={brushCursorRef} className={styles.brushCursor} />
           <canvas
             ref={overlayRef}
             className={styles.overlay}

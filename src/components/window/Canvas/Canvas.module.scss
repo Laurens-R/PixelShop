@@ -24,6 +24,7 @@
 .canvas {
   display: block;
   cursor: crosshair;
+  touch-action: none; // Prevent browser gesture/scroll interference with pen/tablet input
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   width: 100%;
@@ -39,6 +40,16 @@
   pointer-events: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.brushCursor {
+  position: absolute;
+  display: none;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .gridOverlay {

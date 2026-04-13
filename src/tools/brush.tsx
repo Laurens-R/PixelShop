@@ -28,7 +28,7 @@ function smoothingToAlpha(s: number): number {
 
 // ── Velocity dynamics ─────────────────────────────────────────────────────────
 const MAX_TRACKING_SPEED  = 5    // px/ms — speed at which dynamics hit their floor
-const MIN_SIZE_FACTOR     = 0.35 // fast stroke → 35% of set size
+const MIN_SIZE_FACTOR     = 0.55 // fast stroke → 55% of set size
 const MIN_OPACITY_FACTOR  = 0.65 // fast stroke → 65% of set opacity
 const SPEED_SMOOTHING     = 0.25 // EMA weight; higher = snappier but jitterier
 
@@ -93,20 +93,20 @@ function createBrushHandler(): ToolHandler {
   }
 
   return {
-    onPointerDown({ x, y }: ToolPointerPos, ctx: ToolContext) {
+    onPointerDown({ x, y, timeStamp }: ToolPointerPos, ctx: ToolContext) {
       touched      = new Map()
       smoothSpeed  = 0
       stabX = x; stabY = y
-      prevTime     = performance.now()
+      prevTime     = timeStamp
       lastRendered = { x, y }
       lastCtrl     = { x, y }
       // Initial dot: degenerate Bézier at a single point
       paint(x, y, x, y, x, y, brushOptions.size, brushOptions.opacity, ctx)
     },
 
-    onPointerMove({ x, y }: ToolPointerPos, ctx: ToolContext) {
+    onPointerMove({ x, y, timeStamp }: ToolPointerPos, ctx: ToolContext) {
       if (!lastRendered || !lastCtrl) return
-      const now = performance.now()
+      const now = timeStamp
 
       // EMA spatial stabilizer — low-pass filters sub-pixel hardware jitter
       const alpha = smoothingToAlpha(brushOptions.smoothing)
