@@ -14,6 +14,7 @@ import { moveTool } from './move'
 import { gradientTool } from './gradient'
 import { dodgeTool, burnTool } from './dodge'
 import { textTool } from './text'
+import { shapeTool } from './shape'
 import { noopTool } from './noop'
 
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
@@ -34,7 +35,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   dodge:        dodgeTool,
   burn:         burnTool,
   text:         textTool,
-  shape:        noopTool,
+  shape:        shapeTool,
   hand:         noopTool,
 }
 

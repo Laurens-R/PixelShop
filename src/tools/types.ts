@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { WebGLRenderer, WebGLLayer } from '@/webgl/WebGLRenderer'
-import type { RGBAColor, TextLayerState } from '@/types'
+import type { RGBAColor, TextLayerState, ShapeLayerState } from '@/types'
 
 // ─── Runtime context passed to tool handlers on each pointer event ────────────
 
@@ -49,6 +49,21 @@ export interface ToolContext {
    * app state. Used by the move tool for smooth live drag previews of text layers.
    */
   previewTextAt: (ls: TextLayerState, x: number, y: number) => void
+  /** Create a new shape layer, rasterize it, add to state and set as active. */
+  addShapeLayer: (layer: ShapeLayerState) => void
+  /** Dispatch UPDATE_SHAPE_LAYER — sync effect re-rasterizes from new state. */
+  updateShapeLayer: (layer: ShapeLayerState) => void
+  /**
+   * Rasterize a shape layer directly into its GL buffer and render WITHOUT
+   * dispatching to state. Used for live editing previews during drag.
+   */
+  previewShapeLayer: (layer: ShapeLayerState) => void
+  /** All current shape layers — shape tool uses this to find the active shape. */
+  shapeLayers: ShapeLayerState[]
+  /** The active shape layer, if the currently active layer is a shape type. */
+  activeShapeLayer: ShapeLayerState | null
+  /** Current canvas zoom level — used to compute screen-space handle sizes in overlay drawings. */
+  zoom: number
 }
 
 // ─── Pointer position passed to tool handlers ─────────────────────────────────

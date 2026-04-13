@@ -21,5 +21,7 @@ export { ResizeImageDialog } from './dialogs/ResizeImageDialog/ResizeImageDialog
 export type { ResizeImageSettings } from './dialogs/ResizeImageDialog/ResizeImageDialog'
 export { ResizeCanvasDialog } from './dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
 export type { ResizeCanvasSettings } from './dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
+export { AboutDialog } from './dialogs/AboutDialog/AboutDialog'
+export { KeyboardShortcutsDialog } from './dialogs/KeyboardShortcutsDialog/KeyboardShortcutsDialog'
 export { SizeInputs } from './widgets/SizeInputs/SizeInputs'
 export type { SizeInputsProps } from './widgets/SizeInputs/SizeInputs'

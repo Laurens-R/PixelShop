@@ -99,7 +99,49 @@ export interface TextLayerState {
   color: RGBAColor
 }
 
-export type LayerState = PixelLayerState | TextLayerState
+/**
+ * Vector shape layer — stores parametric shape data; pixels are rasterized on demand.
+ * The bounding-box fields (cx/cy/w/h/rotation) drive all shapes except 'line'.
+ * 'line' uses x1/y1/x2/y2 endpoints.
+ */
+export interface ShapeLayerState {
+  id: string
+  name: string
+  visible: boolean
+  opacity: number
+  locked: boolean
+  blendMode: BlendMode
+  type: 'shape'
+  shapeType: ShapeType
+  /** Center X in canvas pixels (non-line shapes). */
+  cx: number
+  /** Center Y in canvas pixels (non-line shapes). */
+  cy: number
+  /** Bounding-box width in canvas pixels (non-line shapes). */
+  w: number
+  /** Bounding-box height in canvas pixels (non-line shapes). */
+  h: number
+  /** Rotation in degrees, clockwise (non-line shapes). */
+  rotation: number
+  /** Line start X (line shape only). */
+  x1: number
+  /** Line start Y (line shape only). */
+  y1: number
+  /** Line end X (line shape only). */
+  x2: number
+  /** Line end Y (line shape only). */
+  y2: number
+  /** null = no stroke */
+  strokeColor: RGBAColor | null
+  /** null = no fill */
+  fillColor: RGBAColor | null
+  strokeWidth: number
+  /** Corner radius in canvas pixels. Applies to rectangle. */
+  cornerRadius: number
+  antiAlias: boolean
+}
+
+export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState
 
 export type BackgroundFill = 'white' | 'black' | 'transparent'
 

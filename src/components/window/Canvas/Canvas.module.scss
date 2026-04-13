@@ -25,6 +25,8 @@
   display: block;
   cursor: crosshair;
   touch-action: none; // Prevent browser gesture/scroll interference with pen/tablet input
+  // image-rendering is set dynamically via inline style in Canvas.tsx:
+  // pixelated at zoom >= 1 (crisp pixel art), auto (bilinear) at zoom < 1 (smooth downscale)
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   width: 100%;

@@ -32,9 +32,11 @@ interface TopBarProps {
   onMergeDown?: () => void
   onMergeVisible?: () => void
   onFlattenImage?: () => void
+  onAbout?: () => void
+  onKeyboardShortcuts?: () => void
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -88,9 +90,12 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
     },
     {
       label: 'Help',
-      items: [{ label: 'About PixelShop' }, { label: 'Keyboard Shortcuts' }]
+      items: [
+        { label: 'About PixelShop',      action: onAbout },
+        { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
+      ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts])
 
   return (
     <div className={styles.topBar}>

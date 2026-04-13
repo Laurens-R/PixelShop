@@ -4,7 +4,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
 import type { WebGLLayer } from '@/webgl/WebGLRenderer'
-import type { TextLayerState } from '@/types'
+import type { TextLayerState, ShapeLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { brushOptions } from '@/tools/brush'
@@ -13,6 +13,7 @@ import { selectionStore } from '@/store/selectionStore'
 import { cursorStore } from '@/store/cursorStore'
 import { TextLayerEditor } from './TextLayerEditor'
 import { rasterizeTextToLayer } from './textRasterizer'
+import { rasterizeShapeToLayer } from './shapeRasterizer'
 import { decodePng } from './pngHelpers'
 import { useCanvasHandle } from './canvasHandle'
 import type { CanvasHandle } from './canvasHandle'
@@ -154,6 +155,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
               layer.data[j] = 0; layer.data[j + 1] = 0; layer.data[j + 2] = 0; layer.data[j + 3] = 255
             }
           }
+        } else if ('type' in ls && ls.type === 'shape') {
+          // Shape layers are full-canvas-sized (rasterized vector data)
+          layer = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+          rasterizeShapeToLayer(ls, layer, cw, ch)
         } else {
           // New blank layer — start at 128×128 centered on the canvas
           const initW = Math.min(128, cw)
@@ -197,6 +202,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           rasterizeTextToLayer(ls, gl)
           renderer.flushLayer(gl)
           map.set(ls.id, gl)
+        } else if ('type' in ls && ls.type === 'shape') {
+          // Shape layers created imperatively via addShapeLayer; recreate if missing.
+          const cw = renderer.pixelWidth
+          const ch = renderer.pixelHeight
+          const gl = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+          rasterizeShapeToLayer(ls, gl, cw, ch)
+          renderer.flushLayer(gl)
+          map.set(ls.id, gl)
         } else {
           // Pixel layers start at 128×128 centered on the canvas
           const cw = renderer.pixelWidth
@@ -237,6 +250,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           rasterizeTextToLayer(ls, gl)
         }
         renderer.flushLayer(gl)
+      } else if ('type' in ls && ls.type === 'shape') {
+        // Re-rasterize whenever shape parameters change
+        const cw = renderer.pixelWidth
+        const ch = renderer.pixelHeight
+        rasterizeShapeToLayer(ls, gl, cw, ch)
+        renderer.flushLayer(gl)
       }
     }
 
@@ -267,8 +286,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     if (!renderer) return null
     const activeId = state.activeLayerId
     const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
-    // Text tool doesn't need an existing pixel layer — it creates its own
-    if (!activeLayer && state.activeTool !== 'text') return null
+    // Text/shape tools don't need an existing pixel layer — they create their own
+    if (!activeLayer && state.activeTool !== 'text' && state.activeTool !== 'shape') return null
     // Only block pixel-modifying tools on locked layers.
     if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
@@ -320,6 +339,36 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         renderer.flushLayer(gl)
         render(buildOrderedGLLayers())
       },
+      addShapeLayer: (ls) => {
+        const cw = renderer.pixelWidth
+        const ch = renderer.pixelHeight
+        const gl = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+        rasterizeShapeToLayer(ls, gl, cw, ch)
+        renderer.flushLayer(gl)
+        glLayersRef.current.set(ls.id, gl)
+        render([...buildOrderedGLLayers(), gl])
+        dispatch({ type: 'ADD_SHAPE_LAYER', payload: ls })
+      },
+      updateShapeLayer: (ls) => {
+        dispatch({ type: 'UPDATE_SHAPE_LAYER', payload: ls })
+      },
+      previewShapeLayer: (ls) => {
+        const gl = glLayersRef.current.get(ls.id)
+        if (!gl) return
+        const cw = renderer.pixelWidth
+        const ch = renderer.pixelHeight
+        rasterizeShapeToLayer(ls, gl, cw, ch)
+        renderer.flushLayer(gl)
+        render(buildOrderedGLLayers())
+      },
+      shapeLayers: state.layers.filter(
+        (l): l is ShapeLayerState => 'type' in l && l.type === 'shape'
+      ),
+      activeShapeLayer: (() => {
+        const l = state.layers.find((l) => l.id === activeId)
+        return l && 'type' in l && l.type === 'shape' ? l : null
+      })(),
+      zoom: state.canvas.zoom,
     }
   }
 
@@ -391,6 +440,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
               width:  width  * state.canvas.zoom / window.devicePixelRatio,
               height: height * state.canvas.zoom / window.devicePixelRatio,
               cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none' : undefined,
+              // Bilinear when zoomed out (smooth downscale); nearest when at or above 100% (crisp pixel art)
+              imageRendering: state.canvas.zoom < 1 ? 'auto' : 'pixelated',
             }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}

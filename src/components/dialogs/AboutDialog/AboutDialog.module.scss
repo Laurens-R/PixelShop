@@ -1,0 +1,59 @@
+@use '@/styles/variables' as vars;
+
+// ─── Body ─────────────────────────────────────────────────────────────────────
+
+.body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 24px 20px;
+  gap: 4px;
+  text-align: center;
+}
+
+// ─── Logo ─────────────────────────────────────────────────────────────────────
+
+.logo {
+  color: vars.$color-accent-blue;
+  margin-bottom: 8px;
+}
+
+// ─── Text ─────────────────────────────────────────────────────────────────────
+
+.name {
+  font-size: 20px;
+  font-weight: 600;
+  color: vars.$color-text;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.version {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+  margin: 2px 0 0;
+}
+
+.desc {
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  margin: 12px 0 0;
+  line-height: 1.6;
+  max-width: 300px;
+}
+
+.tech {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  margin: 8px 0 0;
+  letter-spacing: 0.01em;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-top: 1px solid vars.$color-border;
+}

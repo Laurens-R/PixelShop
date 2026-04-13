@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,8 @@ export type AppAction =
   | { type: 'REORDER_LAYERS'; payload: LayerState[] }
   | { type: 'ADD_TEXT_LAYER'; payload: TextLayerState }
   | { type: 'UPDATE_TEXT_LAYER'; payload: TextLayerState }
+  | { type: 'ADD_SHAPE_LAYER'; payload: ShapeLayerState }
+  | { type: 'UPDATE_SHAPE_LAYER'; payload: ShapeLayerState }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_GRID_SIZE'; payload: number }
@@ -165,6 +167,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
       }
 
     case 'UPDATE_TEXT_LAYER':
+      return {
+        ...state,
+        layers: state.layers.map((l) => l.id === action.payload.id ? action.payload : l),
+      }
+
+    case 'ADD_SHAPE_LAYER':
+      return {
+        ...state,
+        layers: [...state.layers, action.payload],
+        activeLayerId: action.payload.id,
+      }
+
+    case 'UPDATE_SHAPE_LAYER':
       return {
         ...state,
         layers: state.layers.map((l) => l.id === action.payload.id ? action.payload : l),

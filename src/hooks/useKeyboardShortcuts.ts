@@ -5,16 +5,17 @@ import { cropStore } from '@/store/cropStore'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UseKeyboardShortcutsOptions {
-  handleUndo:         () => void
-  handleRedo:         () => void
-  handleCopy:         () => void
-  handleCut:          () => void
-  handlePaste:        () => void
-  handleDelete:       () => void
-  handleZoomIn:       () => void
-  handleZoomOut:      () => void
-  handleFitToWindow:  () => void
-  handleToggleGrid:   () => void
+  handleUndo:               () => void
+  handleRedo:               () => void
+  handleCopy:               () => void
+  handleCut:                () => void
+  handlePaste:              () => void
+  handleDelete:             () => void
+  handleZoomIn:             () => void
+  handleZoomOut:            () => void
+  handleFitToWindow:        () => void
+  handleToggleGrid:         () => void
+  handleKeyboardShortcuts?: () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -30,12 +31,14 @@ export function useKeyboardShortcuts({
   handleZoomOut,
   handleFitToWindow,
   handleToggleGrid,
+  handleKeyboardShortcuts,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'Escape')                                  { selectionStore.clear(); cropStore.clear(); return }
       if (e.key === 'Delete' || e.key === 'Backspace')         { e.preventDefault(); handleDelete(); return }
+      if (e.key === '?' && !e.ctrlKey && !e.altKey)            { e.preventDefault(); handleKeyboardShortcuts?.(); return }
       if (!e.ctrlKey) return
       if      (e.key === 'z')              { e.preventDefault(); handleUndo() }
       else if (e.key === 'y')              { e.preventDefault(); handleRedo() }
@@ -49,5 +52,5 @@ export function useKeyboardShortcuts({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts])
 }

@@ -15,6 +15,8 @@ import { ExportDialog } from '@/components/dialogs/ExportDialog/ExportDialog'
 import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
 import { ResizeImageDialog } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
 import { ResizeCanvasDialog } from '@/components/dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
+import { AboutDialog } from '@/components/dialogs/AboutDialog/AboutDialog'
+import { KeyboardShortcutsDialog } from '@/components/dialogs/KeyboardShortcutsDialog/KeyboardShortcutsDialog'
 import { exportPng } from '@/export/exportPng'
 import { exportJpeg } from '@/export/exportJpeg'
 import { exportWebp } from '@/export/exportWebp'
@@ -36,8 +38,10 @@ function AppContent(): React.JSX.Element {
 
   const [showNewImageDialog,    setShowNewImageDialog]    = useState(false)
   const [showExportDialog,      setShowExportDialog]      = useState(false)
-  const [showResizeDialog,      setShowResizeDialog]      = useState(false)
-  const [showResizeCanvasDialog, setShowResizeCanvasDialog] = useState(false)
+  const [showResizeDialog,       setShowResizeDialog]       = useState(false)
+  const [showResizeCanvasDialog,  setShowResizeCanvasDialog]  = useState(false)
+  const [showAboutDialog,         setShowAboutDialog]         = useState(false)
+  const [showShortcutsDialog,     setShowShortcutsDialog]     = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -97,6 +101,7 @@ function AppContent(): React.JSX.Element {
   useKeyboardShortcuts({
     handleUndo, handleRedo, handleCopy, handleCut, handlePaste,
     handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid,
+    handleKeyboardShortcuts: useCallback(() => setShowShortcutsDialog(true), []),
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -143,6 +148,8 @@ function AppContent(): React.JSX.Element {
         onMergeDown={handleMergeDown}
         onMergeVisible={handleMergeVisible}
         onFlattenImage={handleFlattenImage}
+        onAbout={() => setShowAboutDialog(true)}
+        onKeyboardShortcuts={() => setShowShortcutsDialog(true)}
       />
       <ToolOptionsBar />
       <TabBar
@@ -221,6 +228,14 @@ function AppContent(): React.JSX.Element {
         currentHeight={state.canvas.height}
         onCancel={() => setShowResizeCanvasDialog(false)}
         onConfirm={(s) => { handleResizeCanvas(s); setShowResizeCanvasDialog(false) }}
+      />
+      <AboutDialog
+        open={showAboutDialog}
+        onClose={() => setShowAboutDialog(false)}
+      />
+      <KeyboardShortcutsDialog
+        open={showShortcutsDialog}
+        onClose={() => setShowShortcutsDialog(false)}
       />
     </div>
   )
