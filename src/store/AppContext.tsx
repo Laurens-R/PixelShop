@@ -3,7 +3,7 @@ import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, 
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
-type AppAction =
+export type AppAction =
   | { type: 'SET_TOOL'; payload: Tool }
   | { type: 'SET_SHAPE'; payload: ShapeType }
   | { type: 'SET_PRIMARY_COLOR'; payload: RGBAColor }
