@@ -98,14 +98,19 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
           </button>
         </div>
 
-        {colorTab === 'Color' && (
-          <ColorPicker
-            primaryColor={state.primaryColor}
-            secondaryColor={state.secondaryColor}
-            onPrimaryChange={(c) => dispatch({ type: 'SET_PRIMARY_COLOR', payload: c })}
-            onSecondaryChange={(c) => dispatch({ type: 'SET_SECONDARY_COLOR', payload: c })}
-          />
-        )}
+        {colorTab === 'Color' && (() => {
+          const activeLayerData = state.layers.find(l => l.id === state.activeLayerId)
+          const isOnMaskLayer = !!(activeLayerData && 'type' in activeLayerData && activeLayerData.type === 'mask')
+          return (
+            <ColorPicker
+              primaryColor={state.primaryColor}
+              secondaryColor={state.secondaryColor}
+              onPrimaryChange={(c) => dispatch({ type: 'SET_PRIMARY_COLOR', payload: c })}
+              onSecondaryChange={(c) => dispatch({ type: 'SET_SECONDARY_COLOR', payload: c })}
+              grayscaleOnly={isOnMaskLayer}
+            />
+          )
+        })()}
         {colorTab === 'Swatches' && (
           <SwatchPanel />
         )}
@@ -188,6 +193,18 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
             onMergeVisible={onMergeVisible}
             onMergeDown={onMergeDown}
             onFlattenImage={onFlattenImage}
+            onAddMaskLayer={(parentId) => {
+              // Prevent adding a second mask to the same parent
+              const hasMask = state.layers.some(
+                l => 'type' in l && l.type === 'mask' && (l as { parentId: string }).parentId === parentId
+              )
+              if (hasMask) return
+              const maskId = `mask-${Date.now()}`
+              dispatch({
+                type: 'ADD_MASK_LAYER',
+                payload: { id: maskId, name: 'Layer Mask', visible: true, type: 'mask', parentId },
+              })
+            }}
           />
         )}
         {layerTab === 'History' && (

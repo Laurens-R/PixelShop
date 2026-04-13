@@ -271,7 +271,7 @@ export class WebGLRenderer {
 
   // ─── Rendering ─────────────────────────────────────────────────────────────
 
-  render(layers: WebGLLayer[]): void {
+  render(layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>): void {
     const { gl, pixelWidth: w, pixelHeight: h } = this
 
     // 1. Clear ping-pong buffers
@@ -289,7 +289,8 @@ export class WebGLRenderer {
 
     for (const layer of layers) {
       if (!layer.visible || layer.opacity === 0) continue
-      this.compositeLayer(layer, srcTex, dstFb, w, h)
+      const maskLayer = maskMap?.get(layer.id)
+      this.compositeLayer(layer, srcTex, dstFb, w, h, maskLayer)
       // swap
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
@@ -318,7 +319,8 @@ export class WebGLRenderer {
     srcTex: WebGLTexture,
     targetFb: WebGLFramebuffer,
     w: number,
-    h: number
+    h: number,
+    maskLayer?: WebGLLayer
   ): void {
     const { gl } = this
 
@@ -379,6 +381,16 @@ export class WebGLRenderer {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, layer.texture)
     gl.uniform1i(gl.getUniformLocation(this.imageProgram, 'u_image'), 0)
+
+    // u_maskTex = optional layer mask (full-canvas, R channel = grayscale alpha)
+    if (maskLayer) {
+      gl.activeTexture(gl.TEXTURE2)
+      gl.bindTexture(gl.TEXTURE_2D, maskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.imageProgram, 'u_maskTex'), 2)
+      gl.uniform1i(gl.getUniformLocation(this.imageProgram, 'u_hasMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.imageProgram, 'u_hasMask'), 0)
+    }
 
     // u_dst = previous composite result; shader samples it at v_texCoord.
     // But v_texCoord is [0,1] over the layer's sub-rect, while u_dst covers
@@ -472,7 +484,7 @@ export class WebGLRenderer {
    * Composite `layers` (respecting visibility and opacity) and return the
    * merged RGBA pixels in top-to-bottom order, suitable for ImageData / export.
    */
-  readFlattenedPixels(layers: WebGLLayer[]): Uint8Array {
+  readFlattenedPixels(layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>): Uint8Array {
     const { gl, pixelWidth: w, pixelHeight: h } = this
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb0)
@@ -488,7 +500,8 @@ export class WebGLRenderer {
 
     for (const layer of layers) {
       if (!layer.visible || layer.opacity === 0) continue
-      this.compositeLayer(layer, srcTex, dstFb, w, h)
+      const maskLayer = maskMap?.get(layer.id)
+      this.compositeLayer(layer, srcTex, dstFb, w, h, maskLayer)
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
     }

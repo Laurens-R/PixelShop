@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ export type AppAction =
   | { type: 'UPDATE_TEXT_LAYER'; payload: TextLayerState }
   | { type: 'ADD_SHAPE_LAYER'; payload: ShapeLayerState }
   | { type: 'UPDATE_SHAPE_LAYER'; payload: ShapeLayerState }
+  | { type: 'ADD_MASK_LAYER'; payload: MaskLayerState }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_GRID_SIZE'; payload: number }
@@ -113,13 +114,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'REMOVE_LAYER': {
       if (state.layers.length <= 1) return state
-      const remaining = state.layers.filter((l) => l.id !== action.payload)
+      // Also remove any mask child whose parent is being removed
+      const remaining = state.layers.filter((l) =>
+        l.id !== action.payload &&
+        !('type' in l && l.type === 'mask' && (l as MaskLayerState).parentId === action.payload)
+      )
+      if (remaining.length === 0) return state
       return {
         ...state,
         layers: remaining,
         activeLayerId:
           state.activeLayerId === action.payload ? (remaining[remaining.length - 1]?.id ?? null) : state.activeLayerId
       }
+    }
+
+    case 'ADD_MASK_LAYER': {
+      const parentIdx = state.layers.findIndex((l) => l.id === action.payload.parentId)
+      if (parentIdx < 0) return state
+      const next = [...state.layers]
+      next.splice(parentIdx + 1, 0, action.payload)
+      return { ...state, layers: next, activeLayerId: action.payload.id }
     }
 
     case 'SET_ACTIVE_LAYER':
@@ -137,7 +151,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         layers: state.layers.map((l) =>
-          l.id === action.payload ? { ...l, locked: !l.locked } : l
+          l.id === action.payload && !('type' in l && l.type === 'mask')
+            ? { ...l, locked: !(l as { locked: boolean }).locked }
+            : l
         )
       }
 

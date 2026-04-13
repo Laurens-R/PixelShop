@@ -72,10 +72,21 @@ export function useCanvasHandle({
     exportFlatPixels: () => {
       const renderer = rendererRef.current
       if (!renderer) return null
-      const glLayers = layersStateRef.current
+      const stateLayers = layersStateRef.current
+      // Exclude mask layers from the composite list (they are applied via maskMap)
+      const glLayers = stateLayers
+        .filter((l) => !('type' in l && l.type === 'mask'))
         .map((l) => glLayersRef.current.get(l.id))
         .filter((l): l is WebGLLayer => l !== undefined)
-      const data = renderer.readFlattenedPixels(glLayers)
+      // Build mask map: parentId → mask GL layer (visible masks only)
+      const maskMap = new Map<string, WebGLLayer>()
+      for (const l of stateLayers) {
+        if ('type' in l && l.type === 'mask' && l.visible) {
+          const gl = glLayersRef.current.get(l.id)
+          if (gl) maskMap.set((l as { parentId: string }).parentId, gl)
+        }
+      }
+      const data = renderer.readFlattenedPixels(glLayers, maskMap)
       return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
     },
 

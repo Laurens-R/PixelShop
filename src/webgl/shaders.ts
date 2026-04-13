@@ -36,6 +36,10 @@ export const IMAGE_FRAG = /* glsl */ `#version 300 es
   // Used to remap layer-local v_texCoord → canvas UV for sampling u_dst.
   uniform vec4 u_dstRect;
 
+  // Optional layer mask (full-canvas sized). R channel = grayscale mask alpha.
+  uniform sampler2D u_maskTex;
+  uniform bool u_hasMask;
+
   in vec2 v_texCoord;
   out vec4 fragColor;
 
@@ -62,8 +66,13 @@ export const IMAGE_FRAG = /* glsl */ `#version 300 es
   void main() {
     vec4 src = texture(u_image, v_texCoord);
     src.a *= u_opacity;
-    // Remap layer-local UV (v_texCoord) to full-canvas UV for sampling u_dst
+    // Remap layer-local UV to canvas UV for mask and dst sampling
     vec2 dstUV = u_dstRect.xy + v_texCoord * u_dstRect.zw;
+    // Apply layer mask: R channel = grayscale mask alpha (0=hide, 1=show)
+    if (u_hasMask) {
+      float maskVal = texture(u_maskTex, dstUV).r;
+      src.a *= maskVal;
+    }
     if (src.a < 0.0001) { fragColor = texture(u_dst, dstUV); return; }
 
     vec4 dst = texture(u_dst, dstUV);

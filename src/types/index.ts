@@ -141,7 +141,22 @@ export interface ShapeLayerState {
   antiAlias: boolean
 }
 
-export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState
+/**
+ * Layer mask child — stores a single-channel grayscale mask (0=hide, 255=show)
+ * painted directly on by the user. Stored as a full-canvas RGBA WebGLLayer
+ * where the R channel is the mask alpha value.  Immediately follows its parent
+ * in the layers array and is excluded from independent compositing.
+ */
+export interface MaskLayerState {
+  id: string
+  name: string
+  visible: boolean
+  type: 'mask'
+  /** ID of the parent layer this mask belongs to. */
+  parentId: string
+}
+
+export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState
 
 export type BackgroundFill = 'white' | 'black' | 'transparent'
 

@@ -10,6 +10,8 @@ interface ColorPickerProps {
   secondaryColor?: RGBAColor
   onPrimaryChange?: (color: RGBAColor) => void
   onSecondaryChange?: (color: RGBAColor) => void
+  /** When true, restricts to grayscale only (mask layer mode). */
+  grayscaleOnly?: boolean
 }
 
 export function ColorPicker({
@@ -17,6 +19,7 @@ export function ColorPicker({
   secondaryColor = { r: 255, g: 255, b: 255, a: 255 },
   onPrimaryChange,
   onSecondaryChange,
+  grayscaleOnly = false,
 }: ColorPickerProps): React.JSX.Element {
   const [active, setActive] = useState<'fg' | 'bg'>('fg')
 
@@ -36,17 +39,19 @@ export function ColorPicker({
       {/* FG / BG swatches */}
       <div className={styles.swatchRow}>
         <div className={styles.swatchStack}>
-          <button
-            className={`${styles.swatch} ${styles.swatchBack} ${active === 'bg' ? styles.swatchSel : ''}`}
-            style={{ background: bgHex }}
-            onClick={() => setActive('bg')}
-            aria-label="Background color"
-            title="Background (click to edit)"
-          />
+          {!grayscaleOnly && (
+            <button
+              className={`${styles.swatch} ${styles.swatchBack} ${active === 'bg' ? styles.swatchSel : ''}`}
+              style={{ background: bgHex }}
+              onClick={() => setActive('bg')}
+              aria-label="Background color"
+              title="Background (click to edit)"
+            />
+          )}
           <button
             className={`${styles.swatch} ${styles.swatchFront} ${active === 'fg' ? styles.swatchSel : ''}`}
             style={{ background: fgHex }}
-            onClick={() => setActive('fg')}
+            onClick={() => { setActive('fg') }}
             aria-label="Foreground color"
             title="Foreground (click to edit)"
           />
@@ -54,7 +59,7 @@ export function ColorPicker({
         <span className={styles.swatchLabel}>{active === 'fg' ? 'Foreground' : 'Background'}</span>
       </div>
 
-      <EmbedColorPicker value={activeHex} onChange={handleChange} />
+      <EmbedColorPicker value={activeHex} onChange={handleChange} grayscaleOnly={grayscaleOnly} />
     </div>
   )
 }

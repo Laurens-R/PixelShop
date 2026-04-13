@@ -10,7 +10,7 @@ interface UseWebGLReturn {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
   rendererRef: React.RefObject<WebGLRenderer | null>
   createLayer: (id: string, name: string) => WebGLLayer | null
-  render: (layers: WebGLLayer[]) => void
+  render: (layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>) => void
 }
 
 export function useWebGL({ pixelWidth, pixelHeight }: UseWebGLOptions): UseWebGLReturn {
@@ -39,8 +39,8 @@ export function useWebGL({ pixelWidth, pixelHeight }: UseWebGLOptions): UseWebGL
     []
   )
 
-  const render = useCallback((layers: WebGLLayer[]): void => {
-    rendererRef.current?.render(layers)
+  const render = useCallback((layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>): void => {
+    rendererRef.current?.render(layers, maskMap)
   }, [])
 
   return { canvasRef, rendererRef, createLayer, render }

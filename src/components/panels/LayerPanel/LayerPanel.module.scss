@@ -221,3 +221,39 @@
   }
 }
 
+.menuDivider {
+  height: 1px;
+  background: vars.$color-border;
+  margin: 3px 0;
+}
+
+// ─── Mask item ──────────────────────────────────────────────────────────────
+
+// Indented row for mask child layers
+.maskItem {
+  padding-left: 22px;
+  background: rgba(0, 0, 0, 0.12);
+
+  &.itemActive {
+    background-color: #2e5f96;
+  }
+
+  &.itemSelected {
+    background-color: rgba(6, 153, 251, 0.18);
+  }
+}
+
+// Grayscale gradient thumbnail shown for mask layers
+.maskThumb {
+  background: linear-gradient(to right, #000 0%, #fff 100%) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+// "Layer Mask" label in the blend mode row
+.maskModeLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  font-style: italic;
+  padding: 0 2px;
+}
+

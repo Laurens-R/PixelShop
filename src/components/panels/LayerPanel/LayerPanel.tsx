@@ -55,6 +55,16 @@ const AddLayerIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const MaskIcon = ({ active }: { active: boolean }): React.JSX.Element => (
+  <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" width="12" height="12">
+    <circle cx="7" cy="7" r="5" />
+    {active
+      ? <path d="M7 2v10M2 7h10" strokeLinecap="round" />
+      : <path d="M2 7h10" strokeLinecap="round" />
+    }
+  </svg>
+)
+
 const DeleteLayerIcon = (): React.JSX.Element => (
   <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" width="12" height="12">
     <path d="M3 4h8M5 4V3h4v1M5 4v7h4V4" strokeLinecap="round" strokeLinejoin="round" />
@@ -79,6 +89,7 @@ interface LayerPanelProps {
   onMergeVisible: () => void
   onMergeDown: () => void
   onFlattenImage: () => void
+  onAddMaskLayer: (parentId: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -99,6 +110,7 @@ export function LayerPanel({
   onMergeVisible,
   onMergeDown,
   onFlattenImage,
+  onAddMaskLayer,
 }: LayerPanelProps): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
@@ -163,9 +175,14 @@ export function LayerPanel({
   const activeLayer = layers.find((l) => l.id === activeLayerId)
   const canDelete = layers.length > 1
   const displayLayers = [...layers].reverse()
+  const isMaskActive = activeLayer && 'type' in activeLayer && activeLayer.type === 'mask'
 
-  const opacityValue = activeLayer ? Math.round(activeLayer.opacity * 100) : 100
-  const blendValue: BlendMode = activeLayer?.blendMode ?? 'normal'
+  const opacityValue = (!isMaskActive && activeLayer) ? Math.round((activeLayer as { opacity: number }).opacity * 100) : 100
+  const blendValue: BlendMode = (!isMaskActive && activeLayer) ? (activeLayer as { blendMode: BlendMode }).blendMode : 'normal'
+
+  // Whether "Add Layer Mask" is available for the active layer
+  const canAddMask = activeLayerId && !isMaskActive &&
+    !layers.some(l => 'type' in l && l.type === 'mask' && (l as { parentId: string }).parentId === activeLayerId)
 
   const startEdit = (layer: LayerState, e: React.MouseEvent): void => {
     e.stopPropagation()
@@ -233,21 +250,24 @@ export function LayerPanel({
       </div>
 
       {/* ── Lock row ─────────────────────────────────────────────────── */}
-      <div className={styles.lockRow}>
-        <span className={styles.lockLabel}>Lock:</span>
-        <button
-          className={`${styles.lockBtn} ${activeLayer?.locked ? styles.lockBtnActive : ''}`}
-          title={activeLayer?.locked ? 'Unlock layer' : 'Lock layer'}
-          disabled={!activeLayer}
-          onClick={() => activeLayer && onLayerToggleLock(activeLayer.id)}
-        >
-          <LockIcon locked={activeLayer?.locked ?? false} />
-        </button>
-      </div>
+      {!isMaskActive && (
+        <div className={styles.lockRow}>
+          <span className={styles.lockLabel}>Lock:</span>
+          <button
+            className={`${styles.lockBtn} ${activeLayer && !isMaskActive && (activeLayer as { locked?: boolean }).locked ? styles.lockBtnActive : ''}`}
+            title={(activeLayer && !isMaskActive && (activeLayer as { locked?: boolean }).locked) ? 'Unlock layer' : 'Lock layer'}
+            disabled={!activeLayer || !!isMaskActive}
+            onClick={() => activeLayer && !isMaskActive && onLayerToggleLock(activeLayer.id)}
+          >
+            <LockIcon locked={(!isMaskActive && (activeLayer as unknown as { locked?: boolean })?.locked) ?? false} />
+          </button>
+        </div>
+      )}
 
       {/* ── Layer list ────────────────────────────────────────────────── */}
       <ul className={styles.list} role="listbox" aria-label="Layers" onContextMenu={handleContextMenu}>
         {displayLayers.map((layer, displayIdx) => {
+          const isMask = 'type' in layer && layer.type === 'mask'
           const isActive = layer.id === activeLayerId
           const isSelected = selectedIds.has(layer.id)
           return (
@@ -255,15 +275,16 @@ export function LayerPanel({
               key={layer.id}
               className={[
                 styles.item,
+                isMask    ? styles.maskItem    : '',
                 isActive    ? styles.itemActive   : '',
                 isSelected && !isActive ? styles.itemSelected : '',
               ].join(' ')}
               role="option"
               aria-selected={isActive}
-              draggable
-              onDragStart={(e) => handleDragStart(displayIdx, e)}
+              draggable={!isMask}
+              onDragStart={(e) => !isMask && handleDragStart(displayIdx, e)}
               onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(displayIdx, e)}
+              onDrop={(e) => !isMask && handleDrop(displayIdx, e)}
               onClick={(e) => handleLayerClick(layer, e)}
             >
               <button
@@ -271,10 +292,10 @@ export function LayerPanel({
                 onClick={(e) => { e.stopPropagation(); onLayerToggleVisibility(layer.id) }}
                 aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
               >
-                <EyeIcon visible={layer.visible} />
+                {isMask ? <MaskIcon active={isActive} /> : <EyeIcon visible={layer.visible} />}
               </button>
 
-              <div className={styles.thumb} aria-hidden="true" />
+              <div className={`${styles.thumb} ${isMask ? styles.maskThumb : ''}`} aria-hidden="true" />
 
               {editingId === layer.id ? (
                 <input
@@ -296,7 +317,7 @@ export function LayerPanel({
                 </span>
               )}
 
-              {layer.locked && (
+              {!isMask && (layer as { locked?: boolean }).locked && (
                 <span className={styles.lockIcon}><LockIcon locked /></span>
               )}
             </li>
@@ -327,6 +348,14 @@ export function LayerPanel({
           <div className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
             <button
               className={styles.menuItem}
+              disabled={!canAddMask}
+              onMouseDown={() => { closeContextMenu(); if (activeLayerId) onAddMaskLayer(activeLayerId) }}
+            >
+              Add Layer Mask
+            </button>
+            <div className={styles.menuDivider} />
+            <button
+              className={styles.menuItem}
               disabled={new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])]).size < 2}
               onMouseDown={execMergeSelected}
             >
@@ -334,7 +363,7 @@ export function LayerPanel({
             </button>
             <button
               className={styles.menuItem}
-              disabled={layers.filter((l) => l.visible).length < 2}
+              disabled={layers.filter((l) => l.visible && !('type' in l && l.type === 'mask')).length < 2}
               onMouseDown={execMergeVisible}
             >
               Merge Visible
@@ -348,7 +377,7 @@ export function LayerPanel({
             </button>
             <button
               className={styles.menuItem}
-              disabled={layers.length < 2}
+              disabled={layers.filter(l => !('type' in l && l.type === 'mask')).length < 2}
               onMouseDown={execFlattenImage}
             >
               Flatten Image

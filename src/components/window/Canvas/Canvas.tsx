@@ -4,7 +4,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
 import type { WebGLLayer } from '@/webgl/WebGLRenderer'
-import type { TextLayerState, ShapeLayerState, PixelLayerState } from '@/types'
+import type { TextLayerState, ShapeLayerState, PixelLayerState, MaskLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { brushOptions } from '@/tools/brush'
@@ -163,6 +163,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           // Shape layers are full-canvas-sized (rasterized vector data)
           layer = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
           rasterizeShapeToLayer(ls, layer, cw, ch)
+        } else if ('type' in ls && ls.type === 'mask') {
+          // Mask layers are full-canvas-sized; initialized all-white (fully reveal parent)
+          layer = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+          layer.data.fill(255)
         } else {
           // New blank layer — start at 128×128 centered on the canvas
           const initW = Math.min(128, cw)
@@ -172,13 +176,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           layer = renderer.createLayer(ls.id, ls.name, initW, initH, ox, oy)
         }
 
-        layer.opacity = ls.opacity
-        layer.visible = ls.visible
-        layer.blendMode = ls.blendMode
+        layer.opacity   = 'opacity'   in ls ? ls.opacity   : 1
+        layer.visible   = ls.visible
+        layer.blendMode = 'blendMode' in ls ? ls.blendMode : 'normal'
         renderer.flushLayer(layer)
         glLayersRef.current.set(ls.id, layer)
       }
-      render(buildOrderedGLLayers())
+      render(buildOrderedGLLayers(), buildMaskMap())
       if (isActiveRef.current) {
         onReadyRef.current?.()
       }
@@ -214,6 +218,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           rasterizeShapeToLayer(ls, gl, cw, ch)
           renderer.flushLayer(gl)
           map.set(ls.id, gl)
+        } else if ('type' in ls && ls.type === 'mask') {
+          // Newly added mask layer — full-canvas white (default: fully reveal parent)
+          const cw = renderer.pixelWidth
+          const ch = renderer.pixelHeight
+          const gl = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+          gl.data.fill(255)
+          renderer.flushLayer(gl)
+          map.set(ls.id, gl)
         } else {
           // Pixel layers start at 128×128 centered on the canvas
           const cw = renderer.pixelWidth
@@ -239,9 +251,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     for (const ls of state.layers) {
       const gl = map.get(ls.id)
       if (!gl) continue
-      gl.opacity = ls.opacity
-      gl.visible = ls.visible
-      gl.blendMode = ls.blendMode
+      gl.opacity   = 'opacity'   in ls ? ls.opacity   : 1
+      gl.visible   = ls.visible
+      gl.blendMode = 'blendMode' in ls ? ls.blendMode : 'normal'
       // Re-rasterize text layers whenever their state changes (text, style, position, color).
       // While a text layer is being edited, blank its bitmap so only the textarea is visible.
       if ('type' in ls && ls.type === 'text') {
@@ -263,13 +275,28 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
     }
 
-    render(buildOrderedGLLayers())
+    render(buildOrderedGLLayers(), buildMaskMap())
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.layers, isActive, editingLayerId])
 
+  function buildMaskMap(): Map<string, WebGLLayer> {
+    const maskMap = new Map<string, WebGLLayer>()
+    for (const ls of state.layers) {
+      if ('type' in ls && ls.type === 'mask' && ls.visible) {
+        const gl = glLayersRef.current.get(ls.id)
+        if (gl) maskMap.set((ls as MaskLayerState).parentId, gl)
+      }
+    }
+    return maskMap
+  }
+
   function buildOrderedGLLayers(): WebGLLayer[] {
     const map = glLayersRef.current
-    const layers = state.layers.map((ls) => map.get(ls.id)).filter((l): l is WebGLLayer => !!l)
+    // Exclude mask layers — they are applied via buildMaskMap, not composited independently
+    const layers = state.layers
+      .filter((ls) => !('type' in ls && ls.type === 'mask'))
+      .map((ls) => map.get(ls.id))
+      .filter((l): l is WebGLLayer => !!l)
     // Include any pending new pixel layer before state re-renders with it
     const pending = newPixelLayerRef.current
     if (pending && !layers.some(l => l === pending)) layers.push(pending)
@@ -295,11 +322,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const activeId = state.activeLayerId
     let activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
 
-    // If a paint tool fires on a text/shape layer, auto-create a new
+    // If a paint tool fires on a text/shape (but NOT mask) layer, auto-create a new
     // pixel layer above it on first pointerDown and redirect drawing there.
     if (TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && activeLayer) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
-      if (stateMeta && 'type' in stateMeta) {
+      if (stateMeta && 'type' in stateMeta && stateMeta.type !== 'mask') {
         if (!newPixelLayerRef.current) {
           const { pixelWidth: cw, pixelHeight: ch } = renderer
           const newId = `layer-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -323,25 +350,40 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     // Text/shape tools don't need an existing pixel layer — they create their own
     if (!activeLayer && state.activeTool !== 'text' && state.activeTool !== 'shape') return null
     // Block pixel-modifying tools on locked layers and (for non-redirecting tools) on text/shape layers.
+    // Mask layers are allowed — tools paint grayscale onto the mask buffer.
     // Tools with paintsOntoPixelLayer already redirected above to a new pixel layer — they are allowed.
     if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
-      if (stateMeta?.locked) return null
-      if (!TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && stateMeta && 'type' in stateMeta) return null
+      if (stateMeta && 'locked' in stateMeta && stateMeta.locked) return null
+      const isParametric = stateMeta && 'type' in stateMeta && stateMeta.type !== 'mask'
+      if (!TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && isParametric) return null
+    }
+    // Detect mask layer — constrain colors to grayscale
+    const activeMeta = state.layers.find((l) => l.id === activeId)
+    const isMaskLayer = activeMeta && 'type' in activeMeta && activeMeta.type === 'mask'
+    const toGray = (c: { r: number; g: number; b: number; a: number }) => {
+      const g = Math.round(0.299 * c.r + 0.587 * c.g + 0.114 * c.b)
+      return { r: g, g: g, b: g, a: 255 }
     }
     return {
       renderer,
       layer: activeLayer!, // text tool never dereferences this; all others are guarded above
       layers: buildOrderedGLLayers(),
-      primaryColor: state.primaryColor,
-      secondaryColor: state.secondaryColor,
+      primaryColor: isMaskLayer ? toGray(state.primaryColor) : state.primaryColor,
+      secondaryColor: isMaskLayer ? toGray(state.secondaryColor) : state.secondaryColor,
       selectionMask: selectionStore.mask,
-      render,
+      render: (layers) => render(layers, buildMaskMap()),
       growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
+        // Mask layers are always full-canvas sized — never grow them.
+        // Growing a mask shifts its existing pixel data to a non-zero offset inside
+        // the new larger buffer, while new regions are zero-initialized (R=0 = hide).
+        // The shader samples the mask at canvas UV [0,1]², so a shifted/grown mask
+        // causes the parent layer to appear invisible ("squished mask" artifact).
+        if (isMaskLayer) return
         renderer.growLayerToFit(activeLayer!, canvasX, canvasY, extraRadius)
       },
       setColor: (color) => {
-        dispatch({ type: 'SET_PRIMARY_COLOR', payload: color })
+        dispatch({ type: 'SET_PRIMARY_COLOR', payload: isMaskLayer ? toGray(color) : color })
       },
       commitStroke: (label: string) => {
         onStrokeEndRef.current?.(label)

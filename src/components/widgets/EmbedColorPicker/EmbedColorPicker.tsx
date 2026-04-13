@@ -104,6 +104,11 @@ export interface EmbedColorPickerProps {
   /** Hex string, e.g. `#ff0000` */
   value: string
   onChange: (hex: string) => void
+  /**
+   * When true, restricts the picker to grayscale only.
+   * Used when painting on a layer mask.
+   */
+  grayscaleOnly?: boolean
 }
 
 /**
@@ -111,7 +116,7 @@ export interface EmbedColorPickerProps {
  * switchable input modes (RGB / HSV / HEX). Contains no portal or positioning
  * logic — wrap it in whatever container / popup you need.
  */
-export function EmbedColorPicker({ value, onChange }: EmbedColorPickerProps): React.JSX.Element {
+export function EmbedColorPicker({ value, onChange, grayscaleOnly = false }: EmbedColorPickerProps): React.JSX.Element {
   const gradRef = useRef<HTMLCanvasElement>(null)
   const hueRef  = useRef<HTMLCanvasElement>(null)
 
@@ -203,6 +208,41 @@ export function EmbedColorPicker({ value, onChange }: EmbedColorPickerProps): Re
   }
 
   const hexVal = toHex(rgb[0], rgb[1], rgb[2])
+
+  // ── Grayscale-only mode (mask layers) ───────────────────────────────────────
+
+  const onGraySlider = (v: number): void => {
+    const g = Math.max(0, Math.min(255, v))
+    fire(g, g, g)
+  }
+
+  if (grayscaleOnly) {
+    const grayValue = Math.round(0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2])
+    const grayHex = toHex(grayValue, grayValue, grayValue)
+    return (
+      <div className={styles.picker}>
+        <div className={styles.previewRow}>
+          <div className={styles.preview} style={{ background: grayHex }} />
+          <span className={styles.maskModeHint}>Mask — grayscale only</span>
+        </div>
+        <div className={styles.channels}>
+          <div className={styles.channelRow}>
+            <span className={styles.chLabel}>G</span>
+            <input
+              type="range" min={0} max={255} value={grayValue}
+              className={styles.chSlider}
+              style={{ background: 'linear-gradient(to right, #000, #fff)' }}
+              onChange={(e) => onGraySlider(parseInt(e.target.value))}
+            />
+            <SliderInput
+              min={0} max={255} value={grayValue} inputWidth={34}
+              onChange={onGraySlider}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={styles.picker}>

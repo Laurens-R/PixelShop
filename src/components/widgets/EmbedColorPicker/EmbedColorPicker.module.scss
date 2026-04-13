@@ -49,6 +49,13 @@
   flex-shrink: 0;
 }
 
+.maskModeHint {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  font-style: italic;
+  flex: 1;
+}
+
 // ─── Mode tabs ────────────────────────────────────────────────────────────────
 
 .modeTabs {
