@@ -10,14 +10,14 @@ export const dodgeOptions = {
   size: 25,
   exposure: 50,
   range: 'midtones' as DodgeBurnRange,
-  antiAlias: false,
+  antiAlias: true,
 }
 
 export const burnOptions = {
   size: 25,
   exposure: 50,
   range: 'midtones' as DodgeBurnRange,
-  antiAlias: false,
+  antiAlias: true,
 }
 
 // ─── Handler factory ──────────────────────────────────────────────────────────

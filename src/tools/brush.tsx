@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
-import { drawAirbrushCapsule } from './algorithm/bresenham'
+import { walkQuadBezier } from './algorithm/bresenham'
 import type { BrushShape } from './algorithm/bresenham'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Shared options ───────────────────────────────────────────────────────────
-// Module-level so the handler reads them synchronously inside pointer events.
 
 export const brushOptions = {
   size:             20,
@@ -13,101 +12,159 @@ export const brushOptions = {
   hardness:         50,
   shape:            'round' as BrushShape,
   antiAlias:        true,
+  smoothing:        20,  // 0 = raw coords, 100 = maximum stabilizer
   velocityTracking: false,
 }
 
-// ── Velocity dynamics ─────────────────────────────────────────────────────────
-// Speed reference (px / ms). At this speed, size and opacity hit their floors.
-const MAX_TRACKING_SPEED  = 5
-// At MAX_TRACKING_SPEED the brush narrows to this fraction of the set size.
-const MIN_SIZE_FACTOR     = 0.35
-// At MAX_TRACKING_SPEED, opacity is multiplied by this factor.
-const MIN_OPACITY_FACTOR  = 0.65
-// EMA weight for new speed samples (higher = snappier response, more jitter).
-const SPEED_SMOOTHING     = 0.25
+/**
+ * Map the 0-100 smoothing slider to an EMA alpha (fraction of the *new* sample
+ * to mix in each event). alpha=1 → instantaneous (no filter); alpha↓0 → heavy lag.
+ * We clamp to 0.05 so the brush never completely stops tracking.
+ */
+function smoothingToAlpha(s: number): number {
+  return Math.max(0.05, 1 - s / 100 * 0.92)
+}
 
-// ─── Handler ──────────────────────────────────────────────────────────────────
+// ── Velocity dynamics ─────────────────────────────────────────────────────────
+const MAX_TRACKING_SPEED  = 5    // px/ms — speed at which dynamics hit their floor
+const MIN_SIZE_FACTOR     = 0.35 // fast stroke → 35% of set size
+const MIN_OPACITY_FACTOR  = 0.65 // fast stroke → 65% of set opacity
+const SPEED_SMOOTHING     = 0.25 // EMA weight; higher = snappier but jitterier
+
+// ─── Midpoint B-spline brush handler ─────────────────────────────────────────
+// Positions are smoothed with an EMA stabilizer feeding into a midpoint
+// B-spline (approximating spline). The rendered path is a series of quadratic
+// Bézier arcs — P0→P1 drawn through the previous stabilised control point —
+// giving true curvature. A per-stroke touched-map prevents opacity accumulation
+// at segment joints without the ring/ball stamp artifacts.
+
+type Point = { x: number; y: number }
 
 function createBrushHandler(): ToolHandler {
-  let lastPos: { x: number; y: number; time: number } | null = null
+  let lastRendered: Point | null = null  // endpoint of the last drawn Bézier arc
+  let lastCtrl:     Point | null = null  // last stabilised pointer (B-spline ctrl pt)
   let touched: Map<number, number> | null = null
   let smoothSpeed = 0
+  let stabX = 0, stabY = 0
+  let prevTime = 0
 
-  function stamp(
-    x0: number, y0: number,
-    x1: number, y1: number,
-    effectiveSize: number,
-    effectiveOpacity: number,
+  /**
+   * Paint a quadratic Bézier arc from (p0x,p0y) to (p1x,p1y) using (cpx,cpy)
+   * as the attractor. Stamps along the arc via walkQuadBezier; the shared
+   * per-stroke touched map ensures no pixel accumulates more alpha than it
+   * should, preventing dark blobs where consecutive arcs share endpoints.
+   */
+  function paint(
+    p0x: number, p0y: number,
+    cpx: number, cpy: number,
+    p1x: number, p1y: number,
+    size: number, opacity: number,
     ctx: ToolContext,
   ): void {
     const { renderer, layer, layers, primaryColor, selectionMask, render, growLayerToFit } = ctx
     const { r, g, b, a } = primaryColor
-    const radius = effectiveSize / 2
-
-    growLayerToFit(x0, y0, Math.ceil(radius) + 2)
-    if (x1 !== x0 || y1 !== y0) growLayerToFit(x1, y1, Math.ceil(radius) + 2)
-
+    const padR = Math.ceil(size / 2) + 2
+    growLayerToFit(Math.round(p0x), Math.round(p0y), padR)
+    growLayerToFit(Math.round(cpx),  Math.round(cpy),  padR)
+    growLayerToFit(Math.round(p1x), Math.round(p1y), padR)
     const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
-
-    drawAirbrushCapsule(
+    walkQuadBezier(
       renderer, layer,
-      x0, y0, x1, y1,
-      effectiveSize,
-      r, g, b, a,
-      effectiveOpacity,
-      brushOptions.hardness,
-      brushOptions.shape,
-      brushOptions.antiAlias,
-      touched ?? undefined,
-      sel,
+      p0x, p0y, cpx, cpy, p1x, p1y,
+      size, r, g, b, a, opacity,
+      brushOptions.hardness, brushOptions.shape, brushOptions.antiAlias,
+      touched ?? undefined, sel,
     )
-
     renderer.flushLayer(layer)
     render(layers)
   }
 
-  /** Returns effective { size, opacity } modulated by stroke speed dynamics. */
   function resolveStrokeParams(speed: number): { size: number; opacity: number } {
     if (!brushOptions.velocityTracking || speed <= 0) {
       return { size: brushOptions.size, opacity: brushOptions.opacity }
     }
     const t = Math.min(1, speed / MAX_TRACKING_SPEED)
     return {
-      // Fast → thinner; slow → full size
       size:    brushOptions.size    * Math.max(MIN_SIZE_FACTOR,    1 - t * (1 - MIN_SIZE_FACTOR)),
-      // Fast → lighter; slow → full opacity
       opacity: brushOptions.opacity * Math.max(MIN_OPACITY_FACTOR, 1 - t * (1 - MIN_OPACITY_FACTOR)),
     }
   }
 
   return {
     onPointerDown({ x, y }: ToolPointerPos, ctx: ToolContext) {
-      touched = new Map()
-      smoothSpeed = 0
-      lastPos = { x, y, time: performance.now() }
-      stamp(x, y, x, y, brushOptions.size, brushOptions.opacity, ctx)
+      touched      = new Map()
+      smoothSpeed  = 0
+      stabX = x; stabY = y
+      prevTime     = performance.now()
+      lastRendered = { x, y }
+      lastCtrl     = { x, y }
+      // Initial dot: degenerate Bézier at a single point
+      paint(x, y, x, y, x, y, brushOptions.size, brushOptions.opacity, ctx)
     },
 
     onPointerMove({ x, y }: ToolPointerPos, ctx: ToolContext) {
-      if (!lastPos) return
+      if (!lastRendered || !lastCtrl) return
       const now = performance.now()
-      const dt  = now - lastPos.time
-      const d   = Math.hypot(x - lastPos.x, y - lastPos.y)
-      const rawSpeed = dt > 0 ? d / dt : 0
-      // Exponential moving average keeps dynamics smooth even at irregular event rates
-      smoothSpeed = smoothSpeed * (1 - SPEED_SMOOTHING) + rawSpeed * SPEED_SMOOTHING
-      const { size: effectiveSize, opacity: effectiveOpacity } = resolveStrokeParams(smoothSpeed)
-      stamp(lastPos.x, lastPos.y, x, y, effectiveSize, effectiveOpacity, ctx)
-      lastPos = { x, y, time: now }
+
+      // EMA spatial stabilizer — low-pass filters sub-pixel hardware jitter
+      const alpha = smoothingToAlpha(brushOptions.smoothing)
+      stabX = stabX * (1 - alpha) + x * alpha
+      stabY = stabY * (1 - alpha) + y * alpha
+
+      // Velocity (px/ms)
+      const dt = now - prevTime
+      const d  = Math.hypot(stabX - lastCtrl.x, stabY - lastCtrl.y)
+      smoothSpeed = smoothSpeed * (1 - SPEED_SMOOTHING) + (dt > 0 ? d / dt : 0) * SPEED_SMOOTHING
+      prevTime = now
+
+      const { size, opacity } = resolveStrokeParams(smoothSpeed)
+
+      // Spacing: minimum arc travel before we commit a new Bézier segment.
+      // size * 0.2 keeps dab density consistent with the pencil tool.
+      const spacing = Math.max(1, size * 0.2)
+
+      // Midpoint B-spline: the rendered tip advances to mid(lastCtrl, stab).
+      // lastCtrl becomes the quadratic Bézier control point — the curve is
+      // "attracted" toward the actual pointer without passing through it,
+      // giving automatic rounded corners with zero overshoot.
+      const tipX = (lastCtrl.x + stabX) * 0.5
+      const tipY = (lastCtrl.y + stabY) * 0.5
+
+      if (Math.hypot(tipX - lastRendered.x, tipY - lastRendered.y) >= spacing) {
+        paint(
+          lastRendered.x, lastRendered.y,
+          lastCtrl.x, lastCtrl.y,  // B-spline attractor → Bézier control point
+          tipX, tipY,
+          size, opacity, ctx,
+        )
+        lastRendered = { x: tipX, y: tipY }
+      }
+
+      lastCtrl = { x: stabX, y: stabY }
     },
 
-    onPointerUp() {
-      lastPos = null
-      touched = null
-      smoothSpeed = 0
+    onPointerUp(_pos: ToolPointerPos, ctx: ToolContext) {
+      if (lastRendered && lastCtrl) {
+        const { size, opacity } = resolveStrokeParams(smoothSpeed)
+        if (Math.hypot(lastCtrl.x - lastRendered.x, lastCtrl.y - lastRendered.y) >= 1) {
+          // Close deferred tail — draw from lastRendered → lastCtrl with lastCtrl
+          // duplicated as the end point (zero-length tail eases cleanly)
+          paint(
+            lastRendered.x, lastRendered.y,
+            lastCtrl.x, lastCtrl.y,
+            lastCtrl.x, lastCtrl.y,
+            size, opacity, ctx,
+          )
+        }
+      }
+      lastRendered = null
+      lastCtrl     = null
+      touched      = null
+      smoothSpeed  = 0
     },
   }
 }
+
 
 // ─── Options UI ────────────────────────────────────────────────────────────────
 
@@ -123,11 +180,13 @@ function BrushOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
   const [hardness,         setHardness]         = useState(brushOptions.hardness)
   const [shape,            setShape]            = useState<BrushShape>(brushOptions.shape)
   const [antiAlias,        setAntiAlias]        = useState(brushOptions.antiAlias)
+  const [smoothing,        setSmoothing]        = useState(brushOptions.smoothing)
   const [velocityTracking, setVelocityTracking] = useState(brushOptions.velocityTracking)
 
-  const handleSize     = (v: number): void => { brushOptions.size     = v; setSize(v) }
-  const handleOpacity  = (v: number): void => { brushOptions.opacity  = v; setOpacity(v) }
-  const handleHardness = (v: number): void => { brushOptions.hardness = v; setHardness(v) }
+  const handleSize      = (v: number): void => { brushOptions.size      = v; setSize(v) }
+  const handleOpacity   = (v: number): void => { brushOptions.opacity   = v; setOpacity(v) }
+  const handleHardness  = (v: number): void => { brushOptions.hardness  = v; setHardness(v) }
+  const handleSmoothing = (v: number): void => { brushOptions.smoothing = v; setSmoothing(v) }
 
   const handleShape = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const v = e.target.value as BrushShape
@@ -160,6 +219,9 @@ function BrushOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
           <option key={value} value={value}>{label}</option>
         ))}
       </select>
+      <span className={styles.optSep} />
+      <label className={styles.optLabel} title="Filter out pointer noise — higher values produce cleaner edges at the cost of slight lag">Smoothing:</label>
+      <SliderInput value={smoothing} min={0} max={100} suffix="%" inputWidth={42} onChange={handleSmoothing} />
       <span className={styles.optSep} />
       <label
         className={styles.optCheckLabel}

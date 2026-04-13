@@ -7,7 +7,7 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 // Module-level object so both createPencilHandler and PencilOptions share state
 // without needing React context or prop drilling.
 
-const pencilOptions = { size: 1, opacity: 100, antiAlias: false }
+const pencilOptions = { size: 1, opacity: 100, antiAlias: true }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 

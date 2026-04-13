@@ -715,27 +715,35 @@ export function stampAirbrush(
   opacity: number,
   hardness: number,
   shape: BrushShape,
+  antiAlias = false,
   touched?: Map<number, number>,
   sel?: SelMask,
 ): void {
-  const radius = size / 2
-  const iRadius = Math.ceil(radius) + 1
-  const hardR = radius * (hardness / 100)
+  const radius  = size / 2
+  const outerR  = antiAlias ? radius + 0.5 : radius
+  const iRadius = Math.ceil(outerR) + 1
+  const hardR   = radius * (hardness / 100)
   const softZone = radius - hardR
 
   for (let dy = -iRadius; dy <= iRadius; dy++) {
     for (let dx = -iRadius; dx <= iRadius; dx++) {
       const dist = shapeDistance(dx, dy, shape)
-      if (dist > radius) continue
+      if (dist > outerR) continue
 
-      let coverage: number
+      // Sub-pixel feather at the outer boundary (AA only)
+      const edgeFactor = antiAlias ? Math.min(1, outerR - dist) : 1
+
+      let softFactor: number
       if (softZone <= 0 || dist <= hardR) {
-        coverage = 1
+        softFactor = 1
       } else {
         // Cosine falloff in the soft zone: smooth S-curve from 1→0
         const t = (dist - hardR) / softZone
-        coverage = 0.5 * (1 + Math.cos(Math.PI * t))
+        softFactor = 0.5 * (1 + Math.cos(Math.PI * t))
       }
+
+      const coverage = edgeFactor * softFactor
+      if (coverage <= 0) continue
 
       blendPixelOver(
         renderer, layer,
@@ -854,7 +862,7 @@ export function drawAirbrushSegment(
   const spacing = Math.max(1, size * 0.2)
 
   if (dist === 0) {
-    stampAirbrush(renderer, layer, x0, y0, size, r, g, b, a, opacity, hardness, shape, touched, sel)
+    stampAirbrush(renderer, layer, x0, y0, size, r, g, b, a, opacity, hardness, shape, false, touched, sel)
     return
   }
 
@@ -863,6 +871,41 @@ export function drawAirbrushSegment(
     const t = i / steps
     const sx = Math.round(x0 + dx * t)
     const sy = Math.round(y0 + dy * t)
-    stampAirbrush(renderer, layer, sx, sy, size, r, g, b, a, opacity, hardness, shape, touched, sel)
+    stampAirbrush(renderer, layer, sx, sy, size, r, g, b, a, opacity, hardness, shape, false, touched, sel)
+  }
+}
+
+/**
+ * Walk a quadratic Bézier from (p0x,p0y) to (p1x,p1y) guided by control
+ * point (cpx,cpy), stamping brush dabs at stamp-spacing intervals.
+ *
+ * Used by the midpoint B-spline brush so strokes produce C1-continuous
+ * approximating curves that never overshoot at sharp direction changes.
+ * Arc-length is estimated via |p0→cp| + |cp→p1| (conservative upper bound).
+ */
+export function walkQuadBezier(
+  renderer: WebGLRenderer,
+  layer: WebGLLayer,
+  p0x: number, p0y: number,
+  cpx: number, cpy: number,
+  p1x: number, p1y: number,
+  size: number,
+  r: number, g: number, b: number, a: number,
+  opacity: number,
+  hardness: number,
+  shape: BrushShape,
+  antiAlias: boolean,
+  touched?: Map<number, number>,
+  sel?: SelMask,
+): void {
+  const arcEst = Math.hypot(cpx - p0x, cpy - p0y) + Math.hypot(p1x - cpx, p1y - cpy)
+  const spacing = Math.max(1, size * 0.2)
+  const steps   = Math.max(1, Math.ceil(arcEst / spacing))
+  for (let i = 0; i <= steps; i++) {
+    const t  = i / steps
+    const t1 = 1 - t
+    const x  = Math.round(t1 * t1 * p0x + 2 * t1 * t * cpx + t * t * p1x)
+    const y  = Math.round(t1 * t1 * p0y + 2 * t1 * t * cpy + t * t * p1y)
+    stampAirbrush(renderer, layer, x, y, size, r, g, b, a, opacity, hardness, shape, antiAlias, touched, sel)
   }
 }

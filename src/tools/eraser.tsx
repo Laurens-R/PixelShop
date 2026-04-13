@@ -8,7 +8,7 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 const eraserOptions = {
   size: 20,
   strength: 100,
-  antiAlias: false,
+  antiAlias: true,
   alphaMode: false,
 }
 
