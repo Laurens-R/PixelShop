@@ -111,4 +111,11 @@ export interface ToolDefinition {
   modifiesPixels?: boolean
   /** Set true for async tools that call ctx.commitStroke() themselves; suppresses the automatic pointer-up capture. */
   skipAutoHistory?: boolean
+  /**
+   * True for tools that paint/draw new pixels and therefore need a real pixel
+   * layer to operate on. When the active layer is a text or shape layer, Canvas
+   * will auto-create a new pixel layer above it before the first stroke.
+   * Should be set only for brush, pencil, fill, gradient (not move, eraser, dodge, burn, etc.).
+   */
+  paintsOntoPixelLayer?: boolean
 }

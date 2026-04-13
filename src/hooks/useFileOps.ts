@@ -19,6 +19,7 @@ interface UseFileOpsOptions {
   setActiveTabId: Dispatch<SetStateAction<string>>
   setPendingLayerData: Dispatch<SetStateAction<Map<string, string> | null>>
   captureActiveSnapshot: () => TabSnapshot
+  serializeActiveTabPixels: () => Map<string, string> | null
   handleSwitchTab: (toId: string) => void
   dispatch: Dispatch<AppAction>
 }
@@ -41,15 +42,17 @@ export function useFileOps({
   setActiveTabId,
   setPendingLayerData,
   captureActiveSnapshot,
+  serializeActiveTabPixels,
   handleSwitchTab,
   dispatch,
 }: UseFileOpsOptions): UseFileOpsReturn {
   const [untitledCounter, setUntitledCounter] = useState(1)
 
   const handleNewConfirm = useCallback(({ width, height, backgroundFill }: { width: number; height: number; backgroundFill: BackgroundFill }): void => {
-    const snapshot     = captureActiveSnapshot()
-    const savedHistory = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
-    const n            = untitledCounter
+    const snapshot        = captureActiveSnapshot()
+    const savedHistory    = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+    const savedLayerData  = serializeActiveTabPixels()
+    const n               = untitledCounter
     setUntitledCounter(n + 1)
     const newId: string = makeTabId()
     const newSnapshot: TabSnapshot = {
@@ -58,7 +61,7 @@ export function useFileOps({
       activeLayerId: 'layer-0', zoom: 1,
     }
     const updated: TabRecord[] = [
-      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t),
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
       { id: newId, title: `Untitled-${n + 1}`, filePath: null, snapshot: newSnapshot, savedLayerData: null, savedHistory: null, canvasKey: 1 },
     ]
     setTabs(updated)
@@ -66,7 +69,7 @@ export function useFileOps({
     historyStore.clear()
     setPendingLayerData(null)
     dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
-  }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, dispatch, setTabs, setActiveTabId, setPendingLayerData])
+  }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, serializeActiveTabPixels, dispatch, setTabs, setActiveTabId, setPendingLayerData])
 
   const handleOpen = useCallback(async (): Promise<void> => {
     const path = await window.api.openPxshopDialog()
@@ -90,11 +93,12 @@ export function useFileOps({
         canvasWidth: width, canvasHeight: height, backgroundFill: 'transparent',
         layers, activeLayerId: layerId, zoom: 1,
       }
-      const snapshot     = captureActiveSnapshot()
-      const savedHistory = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
-      const newId        = makeTabId()
+      const snapshot      = captureActiveSnapshot()
+      const savedHistory   = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+      const savedLayerData = serializeActiveTabPixels()
+      const newId          = makeTabId()
       const updated: TabRecord[] = [
-        ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t),
+        ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
         { id: newId, title, filePath: null, snapshot: newSnapshot, savedLayerData: layerData, savedHistory: null, canvasKey: 1 },
       ]
       setTabs(updated)
@@ -130,11 +134,12 @@ export function useFileOps({
       canvasWidth: doc.canvas.width, canvasHeight: doc.canvas.height, backgroundFill: bg,
       layers, activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null, zoom: 1,
     }
-    const snapshot     = captureActiveSnapshot()
-    const savedHistory = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
-    const newId        = makeTabId()
+    const snapshot      = captureActiveSnapshot()
+    const savedHistory   = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+    const savedLayerData = serializeActiveTabPixels()
+    const newId          = makeTabId()
     const updated: TabRecord[] = [
-      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t),
+      ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
       { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: layerData, savedHistory: null, canvasKey: 1 },
     ]
     setTabs(updated)
@@ -142,7 +147,7 @@ export function useFileOps({
     historyStore.clear()
     setPendingLayerData(null)
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
-  }, [tabs, activeTabId, captureActiveSnapshot, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
+  }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
 
   const handleSave = useCallback(async (saveAs = false): Promise<void> => {
     const activeTab = tabs.find(t => t.id === activeTabId)

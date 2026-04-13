@@ -92,4 +92,6 @@
   flex-shrink: 0;
   padding: vars.$spacing-2;
   border-top: 1px solid vars.$color-border;
+  display: flex;
+  gap: vars.$spacing-2;
 }

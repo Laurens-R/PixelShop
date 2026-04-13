@@ -11,6 +11,7 @@ export type AppAction =
   | { type: 'ADD_SWATCH'; payload: RGBAColor }
   | { type: 'REMOVE_SWATCH'; payload: number }
   | { type: 'ADD_LAYER'; payload: LayerState }
+  | { type: 'INSERT_LAYER_ABOVE'; payload: { layer: LayerState; aboveId: string } }
   | { type: 'REMOVE_LAYER'; payload: string }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
   | { type: 'TOGGLE_LAYER_VISIBILITY'; payload: string }
@@ -101,6 +102,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
         layers: [...state.layers, action.payload],
         activeLayerId: action.payload.id
       }
+
+    case 'INSERT_LAYER_ABOVE': {
+      const idx = state.layers.findIndex((l) => l.id === action.payload.aboveId)
+      const insertAt = idx >= 0 ? idx + 1 : state.layers.length
+      const next = [...state.layers]
+      next.splice(insertAt, 0, action.payload.layer)
+      return { ...state, layers: next, activeLayerId: action.payload.layer.id }
+    }
 
     case 'REMOVE_LAYER': {
       if (state.layers.length <= 1) return state

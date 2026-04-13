@@ -253,4 +253,5 @@ export const gradientTool: ToolDefinition = {
   createHandler: createGradientHandler,
   Options: GradientOptions,
   modifiesPixels: true,
+  paintsOntoPixelLayer: true,
 }

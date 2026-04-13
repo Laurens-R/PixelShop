@@ -18,6 +18,8 @@ export interface HistoryEntry {
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
+const MAX_HISTORY_ENTRIES = 50
+
 class HistoryStore {
   entries: HistoryEntry[] = []
   currentIndex = -1
@@ -36,10 +38,30 @@ class HistoryStore {
    */
   onPreview: ((index: number) => void) | null = null
 
+  /**
+   * Registered by useHistory. Called after clearing — allows a fresh snapshot
+   * to be pushed so the cleared state is still recoverable via undo.
+   */
+  onClear: (() => void) | null = null
+
+  private releaseEntry(e: HistoryEntry): void {
+    e.layerPixels.clear()
+    e.layerGeometry.clear()
+  }
+
   push(entry: HistoryEntry): void {
-    // Discard the redo chain (entries after currentIndex) before pushing
-    this.entries = this.entries.slice(0, this.currentIndex + 1)
+    // Discard the redo chain (entries after currentIndex), releasing their buffers
+    const redo = this.entries.splice(this.currentIndex + 1)
+    redo.forEach(e => this.releaseEntry(e))
+
     this.entries.push(entry)
+
+    // Cap history depth — release the oldest entry's buffers immediately
+    if (this.entries.length > MAX_HISTORY_ENTRIES) {
+      const oldest = this.entries.shift()!
+      this.releaseEntry(oldest)
+    }
+
     this.currentIndex = this.entries.length - 1
     this.selectedIndex = this.currentIndex
     this.notify()
@@ -81,10 +103,12 @@ class HistoryStore {
   }
 
   clear(): void {
+    this.entries.forEach(e => this.releaseEntry(e))
     this.entries = []
     this.currentIndex = -1
     this.selectedIndex = -1
     this.notify()
+    this.onClear?.()
   }
 
   /**

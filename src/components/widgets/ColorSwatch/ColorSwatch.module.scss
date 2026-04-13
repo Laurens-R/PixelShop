@@ -1,0 +1,37 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+// ─── Swatch button ────────────────────────────────────────────────────────────
+
+.swatch {
+  display: inline-block;
+  width: 22px;
+  height: 18px;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color vars.$transition-fast, box-shadow vars.$transition-fast;
+
+  &:hover {
+    border-color: vars.$color-text-muted;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+// ─── Popup wrapper ────────────────────────────────────────────────────────────
+
+.popup {
+  position: fixed;
+  z-index: 9999;
+  width: 210px;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-md;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  padding: 8px;
+}

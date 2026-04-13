@@ -163,6 +163,7 @@ export const pencilTool: ToolDefinition = {
   createHandler: createPencilHandler,
   Options: PencilOptions,
   modifiesPixels: true,
+  paintsOntoPixelLayer: true,
 }
 
 // Expose for potential reuse by other tools

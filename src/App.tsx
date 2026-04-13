@@ -49,7 +49,7 @@ function AppContent(): React.JSX.Element {
     activeTabIdRef, setTabsRef,
     canvasHandleRef,
     pendingLayerData, setPendingLayerData,
-    tabCanvasRef, captureActiveSnapshot,
+    tabCanvasRef, captureActiveSnapshot, serializeActiveTabPixels,
     handleSwitchTab, handleCloseTab,
   } = useTabs(state, dispatch)
 
@@ -64,7 +64,7 @@ function AppContent(): React.JSX.Element {
   const { handleNewConfirm, handleOpen, handleSave } = useFileOps({
     canvasHandleRef, state, tabs, activeTabId,
     setTabs, setActiveTabId, setPendingLayerData,
-    captureActiveSnapshot, handleSwitchTab, dispatch,
+    captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch,
   })
 
   // ── Clipboard ─────────────────────────────────────────────────────
@@ -167,31 +167,23 @@ function AppContent(): React.JSX.Element {
         />
         <main className={styles.canvasArea}>
           {tabs.map(tab => {
-            const tabActive = tab.id === activeTabId
+            if (tab.id !== activeTabId) return null
             return (
-              <div
-                key={tab.id}
-                style={tabActive
-                  ? { display: 'flex', flex: 1, overflow: 'hidden' }
-                  : { position: 'absolute', inset: 0, visibility: 'hidden', pointerEvents: 'none' }
-                }
-              >
-                <Canvas
-                  key={`${tab.id}-${tab.canvasKey}`}
-                  ref={tabCanvasRef(tab.id)}
-                  width={tab.snapshot.canvasWidth}
-                  height={tab.snapshot.canvasHeight}
-                  initialLayerData={tabActive && pendingLayerData ? pendingLayerData : tab.savedLayerData ?? undefined}
-                  isActive={tabActive}
-                  onStrokeEnd={captureHistory}
-                  onReady={() => {
-                    setPendingLayerData(null)
-                    setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, savedLayerData: null } : t))
-                    captureHistory(pendingLayerLabelRef.current ?? 'Initial State')
-                    pendingLayerLabelRef.current = null
-                  }}
-                />
-              </div>
+              <Canvas
+                key={`${tab.id}-${tab.canvasKey}`}
+                ref={tabCanvasRef(tab.id)}
+                width={tab.snapshot.canvasWidth}
+                height={tab.snapshot.canvasHeight}
+                initialLayerData={pendingLayerData ?? tab.savedLayerData ?? undefined}
+                isActive={true}
+                onStrokeEnd={captureHistory}
+                onReady={() => {
+                  setPendingLayerData(null)
+                  setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, savedLayerData: null } : t))
+                  captureHistory(pendingLayerLabelRef.current ?? 'Initial State')
+                  pendingLayerLabelRef.current = null
+                }}
+              />
             )
           })}
         </main>

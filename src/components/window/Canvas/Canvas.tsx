@@ -4,7 +4,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
 import type { WebGLLayer } from '@/webgl/WebGLRenderer'
-import type { TextLayerState, ShapeLayerState } from '@/types'
+import type { TextLayerState, ShapeLayerState, PixelLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { brushOptions } from '@/tools/brush'
@@ -78,6 +78,10 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   // ── Inline text layer editor state ────────────────────────────
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
+
+  // When a pixel-modifying tool starts on a text/shape layer, this holds the
+  // newly-created pixel layer so buildCtx can target it before React re-renders.
+  const newPixelLayerRef = useRef<WebGLLayer | null>(null)
 
   // ── Expose handle for save / export / clipboard ────────────────
   useCanvasHandle({ ref, rendererRef, glLayersRef, layersStateRef, render, width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
@@ -265,7 +269,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   function buildOrderedGLLayers(): WebGLLayer[] {
     const map = glLayersRef.current
-    return state.layers.map((ls) => map.get(ls.id)).filter((l): l is WebGLLayer => !!l)
+    const layers = state.layers.map((ls) => map.get(ls.id)).filter((l): l is WebGLLayer => !!l)
+    // Include any pending new pixel layer before state re-renders with it
+    const pending = newPixelLayerRef.current
+    if (pending && !layers.some(l => l === pending)) layers.push(pending)
+    return layers
   }
 
   useEffect(() => {
@@ -285,13 +293,41 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const renderer = rendererRef.current
     if (!renderer) return null
     const activeId = state.activeLayerId
-    const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
+    let activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
+
+    // If a paint tool fires on a text/shape layer, auto-create a new
+    // pixel layer above it on first pointerDown and redirect drawing there.
+    if (TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && activeLayer) {
+      const stateMeta = state.layers.find((l) => l.id === activeId)
+      if (stateMeta && 'type' in stateMeta) {
+        if (!newPixelLayerRef.current) {
+          const { pixelWidth: cw, pixelHeight: ch } = renderer
+          const newId = `layer-${Date.now()}-${Math.random().toString(36).slice(2)}`
+          const newName = `Layer ${state.layers.length + 1}`
+          const initW = Math.min(128, cw)
+          const initH = Math.min(128, ch)
+          const ox = Math.round((cw - initW) / 2)
+          const oy = Math.round((ch - initH) / 2)
+          const gl = renderer.createLayer(newId, newName, initW, initH, ox, oy)
+          glLayersRef.current.set(newId, gl)
+          newPixelLayerRef.current = gl
+          const layerState: PixelLayerState = {
+            id: newId, name: newName, visible: true, opacity: 1, locked: false, blendMode: 'normal',
+          }
+          dispatch({ type: 'INSERT_LAYER_ABOVE', payload: { layer: layerState, aboveId: activeId! } })
+        }
+        activeLayer = newPixelLayerRef.current
+      }
+    }
+
     // Text/shape tools don't need an existing pixel layer — they create their own
     if (!activeLayer && state.activeTool !== 'text' && state.activeTool !== 'shape') return null
-    // Only block pixel-modifying tools on locked layers.
+    // Block pixel-modifying tools on locked layers and (for non-redirecting tools) on text/shape layers.
+    // Tools with paintsOntoPixelLayer already redirected above to a new pixel layer — they are allowed.
     if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
       if (stateMeta?.locked) return null
+      if (!TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && stateMeta && 'type' in stateMeta) return null
     }
     return {
       renderer,
@@ -384,6 +420,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     onPointerUp: (pos) => {
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onPointerUp(pos, ctx)
+      newPixelLayerRef.current = null
       const def = TOOL_REGISTRY[state.activeTool]
       if (def.modifiesPixels && !def.skipAutoHistory && ctx) {
         const label = state.activeTool.charAt(0).toUpperCase() + state.activeTool.slice(1)

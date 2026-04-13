@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import { cursorStore } from '@/store/cursorStore'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { ColorSwatch } from '@/components/widgets/ColorSwatch/ColorSwatch'
 import styles from './StatusBar.module.scss'
 
 export function StatusBar(): React.JSX.Element {
@@ -65,22 +66,18 @@ export function StatusBar(): React.JSX.Element {
                 suffix="px"
                 onChange={(v) => dispatch({ type: 'SET_GRID_SIZE', payload: v })}
               />
-              <input
-                className={styles.gridColorInput}
-                type="color"
+              <ColorSwatch
                 value={gridColor}
                 title="Grid color"
-                onChange={(e) => dispatch({ type: 'SET_GRID_COLOR', payload: e.target.value })}
+                onChange={(hex) => dispatch({ type: 'SET_GRID_COLOR', payload: hex })}
               />
             </>
           )}
           {gridType !== 'normal' && (
-            <input
-              className={styles.gridColorInput}
-              type="color"
+            <ColorSwatch
               value={gridColor}
               title="Grid color"
-              onChange={(e) => dispatch({ type: 'SET_GRID_COLOR', payload: e.target.value })}
+              onChange={(hex) => dispatch({ type: 'SET_GRID_COLOR', payload: hex })}
             />
           )}
         </div>

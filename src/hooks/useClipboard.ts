@@ -79,21 +79,27 @@ export function useClipboard({
   const handleCut = useCallback((): void => {
     const activeId = state.activeLayerId
     if (!activeId) return
+    // Text and shape layers are parametric — pixel erasure is nonsensical and gets overwritten
+    const layerMeta = state.layers.find((l) => l.id === activeId)
+    if (layerMeta && 'type' in layerMeta) return
     handleCopy()
     const totalPixels = state.canvas.width * state.canvas.height
     const mask        = selectionStore.mask ?? new Uint8Array(totalPixels).fill(255)
     canvasHandleRef.current?.clearLayerPixels(activeId, mask)
     captureHistory('Cut')
-  }, [state.activeLayerId, state.canvas, handleCopy, captureHistory, canvasHandleRef])
+  }, [state.activeLayerId, state.layers, state.canvas, handleCopy, captureHistory, canvasHandleRef])
 
   const handleDelete = useCallback((): void => {
     const activeId = state.activeLayerId
     if (!activeId) return
+    // Text and shape layers are parametric — pixel erasure is nonsensical and gets overwritten
+    const layerMeta = state.layers.find((l) => l.id === activeId)
+    if (layerMeta && 'type' in layerMeta) return
     const totalPixels = state.canvas.width * state.canvas.height
     const mask        = selectionStore.mask ?? new Uint8Array(totalPixels).fill(255)
     canvasHandleRef.current?.clearLayerPixels(activeId, mask)
     captureHistory('Delete')
-  }, [state.activeLayerId, state.canvas, captureHistory, canvasHandleRef])
+  }, [state.activeLayerId, state.layers, state.canvas, captureHistory, canvasHandleRef])
 
   const handlePaste = useCallback((): void => {
     const clip = clipboardStore.current

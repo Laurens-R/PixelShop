@@ -253,5 +253,6 @@ export const brushTool: ToolDefinition = {
   createHandler: createBrushHandler,
   Options: BrushOptions,
   modifiesPixels: true,
+  paintsOntoPixelLayer: true,
 }
 

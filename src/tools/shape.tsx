@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import type { ShapeLayerState, ShapeType } from '@/types'
+import type { ShapeLayerState, ShapeType, RGBAColor } from '@/types'
 import { useAppContext } from '@/store/AppContext'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { ColorSwatch } from '@/components/widgets/ColorSwatch/ColorSwatch'
 import { buildShapePath, rgbaToStr } from '../components/window/Canvas/shapeRasterizer'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
@@ -14,6 +15,26 @@ export const shapeOptions = {
   antiAlias:   true,
   useStroke:   true,
   useFill:     false,
+  /** null = defer to primary color at draw time */
+  strokeColor: null as RGBAColor | null,
+  /** null = defer to secondary color at draw time */
+  fillColor:   null as RGBAColor | null,
+}
+
+// ─── Color conversion helpers ─────────────────────────────────────────────────
+
+function rgbaToHex(c: RGBAColor): string {
+  return '#' + [c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('')
+}
+
+function hexToRgba(hex: string, a = 255): RGBAColor {
+  const h = hex.replace('#', '')
+  return {
+    r: parseInt(h.slice(0, 2), 16) || 0,
+    g: parseInt(h.slice(2, 4), 16) || 0,
+    b: parseInt(h.slice(4, 6), 16) || 0,
+    a,
+  }
 }
 
 // ─── Geometry helpers ─────────────────────────────────────────────────────────
@@ -336,8 +357,8 @@ function createShapeHandler(): ToolHandler {
         shapeType:    shapeOptions.shapeType,
         cx: x, cy: y, w: 1, h: 1, rotation: 0,
         x1: x, y1: y, x2: x, y2: y,
-        strokeColor:  shapeOptions.useStroke ? { ...ctx.primaryColor }   : null,
-        fillColor:    shapeOptions.useFill   ? { ...ctx.secondaryColor } : null,
+        strokeColor:  shapeOptions.useStroke ? (shapeOptions.strokeColor ?? { ...ctx.primaryColor })   : null,
+        fillColor:    shapeOptions.useFill   ? (shapeOptions.fillColor   ?? { ...ctx.secondaryColor }) : null,
         strokeWidth:  shapeOptions.strokeWidth,
         cornerRadius: shapeOptions.cornerRadius,
         antiAlias:    shapeOptions.antiAlias,
@@ -470,6 +491,10 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
 
   // Keep module-level defaults in sync with current state (for new shapes drawn while
   // this options bar is visible).
+  // Derive current colors: active shape takes priority, then stored defaults, then app colors
+  const curStrokeColor: RGBAColor = activeShape?.strokeColor ?? shapeOptions.strokeColor ?? state.primaryColor
+  const curFillColor: RGBAColor   = activeShape?.fillColor   ?? shapeOptions.fillColor   ?? state.secondaryColor
+
   shapeOptions.shapeType    = curType
   shapeOptions.strokeWidth  = curStrokeWidth
   shapeOptions.cornerRadius = curCornerRadius
@@ -497,17 +522,31 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
     const next = !curUseStroke
     shapeOptions.useStroke = next
     if (activeShape) {
-      update({ strokeColor: next ? (activeShape.strokeColor ?? { r: 0, g: 0, b: 0, a: 255 }) : null })
+      const fallback = shapeOptions.strokeColor ?? state.primaryColor
+      update({ strokeColor: next ? (activeShape.strokeColor ?? { ...fallback }) : null })
     }
-  }, [curUseStroke, activeShape, update])
+  }, [curUseStroke, activeShape, state.primaryColor, update])
 
   const toggleFill = useCallback(() => {
     const next = !curUseFill
     shapeOptions.useFill = next
     if (activeShape) {
-      update({ fillColor: next ? (activeShape.fillColor ?? { r: 255, g: 255, b: 255, a: 255 }) : null })
+      const fallback = shapeOptions.fillColor ?? state.secondaryColor
+      update({ fillColor: next ? (activeShape.fillColor ?? { ...fallback }) : null })
     }
-  }, [curUseFill, activeShape, update])
+  }, [curUseFill, activeShape, state.secondaryColor, update])
+
+  const setStrokeColor = useCallback((hex: string) => {
+    const color = hexToRgba(hex, curStrokeColor.a)
+    shapeOptions.strokeColor = color
+    if (activeShape) update({ strokeColor: color })
+  }, [curStrokeColor.a, activeShape, update])
+
+  const setFillColor = useCallback((hex: string) => {
+    const color = hexToRgba(hex, curFillColor.a)
+    shapeOptions.fillColor = color
+    if (activeShape) update({ fillColor: color })
+  }, [curFillColor.a, activeShape, update])
 
   const setAntiAlias = useCallback((v: boolean) => {
     shapeOptions.antiAlias = v
@@ -535,7 +574,7 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
 
       <div className={styles.optSep} />
 
-      {/* Stroke toggle */}
+      {/* Stroke toggle + color */}
       <label className={styles.optCheckLabel}>
         <input
           type="checkbox"
@@ -544,6 +583,13 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
         />
         Stroke
       </label>
+      {curUseStroke && (
+        <ColorSwatch
+          value={rgbaToHex(curStrokeColor)}
+          title="Stroke color"
+          onChange={setStrokeColor}
+        />
+      )}
 
       {/* Stroke width */}
       {curUseStroke && (
@@ -560,7 +606,7 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
 
       <div className={styles.optSep} />
 
-      {/* Fill toggle */}
+      {/* Fill toggle + color */}
       <label className={styles.optCheckLabel}>
         <input
           type="checkbox"
@@ -569,6 +615,13 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
         />
         Fill
       </label>
+      {curUseFill && (
+        <ColorSwatch
+          value={rgbaToHex(curFillColor)}
+          title="Fill color"
+          onChange={setFillColor}
+        />
+      )}
 
       <div className={styles.optSep} />
 

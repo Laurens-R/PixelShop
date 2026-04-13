@@ -116,6 +116,11 @@ export function HistoryPanel(): React.JSX.Element {
         >
           Restore to here
         </DialogButton>
+        <DialogButton
+          onClick={() => historyStore.clear()}
+        >
+          Clear History
+        </DialogButton>
       </div>
     </div>
   )

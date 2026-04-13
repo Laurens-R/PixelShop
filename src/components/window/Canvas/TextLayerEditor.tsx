@@ -39,12 +39,16 @@ export function TextLayerEditor({
   const onCloseRef  = useRef(onClose)
   onCloseRef.current = onClose
 
-  // Focus and measure as soon as the textarea mounts
+  // Focus the textarea as soon as it mounts or editingLayerId changes.
+  // Use requestAnimationFrame so the focus call fires AFTER the pointerup
+  // event settles — without this, pointer capture on the canvas steals focus
+  // back before the user can type.
   useEffect(() => {
-    const el = textareaRef.current
-    if (editingLayerId && el) {
-      el.focus()
-    }
+    if (!editingLayerId) return
+    const rafId = requestAnimationFrame(() => {
+      textareaRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(rafId)
   }, [editingLayerId])
 
   // Close when the user clicks OUTSIDE the editor box, but NOT inside the tool options bar.
@@ -176,6 +180,7 @@ export function TextLayerEditor({
       <textarea
         ref={textareaRef}
         key={editingLayerId}
+        autoFocus
         className={styles.textEditor}
         style={{
           font:           fontStyle,

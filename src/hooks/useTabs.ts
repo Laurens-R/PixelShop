@@ -21,6 +21,7 @@ export interface UseTabsReturn {
   setPendingLayerData: Dispatch<SetStateAction<Map<string, string> | null>>
   tabCanvasRef: (tabId: string) => (h: CanvasHandle | null) => void
   captureActiveSnapshot: () => TabSnapshot
+  serializeActiveTabPixels: () => Map<string, string> | null
   switchToTab: (toId: string, tabs_: TabRecord[]) => void
   handleSwitchTab: (toId: string) => void
   handleCloseTab: (tabId: string) => void
@@ -80,6 +81,28 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
     zoom:           state.canvas.zoom,
   }), [state])
 
+  /** Encode every active layer's pixel data into Map<layerId, dataURL> (+ geometry entries).
+   *  Must be called while the active tab's Canvas is still mounted. Returns null if no data. */
+  const serializeActiveTabPixels = useCallback((): Map<string, string> | null => {
+    const layerPixels = canvasHandleRef.current?.captureAllLayerPixels()
+    if (!layerPixels || layerPixels.size === 0) return null
+    const layerGeo = canvasHandleRef.current?.captureAllLayerGeometry() ?? new Map()
+    const snap = captureActiveSnapshot()
+    const result = new Map<string, string>()
+    for (const [id, pixels] of layerPixels) {
+      const geo = layerGeo.get(id)
+      const lw = geo?.layerWidth ?? snap.canvasWidth
+      const lh = geo?.layerHeight ?? snap.canvasHeight
+      const tmp = document.createElement('canvas')
+      tmp.width = lw; tmp.height = lh
+      const ctx2d = tmp.getContext('2d')!
+      ctx2d.putImageData(new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), lw, lh), 0, 0)
+      result.set(id, tmp.toDataURL('image/png'))
+      if (geo) result.set(`${id}:geo`, JSON.stringify(geo))
+    }
+    return result
+  }, [canvasHandleRef, captureActiveSnapshot])
+
   const switchToTab = useCallback((toId: string, tabs_: TabRecord[]): void => {
     const toTab = tabs_.find(t => t.id === toId)
     if (!toTab) return
@@ -87,6 +110,11 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
       historyStore.restore(toTab.savedHistory.entries, toTab.savedHistory.currentIndex)
     } else {
       historyStore.clear()
+    }
+    // Null savedHistory after handing ownership to historyStore — prevents
+    // the Tab record from keeping dead Uint8Array refs after the first new push.
+    if (toTab.savedHistory) {
+      setTabsRef.current(prev => prev.map(t => t.id === toId ? { ...t, savedHistory: null } : t))
     }
     setActiveTabId(toId)
     dispatch({
@@ -104,12 +132,13 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
 
   const handleSwitchTab = useCallback((toId: string): void => {
     if (toId === activeTabId) return
-    const snapshot    = captureActiveSnapshot()
-    const savedHistory = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
-    const updated     = tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory } : t)
+    const snapshot        = captureActiveSnapshot()
+    const savedHistory    = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+    const savedLayerData  = serializeActiveTabPixels()
+    const updated         = tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t)
     setTabs(updated)
     switchToTab(toId, updated)
-  }, [activeTabId, tabs, captureActiveSnapshot, switchToTab])
+  }, [activeTabId, tabs, captureActiveSnapshot, serializeActiveTabPixels, switchToTab])
 
   const handleCloseTab = useCallback((tabId: string): void => {
     if (tabs.length === 1) return
@@ -130,6 +159,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
     pendingLayerData, setPendingLayerData,
     tabCanvasRef,
     captureActiveSnapshot,
+    serializeActiveTabPixels,
     switchToTab,
     handleSwitchTab, handleCloseTab,
   }

@@ -148,5 +148,6 @@ export const fillTool: ToolDefinition = {
   Options: FillOptions,
   modifiesPixels: true,
   skipAutoHistory: true,
+  paintsOntoPixelLayer: true,
 }
 

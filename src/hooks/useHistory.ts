@@ -137,6 +137,12 @@ export function useHistory({
     return () => { historyStore.onJumpTo = null }
   }, [dispatch, canvasHandleRef, stateRef, activeTabIdRef, setTabsRef, setPendingLayerData])
 
+  // Register onClear: capture current state as 'History Cleared' entry
+  useEffect(() => {
+    historyStore.onClear = (): void => { captureHistory('History Cleared') }
+    return () => { historyStore.onClear = null }
+  }, [captureHistory])
+
   // Auto-capture when layers are added or removed
   useEffect(() => {
     if (isRestoringRef.current) {
