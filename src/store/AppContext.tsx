@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, BlendMode, BackgroundFill } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,7 @@ type AppAction =
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_GRID_SIZE'; payload: number }
   | { type: 'SET_GRID_COLOR'; payload: string }
+  | { type: 'SET_GRID_TYPE'; payload: GridType }
   | { type: 'SET_HISTORY'; payload: { canUndo: boolean; canRedo: boolean } }
   | { type: 'NEW_CANVAS'; payload: { width: number; height: number; backgroundFill: BackgroundFill } }
   | { type: 'OPEN_FILE'; payload: { width: number; height: number; layers: LayerState[]; activeLayerId: string | null } }
@@ -64,7 +65,7 @@ const initialState: AppState = {
   swatches: DEFAULT_SWATCHES,
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
-  canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, gridSize: 16, gridColor: '#808080', backgroundFill: 'white', key: 0 },
+  canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, gridSize: 16, gridColor: '#808080', gridType: 'normal' as GridType, backgroundFill: 'white', key: 0 },
   history: { canUndo: false, canRedo: false }
 }
 
@@ -180,6 +181,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_GRID_COLOR':
       return { ...state, canvas: { ...state.canvas, gridColor: action.payload } }
+
+    case 'SET_GRID_TYPE':
+      return { ...state, canvas: { ...state.canvas, gridType: action.payload } }
 
     case 'SET_HISTORY':
       return { ...state, history: action.payload }

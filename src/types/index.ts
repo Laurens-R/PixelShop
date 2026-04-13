@@ -103,6 +103,8 @@ export type LayerState = PixelLayerState | TextLayerState
 
 export type BackgroundFill = 'white' | 'black' | 'transparent'
 
+export type GridType = 'normal' | 'thirds' | 'safe-zone'
+
 export interface CanvasState {
   width: number
   height: number
@@ -112,6 +114,7 @@ export interface CanvasState {
   showGrid: boolean
   gridSize: number
   gridColor: string
+  gridType: GridType
   backgroundFill: BackgroundFill
   key: number
 }

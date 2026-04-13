@@ -385,15 +385,56 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             width={width}
             height={height}
           />
-          {state.canvas.showGrid && (
-            <div
-              className={styles.gridOverlay}
-              style={{
-                '--grid-size': `${state.canvas.gridSize * state.canvas.zoom / window.devicePixelRatio}px`,
-                '--grid-color': state.canvas.gridColor,
-              } as React.CSSProperties}
-            />
-          )}
+          {state.canvas.showGrid && (() => {
+            const { gridType, gridColor, gridSize, zoom } = state.canvas
+            const dpr = window.devicePixelRatio
+            const cellPx = gridSize * zoom / dpr
+
+            if (gridType === 'normal') {
+              return (
+                <div
+                  className={styles.gridOverlay}
+                  style={{
+                    '--grid-size': `${cellPx}px`,
+                    '--grid-color': gridColor,
+                  } as React.CSSProperties}
+                />
+              )
+            }
+
+            const svgStyle: React.CSSProperties = {
+              position: 'absolute', top: 0, left: 0,
+              width: '100%', height: '100%',
+              pointerEvents: 'none', zIndex: 2,
+              overflow: 'visible',
+            }
+            const stroke = gridColor
+            const sw = Math.max(1, zoom / dpr)
+
+            if (gridType === 'thirds') {
+              return (
+                <svg style={svgStyle} viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <line x1="33.333" y1="0" x2="33.333" y2="100" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+                  <line x1="66.667" y1="0" x2="66.667" y2="100" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+                  <line x1="0" y1="33.333" x2="100" y2="33.333" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+                  <line x1="0" y1="66.667" x2="100" y2="66.667" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+                </svg>
+              )
+            }
+
+            // safe-zone: action safe 80%, title safe 90%
+            return (
+              <svg style={svgStyle} viewBox="0 0 100 100" preserveAspectRatio="none">
+                {/* Title safe – 90% */}
+                <rect x="5" y="5" width="90" height="90" fill="none" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+                {/* Action safe – 80% */}
+                <rect x="10" y="10" width="80" height="80" fill="none" stroke={stroke} strokeWidth={sw} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+                {/* Centre crosshair */}
+                <line x1="49" y1="50" x2="51" y2="50" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+                <line x1="50" y1="49" x2="50" y2="51" stroke={stroke} strokeWidth={sw} vectorEffect="non-scaling-stroke" />
+              </svg>
+            )
+          })()}
         </div>
       </div>
     </div>

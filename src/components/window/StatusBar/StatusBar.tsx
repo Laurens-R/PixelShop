@@ -7,7 +7,7 @@ import styles from './StatusBar.module.scss'
 export function StatusBar(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const zoom = Math.round(state.canvas.zoom * 100)
-  const { width, height, showGrid, gridSize, gridColor } = state.canvas
+  const { width, height, showGrid, gridSize, gridColor, gridType } = state.canvas
 
   const [cursor, setCursor] = useState<{ x: number; y: number; visible: boolean }>({
     x: cursorStore.x, y: cursorStore.y, visible: cursorStore.visible,
@@ -26,10 +26,15 @@ export function StatusBar(): React.JSX.Element {
         <span className={styles.infoItem}>{width} × {height} px</span>
         <span className={styles.sep} />
         <span className={styles.infoItem}>RGB/8</span>
+        {/* Right: zoom */}
+        <div className={styles.zoom}>
+          <span className={styles.infoItem}>{zoom}%</span>
+        </div>
         {cursor.visible && (
           <>
             <span className={styles.sep} />
             <span className={styles.infoItem}>{cursor.x}, {cursor.y}</span>
+            
           </>
         )}
       </div>
@@ -37,30 +42,51 @@ export function StatusBar(): React.JSX.Element {
       {/* Centre: grid controls — only visible when grid is on */}
       {showGrid && (
         <div className={styles.gridControls}>
+          <span className={styles.sep} />
           <span className={styles.gridLabel}>Grid:</span>
-          <SliderInput
-            value={gridSize}
-            min={1}
-            max={128}
-            step={1}
-            inputWidth={36}
-            suffix="px"
-            onChange={(v) => dispatch({ type: 'SET_GRID_SIZE', payload: v })}
-          />
-          <input
-            className={styles.gridColorInput}
-            type="color"
-            value={gridColor}
-            title="Grid color"
-            onChange={(e) => dispatch({ type: 'SET_GRID_COLOR', payload: e.target.value })}
-          />
+          <select
+            className={styles.gridTypeSelect}
+            value={gridType}
+            title="Grid type"
+            onChange={(e) => dispatch({ type: 'SET_GRID_TYPE', payload: e.target.value as import('@/types').GridType })}
+          >
+            <option value="normal">Normal</option>
+            <option value="thirds">Thirds</option>
+            <option value="safe-zone">Safe Zone</option>
+          </select>
+          {gridType === 'normal' && (
+            <>
+              <SliderInput
+                value={gridSize}
+                min={1}
+                max={128}
+                step={1}
+                inputWidth={36}
+                suffix="px"
+                onChange={(v) => dispatch({ type: 'SET_GRID_SIZE', payload: v })}
+              />
+              <input
+                className={styles.gridColorInput}
+                type="color"
+                value={gridColor}
+                title="Grid color"
+                onChange={(e) => dispatch({ type: 'SET_GRID_COLOR', payload: e.target.value })}
+              />
+            </>
+          )}
+          {gridType !== 'normal' && (
+            <input
+              className={styles.gridColorInput}
+              type="color"
+              value={gridColor}
+              title="Grid color"
+              onChange={(e) => dispatch({ type: 'SET_GRID_COLOR', payload: e.target.value })}
+            />
+          )}
         </div>
       )}
 
-      {/* Right: zoom */}
-      <div className={styles.zoom}>
-        <span className={styles.infoItem}>{zoom}%</span>
-      </div>
+      
     </div>
   )
 }
