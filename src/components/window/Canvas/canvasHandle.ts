@@ -29,8 +29,9 @@ export interface CanvasHandle {
   captureAllLayerPixels: () => Map<string, Uint8Array>
   /** Snapshot per-layer geometry (width/height/offset). */
   captureAllLayerGeometry: () => Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>
-  /** Restore previously snapshotted pixel data + geometry and flush+render for each layer. */
-  restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>) => void
+  /** Restore previously snapshotted pixel data + geometry and flush+render for each layer.
+   * Pass layerStateForRender (the history snapshot's layer state) so the render uses the correct mask map. */
+  restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>, layerStateForRender?: readonly LayerState[]) => void
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
   fitToWindow: () => void
 }
@@ -42,7 +43,9 @@ interface UseCanvasHandleParams {
   rendererRef: { readonly current: WebGLRenderer | null }
   glLayersRef: { readonly current: Map<string, WebGLLayer> }
   layersStateRef: { readonly current: readonly LayerState[] }
-  render: (layers: WebGLLayer[]) => void
+  render: (layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>) => void
+  /** Returns the correctly-filtered layers + mask map to pass to render. Used by all internal render calls. */
+  buildRenderArgs: () => { layers: WebGLLayer[]; maskMap: Map<string, WebGLLayer> }
   width: number
   height: number
   viewportRef: React.RefObject<HTMLDivElement | null>
@@ -55,6 +58,7 @@ export function useCanvasHandle({
   glLayersRef,
   layersStateRef,
   render,
+  buildRenderArgs,
   width,
   height,
   viewportRef,
@@ -130,7 +134,7 @@ export function useCanvasHandle({
           .map((l) => glLayersRef.current.get(l.id))
           .filter((l): l is WebGLLayer => !!l),
         layer,
-      ])
+      ], new Map())
     },
 
     clearLayerPixels: (layerId, mask) => {
@@ -153,11 +157,8 @@ export function useCanvasHandle({
         layer.data[pi + 3] = Math.round(layer.data[pi + 3] * f)
       }
       renderer.flushLayer(layer)
-      render(
-        layersStateRef.current
-          .map((l) => glLayersRef.current.get(l.id))
-          .filter((l): l is WebGLLayer => !!l)
-      )
+      const { layers: rl, maskMap: rm } = buildRenderArgs()
+      render(rl, rm)
     },
 
     captureAllLayerPixels: () => {
@@ -190,7 +191,7 @@ export function useCanvasHandle({
       onZoom(parseFloat(Math.max(0.05, Math.min(32, zoom)).toFixed(4)))
     },
 
-    restoreAllLayerPixels: (data, geometry?) => {
+    restoreAllLayerPixels: (data, geometry?, layerStateForRender?) => {
       const renderer = rendererRef.current
       if (!renderer) return
       for (const [id, pixels] of data) {
@@ -213,11 +214,22 @@ export function useCanvasHandle({
         layer.data.set(pixels)
         renderer.flushLayer(layer)
       }
-      render(
-        layersStateRef.current
-          .map((l) => glLayersRef.current.get(l.id))
-          .filter((l): l is WebGLLayer => !!l)
-      )
+      // Build render args from the snapshot's layer state when provided, so the
+      // render uses the correct mask map before RESTORE_LAYERS dispatch settles.
+      const refLayers = layerStateForRender ?? layersStateRef.current
+      const glMap = glLayersRef.current
+      const orderedLayers = refLayers
+        .filter((l) => !('type' in l && l.type === 'mask'))
+        .map((l) => glMap.get(l.id))
+        .filter((l): l is WebGLLayer => !!l)
+      const maskMap = new Map<string, WebGLLayer>()
+      for (const l of refLayers) {
+        if ('type' in l && l.type === 'mask' && l.visible) {
+          const gl = glMap.get(l.id)
+          if (gl) maskMap.set((l as { parentId: string }).parentId, gl)
+        }
+      }
+      render(orderedLayers, maskMap)
     },
   }), [width, height]) // eslint-disable-line react-hooks/exhaustive-deps
 }

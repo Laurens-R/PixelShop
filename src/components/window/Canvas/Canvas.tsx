@@ -84,7 +84,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const newPixelLayerRef = useRef<WebGLLayer | null>(null)
 
   // ── Expose handle for save / export / clipboard ────────────────
-  useCanvasHandle({ ref, rendererRef, glLayersRef, layersStateRef, render, width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
+  useCanvasHandle({ ref, rendererRef, glLayersRef, layersStateRef, render, buildRenderArgs: () => ({ layers: buildOrderedGLLayers(), maskMap: buildMaskMap() }), width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
 
   // ── Zoom to cursor + scroll save/restore ───────────────────────
   useScrollZoom(

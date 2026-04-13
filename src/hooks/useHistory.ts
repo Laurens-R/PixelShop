@@ -74,7 +74,7 @@ export function useHistory({
         entry.canvasWidth  !== stateRef.current.canvas.width ||
         entry.canvasHeight !== stateRef.current.canvas.height
       ) return
-      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry)
+      canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry, entry.layerState)
     }
     return () => { historyStore.onPreview = null }
   }, [canvasHandleRef, stateRef])
@@ -124,7 +124,7 @@ export function useHistory({
           },
         })
       } else {
-        canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry)
+        canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry, entry.layerState)
         dispatch({
           type: 'RESTORE_LAYERS',
           payload: { layers: entry.layerState, activeLayerId: entry.activeLayerId },
