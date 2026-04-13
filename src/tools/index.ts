@@ -13,6 +13,7 @@ import { cropTool } from './crop'
 import { moveTool } from './move'
 import { gradientTool } from './gradient'
 import { dodgeTool, burnTool } from './dodge'
+import { textTool } from './text'
 import { noopTool } from './noop'
 
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
@@ -32,7 +33,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   gradient:     gradientTool,
   dodge:        dodgeTool,
   burn:         burnTool,
-  text:         noopTool,
+  text:         textTool,
   shape:        noopTool,
   hand:         noopTool,
 }

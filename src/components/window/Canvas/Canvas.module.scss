@@ -41,3 +41,21 @@
   image-rendering: crisp-edges;
 }
 
+.textEditor {
+  position: fixed; // overridden inline to fixed - kept here as fallback
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px dashed #0078ff;
+  outline: none;
+  resize: none;
+  padding: 2px 4px;
+  margin: 0;
+  overflow: hidden;
+  white-space: pre;
+  z-index: 9999;
+  pointer-events: auto;
+  box-shadow: 0 0 0 1px rgba(0, 120, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  caret-color: currentColor;
+  // Grow to fit content (supported in Chromium 123+ / Electron 30+)
+  field-sizing: content;
+}
+

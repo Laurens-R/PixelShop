@@ -1,0 +1,2 @@
+- Finalize fix font/text editing
+- Implement shape layers and editing.

@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { WebGLRenderer, WebGLLayer } from '@/webgl/WebGLRenderer'
-import type { RGBAColor } from '@/types'
+import type { RGBAColor, TextLayerState } from '@/types'
 
 // ─── Runtime context passed to tool handlers on each pointer event ────────────
 
@@ -36,6 +36,14 @@ export interface ToolContext {
    * May be null if the canvas is not yet mounted.
    */
   overlayCanvas: HTMLCanvasElement | null
+  /** Create a new text layer at a canvas position (used by the text tool on pointerDown). */
+  addTextLayer: (layer: TextLayerState) => void
+  /** Update an existing text layer's content / style (dispatches state update + re-rasterizes). */
+  updateTextLayer: (layer: TextLayerState) => void
+  /** Open the inline text editor for an already-existing text layer (e.g. clicking on it with the text tool). */
+  openTextLayerEditor: (id: string) => void
+  /** Current text layers in state — used by the text tool to detect clicks on existing text. */
+  textLayers: TextLayerState[]
 }
 
 // ─── Pointer position passed to tool handlers ─────────────────────────────────
@@ -54,6 +62,10 @@ export interface ToolHandler {
   onPointerDown(pos: ToolPointerPos, ctx: ToolContext): void
   onPointerMove(pos: ToolPointerPos, ctx: ToolContext): void
   onPointerUp(pos: ToolPointerPos, ctx: ToolContext): void
+  /** Called on every pointer-move regardless of button state — for hover UI effects. */
+  onHover?(pos: ToolPointerPos, ctx: ToolContext): void
+  /** Called when the pointer leaves the canvas — clean up any hover UI. */
+  onLeave?(ctx: ToolContext): void
 }
 
 // ─── CSS module classes passed to each Options component ──────────────────────

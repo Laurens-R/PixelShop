@@ -12,6 +12,10 @@ interface UseCanvasOptions {
   onPointerDown?: (pos: CanvasPointerPosition) => void
   onPointerMove?: (pos: CanvasPointerPosition) => void
   onPointerUp?: (pos: CanvasPointerPosition) => void
+  /** Fires on every pointermove regardless of button state — for hover effects. */
+  onHover?: (pos: CanvasPointerPosition) => void
+  /** Fires when the pointer leaves the canvas. */
+  onLeave?: () => void
 }
 
 interface UseCanvasReturn {
@@ -25,7 +29,9 @@ interface UseCanvasReturn {
 export function useCanvas({
   onPointerDown,
   onPointerMove,
-  onPointerUp
+  onPointerUp,
+  onHover,
+  onLeave,
 }: UseCanvasOptions): UseCanvasReturn {
   const isDrawing = useRef(false)
 
@@ -56,10 +62,12 @@ export function useCanvas({
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): void => {
+      const pos = toCanvasPos(e)
+      onHover?.(pos)                        // always fires for hover effects
       if (!isDrawing.current) return
-      onPointerMove?.(toCanvasPos(e))
+      onPointerMove?.(pos)
     },
-    [toCanvasPos, onPointerMove]
+    [toCanvasPos, onPointerMove, onHover]
   )
 
   const handlePointerUp = useCallback(
@@ -73,11 +81,12 @@ export function useCanvas({
 
   const handlePointerLeave = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): void => {
+      onLeave?.()
       if (!isDrawing.current) return
       isDrawing.current = false
       onPointerUp?.(toCanvasPos(e))
     },
-    [toCanvasPos, onPointerUp]
+    [toCanvasPos, onPointerUp, onLeave]
   )
 
   return { isDrawing, handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave }

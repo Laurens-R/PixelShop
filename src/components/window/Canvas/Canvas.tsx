@@ -1,14 +1,150 @@
-import { forwardRef, useEffect, useLayoutEffect, useImperativeHandle, useRef } from 'react'
+import { forwardRef, useEffect, useLayoutEffect, useImperativeHandle, useRef, useState } from 'react'
+import ReactDOM from 'react-dom'
 import { useWebGL } from '@/hooks/useWebGL'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
 import type { WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { TextLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { selectionStore } from '@/store/selectionStore'
 import { cropStore } from '@/store/cropStore'
 import styles from './Canvas.module.scss'
+
+// ─── Text layer inline editor (fixed-position portal) ─────────────────────
+
+interface TextLayerEditorProps {
+  editingLayerId: string | null
+  layers: (import('@/types').LayerState)[]
+  zoom: number
+  canvasWrapperRef: React.RefObject<HTMLDivElement | null>
+  onCommit: (ls: TextLayerState) => void
+  onClose: () => void
+}
+
+function TextLayerEditor({ editingLayerId, layers, zoom, canvasWrapperRef, onCommit, onClose }: TextLayerEditorProps): React.JSX.Element | null {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const onCloseRef  = useRef(onClose)
+  onCloseRef.current = onClose
+
+  // Focus as soon as the textarea mounts
+  useEffect(() => {
+    if (editingLayerId && textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [editingLayerId])
+
+  // Close when the user clicks OUTSIDE the textarea.
+  // We use a pointerdown capture listener added AFTER the current event loop tick
+  // so that the creation click (which triggered the editor) is never caught here.
+  useEffect(() => {
+    if (!editingLayerId) return
+    const close = (e: PointerEvent): void => {
+      if (textareaRef.current && !textareaRef.current.contains(e.target as Node)) {
+        onCloseRef.current()
+      }
+    }
+    document.addEventListener('pointerdown', close, { capture: true })
+    return () => document.removeEventListener('pointerdown', close, { capture: true })
+  }, [editingLayerId])
+
+  if (!editingLayerId) return null
+
+  const ls = layers.find(
+    (l): l is TextLayerState => 'type' in l && l.type === 'text' && l.id === editingLayerId
+  )
+  if (!ls) return null
+
+  // Compute fixed screen position of the text origin.
+  // Subtract the textarea's border (2px) + padding (4px left, 2px top) so the
+  // first character rendered inside the box aligns with ls.x / ls.y on the canvas.
+  const BORDER = 2    // matches .textEditor border width
+  const PAD_X  = 4    // matches .textEditor padding-left / padding-right
+  const PAD_Y  = 2    // matches .textEditor padding-top / padding-bottom
+  const wrapperRect = canvasWrapperRef.current?.getBoundingClientRect()
+  const dpr = window.devicePixelRatio || 1
+  const cssZoom = zoom / dpr
+  const screenX = (wrapperRect?.left ?? 0) + ls.x * cssZoom - BORDER - PAD_X
+  const screenY = (wrapperRect?.top  ?? 0) + ls.y * cssZoom - BORDER - PAD_Y
+  const fontSizePx = ls.fontSize * cssZoom
+
+  const fontStyle = [
+    ls.italic ? 'italic' : '',
+    ls.bold   ? 'bold'   : '',
+    `${fontSizePx}px`,
+    `"${ls.fontFamily}", sans-serif`,
+  ].filter(Boolean).join(' ')
+
+  const textarea = (
+    <textarea
+      ref={textareaRef}
+      key={editingLayerId}
+      className={styles.textEditor}
+      style={{
+        position:   'fixed',
+        left:       screenX,
+        top:        screenY,
+        font:       fontStyle,
+        color:      `rgb(${ls.color.r},${ls.color.g},${ls.color.b})`,
+        textDecoration: ls.underline ? 'underline' : 'none',
+        minWidth:   `${Math.max(80, fontSizePx * 4)}px`,
+        minHeight:  `${fontSizePx + 8}px`,
+        lineHeight: '1.2',
+      }}
+      rows={1}
+      value={ls.text}
+      onChange={(e) => onCommit({ ...ls, text: e.target.value })}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onCloseRef.current()
+        e.stopPropagation()  // don't let shortcuts reach the app while typing
+      }}
+      onPointerDown={(e) => e.stopPropagation()}  // don't create a new text layer
+    />
+  )
+
+  return ReactDOM.createPortal(textarea, document.body)
+}
+
+// ─── Text layer rasterization ──────────────────────────────────────────────
+
+/**
+ * Rasterize a TextLayerState's text into the WebGL layer's pixel buffer.
+ * The layer must already be canvas-sized (offsetX=0, offsetY=0).
+ * Call renderer.flushLayer() after this to upload to GPU.
+ */
+function rasterizeTextToLayer(ls: TextLayerState, gl: WebGLLayer): void {
+  const w = gl.layerWidth
+  const h = gl.layerHeight
+  gl.data.fill(0) // clear existing pixels
+  if (!ls.text) return
+
+  const tmp = document.createElement('canvas')
+  tmp.width = w
+  tmp.height = h
+  const ctx2d = tmp.getContext('2d')!
+
+  const fontStyle = [
+    ls.italic ? 'italic' : '',
+    ls.bold ? 'bold' : '',
+    `${ls.fontSize}px`,
+    `"${ls.fontFamily}", sans-serif`,
+  ].filter(Boolean).join(' ')
+
+  ctx2d.font = fontStyle
+  ctx2d.textBaseline = 'top'
+  ctx2d.fillStyle = `rgba(${ls.color.r}, ${ls.color.g}, ${ls.color.b}, ${ls.color.a / 255})`
+  ctx2d.fillText(ls.text, ls.x, ls.y)
+
+  if (ls.underline) {
+    const m = ctx2d.measureText(ls.text)
+    const lineY = ls.y + ls.fontSize + 2
+    const lineH = Math.max(1, Math.round(ls.fontSize / 14))
+    ctx2d.fillRect(ls.x, lineY, m.width, lineH)
+  }
+
+  gl.data.set(new Uint8Array(ctx2d.getImageData(0, 0, w, h).data.buffer))
+}
 
 // ─── Public handle (for save / export / clipboard) ─────────────────────────
 
@@ -100,6 +236,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const scrollPosRef = useRef({ left: 0, top: 0 })
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const toolOverlayRef = useRef<HTMLCanvasElement>(null)
+  const canvasWrapperRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(state.canvas.zoom)
   zoomRef.current = state.canvas.zoom
@@ -113,6 +250,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   onStrokeEndRef.current = onStrokeEnd
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
+
+  // ── Inline text layer editor state ────────────────────────────
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
 
   // ── Expose handle for save / export / clipboard ────────────────
   useImperativeHandle(ref, () => ({
@@ -497,15 +637,26 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
     for (const ls of state.layers) {
       if (!map.has(ls.id)) {
-        // New layers start at 128×128 centered on the canvas
-        const cw = renderer.pixelWidth
-        const ch = renderer.pixelHeight
-        const initW = Math.min(128, cw)
-        const initH = Math.min(128, ch)
-        const ox = Math.round((cw - initW) / 2)
-        const oy = Math.round((ch - initH) / 2)
-        const gl = renderer.createLayer(ls.id, ls.name, initW, initH, ox, oy)
-        map.set(ls.id, gl)
+        if ('type' in ls && ls.type === 'text') {
+          // Text layers are created imperatively in addTextLayer before the dispatch;
+          // if they somehow still aren't in the map, create a full-canvas layer for them.
+          const cw = renderer.pixelWidth
+          const ch = renderer.pixelHeight
+          const gl = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+          rasterizeTextToLayer(ls, gl)
+          renderer.flushLayer(gl)
+          map.set(ls.id, gl)
+        } else {
+          // Pixel layers start at 128×128 centered on the canvas
+          const cw = renderer.pixelWidth
+          const ch = renderer.pixelHeight
+          const initW = Math.min(128, cw)
+          const initH = Math.min(128, ch)
+          const ox = Math.round((cw - initW) / 2)
+          const oy = Math.round((ch - initH) / 2)
+          const gl = renderer.createLayer(ls.id, ls.name, initW, initH, ox, oy)
+          map.set(ls.id, gl)
+        }
       }
     }
 
@@ -523,11 +674,21 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       gl.opacity = ls.opacity
       gl.visible = ls.visible
       gl.blendMode = ls.blendMode
+      // Re-rasterize text layers whenever their state changes (text, style, position, color).
+      // While a text layer is being edited, blank its bitmap so only the textarea is visible.
+      if ('type' in ls && ls.type === 'text') {
+        if (ls.id === editingLayerId) {
+          gl.data.fill(0)
+        } else {
+          rasterizeTextToLayer(ls, gl)
+        }
+        renderer.flushLayer(gl)
+      }
     }
 
     render(buildOrderedGLLayers())
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.layers, isActive])
+  }, [state.layers, isActive, editingLayerId])
 
   function buildOrderedGLLayers(): WebGLLayer[] {
     const map = glLayersRef.current
@@ -548,7 +709,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     if (!renderer) return null
     const activeId = state.activeLayerId
     const activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
-    if (!activeLayer) return null
+    // Text tool doesn't need an existing pixel layer — it creates its own
+    if (!activeLayer && state.activeTool !== 'text') return null
     // Only block pixel-modifying tools on locked layers.
     if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
@@ -556,14 +718,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     }
     return {
       renderer,
-      layer: activeLayer,
+      layer: activeLayer!, // text tool never dereferences this; all others are guarded above
       layers: buildOrderedGLLayers(),
       primaryColor: state.primaryColor,
       secondaryColor: state.secondaryColor,
       selectionMask: selectionStore.mask,
       render,
       growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
-        renderer.growLayerToFit(activeLayer, canvasX, canvasY, extraRadius)
+        renderer.growLayerToFit(activeLayer!, canvasX, canvasY, extraRadius)
       },
       setColor: (color) => {
         dispatch({ type: 'SET_PRIMARY_COLOR', payload: color })
@@ -572,6 +734,26 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         onStrokeEndRef.current?.(label)
       },
       overlayCanvas: toolOverlayRef.current,
+      addTextLayer: (ls) => {
+        const cw = renderer.pixelWidth
+        const ch = renderer.pixelHeight
+        const gl = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
+        rasterizeTextToLayer(ls, gl)
+        renderer.flushLayer(gl)
+        glLayersRef.current.set(ls.id, gl)
+        render([...buildOrderedGLLayers(), gl])
+        dispatch({ type: 'ADD_TEXT_LAYER', payload: ls })
+        setEditingLayerId(ls.id)
+      },
+      updateTextLayer: (ls) => {
+        dispatch({ type: 'UPDATE_TEXT_LAYER', payload: ls })
+      },
+      openTextLayerEditor: (id) => {
+        setEditingLayerId(id)
+      },
+      textLayers: state.layers.filter(
+        (l): l is TextLayerState => 'type' in l && l.type === 'text'
+      ),
     }
   }
 
@@ -593,12 +775,22 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         onStrokeEndRef.current?.(label)
       }
     },
+    onHover: (pos) => {
+      const ctx = buildCtx()
+      if (ctx) toolHandlerRef.current.onHover?.(pos, ctx)
+    },
+    onLeave: () => {
+      const ctx = buildCtx()
+      if (ctx) toolHandlerRef.current.onLeave?.(ctx)
+    },
   })
 
   return (
+    <>
     <div ref={viewportRef} className={styles.viewport} data-canvas-viewport>
       <div className={styles.viewportInner}>
         <div
+          ref={canvasWrapperRef}
           className={styles.canvasWrapper}
           style={{
             width:  width  * state.canvas.zoom / window.devicePixelRatio,
@@ -635,6 +827,18 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         </div>
       </div>
     </div>
+    <TextLayerEditor
+      editingLayerId={editingLayerId}
+      layers={state.layers}
+      zoom={state.canvas.zoom}
+      canvasWrapperRef={canvasWrapperRef}
+      onCommit={(ls) => dispatch({ type: 'UPDATE_TEXT_LAYER', payload: ls })}
+      onClose={() => {
+        onStrokeEndRef.current?.('Text')
+        setEditingLayerId(null)
+      }}
+    />
+    </>
   )
 })
 

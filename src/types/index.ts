@@ -64,7 +64,7 @@ export type BlendMode =
   | 'color-dodge'
   | 'color-burn'
 
-export interface LayerState {
+export interface PixelLayerState {
   id: string
   name: string
   visible: boolean
@@ -72,6 +72,27 @@ export interface LayerState {
   locked: boolean
   blendMode: BlendMode
 }
+
+export interface TextLayerState {
+  id: string
+  name: string
+  visible: boolean
+  opacity: number
+  locked: boolean
+  blendMode: BlendMode
+  type: 'text'
+  text: string
+  x: number
+  y: number
+  fontFamily: string
+  fontSize: number
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  color: RGBAColor
+}
+
+export type LayerState = PixelLayerState | TextLayerState
 
 export type BackgroundFill = 'white' | 'black' | 'transparent'
 

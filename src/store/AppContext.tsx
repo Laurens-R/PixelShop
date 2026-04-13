@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, BlendMode, BackgroundFill } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, BlendMode, BackgroundFill } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,8 @@ type AppAction =
   | { type: 'SET_LAYER_BLEND'; payload: { id: string; blendMode: BlendMode } }
   | { type: 'RENAME_LAYER'; payload: { id: string; name: string } }
   | { type: 'REORDER_LAYERS'; payload: LayerState[] }
+  | { type: 'ADD_TEXT_LAYER'; payload: TextLayerState }
+  | { type: 'UPDATE_TEXT_LAYER'; payload: TextLayerState }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_HISTORY'; payload: { canUndo: boolean; canRedo: boolean } }
@@ -151,6 +153,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'REORDER_LAYERS':
       return { ...state, layers: action.payload }
+
+    case 'ADD_TEXT_LAYER':
+      return {
+        ...state,
+        layers: [...state.layers, action.payload],
+        activeLayerId: action.payload.id,
+      }
+
+    case 'UPDATE_TEXT_LAYER':
+      return {
+        ...state,
+        layers: state.layers.map((l) => l.id === action.payload.id ? action.payload : l),
+      }
 
     case 'SET_ZOOM':
       return { ...state, canvas: { ...state.canvas, zoom: action.payload } }
