@@ -879,9 +879,10 @@ export function drawAirbrushSegment(
  * Walk a quadratic Bézier from (p0x,p0y) to (p1x,p1y) guided by control
  * point (cpx,cpy), stamping brush dabs at stamp-spacing intervals.
  *
- * Used by the midpoint B-spline brush so strokes produce C1-continuous
- * approximating curves that never overshoot at sharp direction changes.
- * Arc-length is estimated via |p0→cp| + |cp→p1| (conservative upper bound).
+ * motionBlur 0‒1: when > 0 each dab becomes a capsule oriented along the
+ * local arc tangent, with half-length = size × motionBlur × 0.5. This gives
+ * a natural directional-smear appearance without any post-processing step.
+ * The touched map prevents double-painting in capsule overlaps.
  */
 export function walkQuadBezier(
   renderer: WebGLRenderer,
@@ -895,17 +896,41 @@ export function walkQuadBezier(
   hardness: number,
   shape: BrushShape,
   antiAlias: boolean,
+  motionBlur = 0,
   touched?: Map<number, number>,
   sel?: SelMask,
 ): void {
   const arcEst = Math.hypot(cpx - p0x, cpy - p0y) + Math.hypot(p1x - cpx, p1y - cpy)
   const spacing = Math.max(1, size * 0.2)
   const steps   = Math.max(1, Math.ceil(arcEst / spacing))
+  const half    = size * motionBlur * 0.5
+
   for (let i = 0; i <= steps; i++) {
     const t  = i / steps
     const t1 = 1 - t
-    const x  = Math.round(t1 * t1 * p0x + 2 * t1 * t * cpx + t * t * p1x)
-    const y  = Math.round(t1 * t1 * p0y + 2 * t1 * t * cpy + t * t * p1y)
-    stampAirbrush(renderer, layer, x, y, size, r, g, b, a, opacity, hardness, shape, antiAlias, touched, sel)
+    const x  = t1 * t1 * p0x + 2 * t1 * t * cpx + t * t * p1x
+    const y  = t1 * t1 * p0y + 2 * t1 * t * cpy + t * t * p1y
+
+    if (half > 0) {
+      // Quadratic Bézier tangent: d/dt evaluated at current t
+      const dtx = 2 * t1 * (cpx - p0x) + 2 * t * (p1x - cpx)
+      const dty = 2 * t1 * (cpy - p0y) + 2 * t * (p1y - cpy)
+      const len = Math.sqrt(dtx * dtx + dty * dty)
+      if (len > 0) {
+        const nx = dtx / len, ny = dty / len
+        drawAirbrushCapsule(
+          renderer, layer,
+          x - nx * half, y - ny * half,
+          x + nx * half, y + ny * half,
+          size, r, g, b, a, opacity,
+          hardness, shape, antiAlias,
+          touched, sel,
+        )
+      } else {
+        stampAirbrush(renderer, layer, Math.round(x), Math.round(y), size, r, g, b, a, opacity, hardness, shape, antiAlias, touched, sel)
+      }
+    } else {
+      stampAirbrush(renderer, layer, Math.round(x), Math.round(y), size, r, g, b, a, opacity, hardness, shape, antiAlias, touched, sel)
+    }
   }
 }

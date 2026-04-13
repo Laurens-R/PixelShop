@@ -8,12 +8,13 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 
 export const brushOptions = {
   size:             20,
-  opacity:          80,
-  hardness:         50,
+  opacity:          100,
+  hardness:         100,
   shape:            'round' as BrushShape,
   antiAlias:        true,
-  smoothing:        20,  // 0 = raw coords, 100 = maximum stabilizer
-  velocityTracking: false,
+  smoothing:        50,  // 0 = raw coords, 100 = maximum stabilizer
+  motionBlur:       5,   // 0 = round dabs, 100 = dabs elongated 1× brush-width along stroke
+  velocityTracking: true,
 }
 
 /**
@@ -73,6 +74,7 @@ function createBrushHandler(): ToolHandler {
       p0x, p0y, cpx, cpy, p1x, p1y,
       size, r, g, b, a, opacity,
       brushOptions.hardness, brushOptions.shape, brushOptions.antiAlias,
+      brushOptions.motionBlur / 100,
       touched ?? undefined, sel,
     )
     renderer.flushLayer(layer)
@@ -181,12 +183,14 @@ function BrushOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
   const [shape,            setShape]            = useState<BrushShape>(brushOptions.shape)
   const [antiAlias,        setAntiAlias]        = useState(brushOptions.antiAlias)
   const [smoothing,        setSmoothing]        = useState(brushOptions.smoothing)
+  const [motionBlur,       setMotionBlur]       = useState(brushOptions.motionBlur)
   const [velocityTracking, setVelocityTracking] = useState(brushOptions.velocityTracking)
 
-  const handleSize      = (v: number): void => { brushOptions.size      = v; setSize(v) }
-  const handleOpacity   = (v: number): void => { brushOptions.opacity   = v; setOpacity(v) }
-  const handleHardness  = (v: number): void => { brushOptions.hardness  = v; setHardness(v) }
-  const handleSmoothing = (v: number): void => { brushOptions.smoothing = v; setSmoothing(v) }
+  const handleSize      = (v: number): void => { brushOptions.size       = v; setSize(v) }
+  const handleOpacity   = (v: number): void => { brushOptions.opacity    = v; setOpacity(v) }
+  const handleHardness  = (v: number): void => { brushOptions.hardness   = v; setHardness(v) }
+  const handleSmoothing = (v: number): void => { brushOptions.smoothing  = v; setSmoothing(v) }
+  const handleMotionBlur = (v: number): void => { brushOptions.motionBlur = v; setMotionBlur(v) }
 
   const handleShape = (e: React.ChangeEvent<HTMLSelectElement>): void => {
     const v = e.target.value as BrushShape
@@ -222,6 +226,9 @@ function BrushOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
       <span className={styles.optSep} />
       <label className={styles.optLabel} title="Filter out pointer noise — higher values produce cleaner edges at the cost of slight lag">Smoothing:</label>
       <SliderInput value={smoothing} min={0} max={100} suffix="%" inputWidth={42} onChange={handleSmoothing} />
+      <span className={styles.optSep} />
+      <label className={styles.optLabel} title="Elongates each dab along the stroke direction — higher values give a smeared/calligraphic feel">Motion:</label>
+      <SliderInput value={motionBlur} min={0} max={100} suffix="%" inputWidth={42} onChange={handleMotionBlur} />
       <span className={styles.optSep} />
       <label
         className={styles.optCheckLabel}
