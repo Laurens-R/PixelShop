@@ -44,6 +44,11 @@ export interface ToolContext {
   openTextLayerEditor: (id: string) => void
   /** Current text layers in state — used by the text tool to detect clicks on existing text. */
   textLayers: TextLayerState[]
+  /**
+   * Re-rasterize a text layer at an arbitrary canvas position WITHOUT updating
+   * app state. Used by the move tool for smooth live drag previews of text layers.
+   */
+  previewTextAt: (ls: TextLayerState, x: number, y: number) => void
 }
 
 // ─── Pointer position passed to tool handlers ─────────────────────────────────

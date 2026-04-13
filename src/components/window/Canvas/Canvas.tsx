@@ -224,6 +224,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       // Re-rasterize text layers whenever their state changes (text, style, position, color).
       // While a text layer is being edited, blank its bitmap so only the textarea is visible.
       if ('type' in ls && ls.type === 'text') {
+        // Always reset offset — move tool may have shifted it temporarily for preview.
+        gl.offsetX = 0
+        gl.offsetY = 0
         if (ls.id === editingLayerId) {
           gl.data.fill(0)
         } else {
@@ -296,11 +299,19 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         dispatch({ type: 'UPDATE_TEXT_LAYER', payload: ls })
       },
       openTextLayerEditor: (id) => {
+        dispatch({ type: 'SET_ACTIVE_LAYER', payload: id })
         setEditingLayerId(id)
       },
       textLayers: state.layers.filter(
         (l): l is TextLayerState => 'type' in l && l.type === 'text'
       ),
+      previewTextAt: (ls, x, y) => {
+        const gl = glLayersRef.current.get(ls.id)
+        if (!gl) return
+        rasterizeTextToLayer({ ...ls, x, y }, gl)
+        renderer.flushLayer(gl)
+        render(buildOrderedGLLayers())
+      },
     }
   }
 

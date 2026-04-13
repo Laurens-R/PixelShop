@@ -9,7 +9,7 @@ export function ToolOptionsBar(): React.JSX.Element {
   const { Options } = TOOL_REGISTRY[state.activeTool]
 
   return (
-    <div className={styles.bar} role="toolbar" aria-label="Tool options">
+    <div className={styles.bar} role="toolbar" aria-label="Tool options" data-text-editor-safe>
       <Options styles={styles as unknown as ToolOptionsStyles} />
     </div>
   )

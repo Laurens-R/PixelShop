@@ -1,5 +1,6 @@
 import React from 'react'
 import { selectionStore } from '@/store/selectionStore'
+import type { TextLayerState } from '@/types'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -15,6 +16,10 @@ function createMoveHandler(): ToolHandler {
   // For whole-layer move: store original offset
   let originalOffsetX = 0
   let originalOffsetY = 0
+  // For text layer move: track original ls.x / ls.y
+  let textLayerSnapshot: TextLayerState | null = null
+  let textLayerOrigX = 0
+  let textLayerOrigY = 0
   let isDown = false
 
   function applySelectionMove(dx: number, dy: number, ctx: ToolContext): void {
@@ -84,6 +89,7 @@ function createMoveHandler(): ToolHandler {
       lastDx = 0
       lastDy = 0
       isDown = true
+      textLayerSnapshot = ctx.textLayers.find((t) => t.id === ctx.layer.id) ?? null
 
       if (selectionStore.mask) {
         // Selection move: pixel-copy approach (selection moves pixels, offset unchanged)
@@ -97,6 +103,10 @@ function createMoveHandler(): ToolHandler {
         originalMask   = null
         originalOffsetX = ctx.layer.offsetX
         originalOffsetY = ctx.layer.offsetY
+        if (textLayerSnapshot) {
+          textLayerOrigX = textLayerSnapshot.x
+          textLayerOrigY = textLayerSnapshot.y
+        }
       }
     },
 
@@ -110,6 +120,9 @@ function createMoveHandler(): ToolHandler {
 
       if (originalPixels) {
         applySelectionMove(dx, dy, ctx)
+      } else if (textLayerSnapshot) {
+        // Text layer: re-rasterize at preview position (no GL offset, no state update)
+        ctx.previewTextAt(textLayerSnapshot, textLayerOrigX + dx, textLayerOrigY + dy)
       } else {
         // Update offset in-place (no pixel data change)
         ctx.layer.offsetX = originalOffsetX + dx
@@ -129,6 +142,11 @@ function createMoveHandler(): ToolHandler {
         if (originalMask && (dx !== 0 || dy !== 0)) selectionStore.translateMask(dx, dy)
         originalPixels = null
         originalMask   = null
+      } else if (textLayerSnapshot) {
+        // Ensure final position is rasterized before committing to state
+        ctx.previewTextAt(textLayerSnapshot, textLayerOrigX + dx, textLayerOrigY + dy)
+        ctx.updateTextLayer({ ...textLayerSnapshot, x: textLayerOrigX + dx, y: textLayerOrigY + dy })
+        textLayerSnapshot = null
       } else {
         if (dx !== lastDx || dy !== lastDy) {
           ctx.layer.offsetX = originalOffsetX + dx

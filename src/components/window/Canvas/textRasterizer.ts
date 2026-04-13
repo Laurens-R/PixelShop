@@ -27,14 +27,17 @@ export function rasterizeTextToLayer(ls: TextLayerState, gl: WebGLLayer): void {
   ctx2d.font = fontStyle
   ctx2d.textBaseline = 'top'
   ctx2d.fillStyle = `rgba(${ls.color.r}, ${ls.color.g}, ${ls.color.b}, ${ls.color.a / 255})`
-  ctx2d.fillText(ls.text, ls.x, ls.y)
-
-  if (ls.underline) {
-    const m = ctx2d.measureText(ls.text)
-    const lineY = ls.y + ls.fontSize + 2
-    const lineH = Math.max(1, Math.round(ls.fontSize / 14))
-    ctx2d.fillRect(ls.x, lineY, m.width, lineH)
-  }
+  const lineHeight = ls.fontSize * 1.2
+  const lineH = Math.max(1, Math.round(ls.fontSize / 14))
+  const lines = ls.text.split('\n')
+  lines.forEach((line, i) => {
+    const lineY = ls.y + i * lineHeight
+    ctx2d.fillText(line, ls.x, lineY)
+    if (ls.underline && line.length > 0) {
+      const m = ctx2d.measureText(line)
+      ctx2d.fillRect(ls.x, lineY + ls.fontSize + 2, m.width, lineH)
+    }
+  })
 
   gl.data.set(new Uint8Array(ctx2d.getImageData(0, 0, w, h).data.buffer))
 }

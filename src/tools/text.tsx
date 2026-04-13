@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import type { TextLayerState } from '@/types'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
+import { useAppContext } from '@/store/AppContext'
 
 // ─── Module-level options ─────────────────────────────────────────────────────
 
@@ -141,12 +142,31 @@ function createTextHandler(): ToolHandler {
 // ─── Options UI ───────────────────────────────────────────────────────────────
 
 function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
-  const [fontFamily, setFontFamily] = useState(textOptions.fontFamily)
-  const [fontSize, setFontSize]     = useState(textOptions.fontSize)
-  const [bold, setBold]             = useState(textOptions.bold)
-  const [italic, setItalic]         = useState(textOptions.italic)
-  const [underline, setUnderline]   = useState(textOptions.underline)
+  const { state, dispatch } = useAppContext()
+
+  const activeTextLayer = state.layers.find(
+    (l): l is TextLayerState => 'type' in l && l.type === 'text' && l.id === state.activeLayerId
+  )
+
+  const [fontFamily, setFontFamily] = useState(activeTextLayer?.fontFamily ?? textOptions.fontFamily)
+  const [fontSize, setFontSize]     = useState(activeTextLayer?.fontSize   ?? textOptions.fontSize)
+  const [bold, setBold]             = useState(activeTextLayer?.bold        ?? textOptions.bold)
+  const [italic, setItalic]         = useState(activeTextLayer?.italic      ?? textOptions.italic)
+  const [underline, setUnderline]   = useState(activeTextLayer?.underline   ?? textOptions.underline)
   const [fonts, setFonts]           = useState<string[]>([textOptions.fontFamily])
+
+  // Sync toolbar UI when the active text layer changes
+  const activeId = activeTextLayer?.id
+  useEffect(() => {
+    if (activeTextLayer) {
+      setFontFamily(activeTextLayer.fontFamily)
+      setFontSize(activeTextLayer.fontSize)
+      setBold(activeTextLayer.bold)
+      setItalic(activeTextLayer.italic)
+      setUnderline(activeTextLayer.underline)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
 
   useEffect(() => {
     getSystemFonts().then((list) => {
@@ -154,11 +174,22 @@ function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
     })
   }, [])
 
-  const handleFont      = (f: string):  void => { textOptions.fontFamily = f; setFontFamily(f) }
-  const handleSize      = (v: number):  void => { textOptions.fontSize = v; setFontSize(v) }
-  const handleBold      = (v: boolean): void => { textOptions.bold = v; setBold(v) }
-  const handleItalic    = (v: boolean): void => { textOptions.italic = v; setItalic(v) }
-  const handleUnderline = (v: boolean): void => { textOptions.underline = v; setUnderline(v) }
+  const applyChange = (patch: Partial<Pick<TextLayerState, 'fontFamily' | 'fontSize' | 'bold' | 'italic' | 'underline'>>): void => {
+    if (activeTextLayer) {
+      dispatch({ type: 'UPDATE_TEXT_LAYER', payload: { ...activeTextLayer, ...patch } })
+    }
+    if (patch.fontFamily !== undefined) textOptions.fontFamily = patch.fontFamily
+    if (patch.fontSize   !== undefined) textOptions.fontSize   = patch.fontSize
+    if (patch.bold       !== undefined) textOptions.bold       = patch.bold
+    if (patch.italic     !== undefined) textOptions.italic     = patch.italic
+    if (patch.underline  !== undefined) textOptions.underline  = patch.underline
+  }
+
+  const handleFont      = (f: string):  void => { setFontFamily(f); applyChange({ fontFamily: f }) }
+  const handleSize      = (v: number):  void => { setFontSize(v);   applyChange({ fontSize: v }) }
+  const handleBold      = (v: boolean): void => { setBold(v);       applyChange({ bold: v }) }
+  const handleItalic    = (v: boolean): void => { setItalic(v);     applyChange({ italic: v }) }
+  const handleUnderline = (v: boolean): void => { setUnderline(v);  applyChange({ underline: v }) }
 
   return (
     <>

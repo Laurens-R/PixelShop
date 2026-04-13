@@ -24,22 +24,26 @@ export function TextLayerEditor({
   const onCloseRef  = useRef(onClose)
   onCloseRef.current = onClose
 
-  // Focus as soon as the textarea mounts
+  // Focus and resize as soon as the textarea mounts
   useEffect(() => {
-    if (editingLayerId && textareaRef.current) {
-      textareaRef.current.focus()
+    const el = textareaRef.current
+    if (editingLayerId && el) {
+      el.focus()
+      el.style.height = 'auto'
+      el.style.height = `${el.scrollHeight}px`
     }
   }, [editingLayerId])
 
-  // Close when the user clicks OUTSIDE the textarea.
+  // Close when the user clicks OUTSIDE the textarea, but NOT inside the tool options bar.
   // We add the listener after the current event loop tick so that the creation
   // click (which triggered the editor) is never caught here.
   useEffect(() => {
     if (!editingLayerId) return
     const close = (e: PointerEvent): void => {
-      if (textareaRef.current && !textareaRef.current.contains(e.target as Node)) {
-        onCloseRef.current()
-      }
+      const target = e.target as Element
+      if (textareaRef.current?.contains(target)) return
+      if (target.closest?.('[data-text-editor-safe]')) return
+      onCloseRef.current()
     }
     document.addEventListener('pointerdown', close, { capture: true })
     return () => document.removeEventListener('pointerdown', close, { capture: true })
@@ -88,9 +92,13 @@ export function TextLayerEditor({
         minHeight:      `${fontSizePx + 8}px`,
         lineHeight:     '1.2',
       }}
-      rows={1}
       value={ls.text}
-      onChange={(e) => onCommit({ ...ls, text: e.target.value })}
+      onChange={(e) => {
+        onCommit({ ...ls, text: e.target.value })
+        const el = e.target
+        el.style.height = 'auto'
+        el.style.height = `${el.scrollHeight}px`
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') onCloseRef.current()
         e.stopPropagation()  // don't let shortcuts reach the app while typing
