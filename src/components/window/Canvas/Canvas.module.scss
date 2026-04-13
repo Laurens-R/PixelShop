@@ -41,21 +41,55 @@
   image-rendering: crisp-edges;
 }
 
-.textEditor {
-  position: fixed; // overridden inline to fixed - kept here as fallback
-  background: rgba(255, 255, 255, 0.15);
+.textEditorRoot {
+  box-sizing: content-box;
   border: 2px dashed #0078ff;
+  box-shadow: 0 0 0 1px rgba(0, 120, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  pointer-events: auto;
+
+  // Resize handles
+  $hs: 8px; // handle size
+  $ho: -5px; // handle offset from edge (negative = outside)
+
+  .resizeHandle {
+    position: absolute;
+    width: $hs;
+    height: $hs;
+    background: #fff;
+    border: 1px solid #0078ff;
+    border-radius: 1px;
+    z-index: 10000;
+    pointer-events: all;
+
+    // Corners
+    &.handle-nw { left: $ho; top: $ho; }
+    &.handle-ne { right: $ho; top: $ho; }
+    &.handle-se { right: $ho; bottom: $ho; }
+    &.handle-sw { left: $ho; bottom: $ho; }
+    // Edges — centered
+    &.handle-n  { left: calc(50% - #{$hs * 0.5}); top: $ho; }
+    &.handle-s  { left: calc(50% - #{$hs * 0.5}); bottom: $ho; }
+    &.handle-w  { top: calc(50% - #{$hs * 0.5}); left: $ho; }
+    &.handle-e  { top: calc(50% - #{$hs * 0.5}); right: $ho; }
+  }
+}
+
+.textEditor {
+  display: block;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
   outline: none;
   resize: none;
   padding: 2px 4px;
   margin: 0;
   overflow: hidden;
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
   z-index: 9999;
   pointer-events: auto;
-  box-shadow: 0 0 0 1px rgba(0, 120, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
   caret-color: currentColor;
-  // Grow to fit content (supported in Chromium 123+ / Electron 30+)
-  field-sizing: content;
 }
 

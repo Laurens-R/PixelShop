@@ -73,6 +73,8 @@ export interface PixelLayerState {
   blendMode: BlendMode
 }
 
+export type TextAlign = 'left' | 'center' | 'right' | 'justify'
+
 export interface TextLayerState {
   id: string
   name: string
@@ -84,11 +86,16 @@ export interface TextLayerState {
   text: string
   x: number
   y: number
+  /** Width of the text bounding box in canvas pixels. 0 = unconstrained. */
+  boxWidth: number
+  /** Height of the text bounding box in canvas pixels. 0 = unconstrained. */
+  boxHeight: number
   fontFamily: string
   fontSize: number
   bold: boolean
   italic: boolean
   underline: boolean
+  align: TextAlign
   color: RGBAColor
 }
 

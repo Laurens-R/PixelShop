@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import type { TextLayerState } from '@/types'
+import type { TextAlign, TextLayerState } from '@/types'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 import { useAppContext } from '@/store/AppContext'
@@ -12,6 +12,7 @@ export const textOptions = {
   bold: false,
   italic: false,
   underline: false,
+  align: 'left' as import('@/types').TextAlign,
 }
 
 // ─── System font enumeration ──────────────────────────────────────────────────
@@ -52,6 +53,9 @@ const _measureCanvas = document.createElement('canvas')
 const _measureCtx    = _measureCanvas.getContext('2d')!
 
 function getTextBounds(ls: TextLayerState): { x: number; y: number; w: number; h: number } {
+  if (ls.boxWidth > 0 && ls.boxHeight > 0) {
+    return { x: ls.x, y: ls.y, w: ls.boxWidth, h: ls.boxHeight }
+  }
   const fontStyle = [
     ls.italic ? 'italic' : '',
     ls.bold   ? 'bold'   : '',
@@ -60,8 +64,8 @@ function getTextBounds(ls: TextLayerState): { x: number; y: number; w: number; h
   ].filter(Boolean).join(' ')
   _measureCtx.font = fontStyle
   const textW = _measureCtx.measureText(ls.text || 'M').width
-  const w = Math.max(ls.fontSize * 2, textW)
-  const h = Math.ceil(ls.fontSize * 1.2)
+  const w = ls.boxWidth  > 0 ? ls.boxWidth  : Math.max(ls.fontSize * 2, textW)
+  const h = ls.boxHeight > 0 ? ls.boxHeight : Math.ceil(ls.fontSize * 1.2)
   return { x: ls.x, y: ls.y, w, h }
 }
 
@@ -113,11 +117,14 @@ function createTextHandler(): ToolHandler {
         text: '',
         x: Math.round(x),
         y: Math.round(y),
+        boxWidth: 0,
+        boxHeight: 0,
         fontFamily: textOptions.fontFamily,
         fontSize: textOptions.fontSize,
         bold: textOptions.bold,
         italic: textOptions.italic,
         underline: textOptions.underline,
+        align: textOptions.align,
         color: ctx.primaryColor,
       }
       ctx.addTextLayer(layer)
@@ -153,6 +160,7 @@ function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
   const [bold, setBold]             = useState(activeTextLayer?.bold        ?? textOptions.bold)
   const [italic, setItalic]         = useState(activeTextLayer?.italic      ?? textOptions.italic)
   const [underline, setUnderline]   = useState(activeTextLayer?.underline   ?? textOptions.underline)
+  const [align, setAlign]           = useState<TextAlign>(activeTextLayer?.align ?? textOptions.align)
   const [fonts, setFonts]           = useState<string[]>([textOptions.fontFamily])
 
   // Sync toolbar UI when the active text layer changes
@@ -164,6 +172,7 @@ function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
       setBold(activeTextLayer.bold)
       setItalic(activeTextLayer.italic)
       setUnderline(activeTextLayer.underline)
+      setAlign(activeTextLayer.align ?? 'left')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
@@ -174,7 +183,7 @@ function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
     })
   }, [])
 
-  const applyChange = (patch: Partial<Pick<TextLayerState, 'fontFamily' | 'fontSize' | 'bold' | 'italic' | 'underline'>>): void => {
+  const applyChange = (patch: Partial<Pick<TextLayerState, 'fontFamily' | 'fontSize' | 'bold' | 'italic' | 'underline' | 'align'>>): void => {
     if (activeTextLayer) {
       dispatch({ type: 'UPDATE_TEXT_LAYER', payload: { ...activeTextLayer, ...patch } })
     }
@@ -183,13 +192,46 @@ function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
     if (patch.bold       !== undefined) textOptions.bold       = patch.bold
     if (patch.italic     !== undefined) textOptions.italic     = patch.italic
     if (patch.underline  !== undefined) textOptions.underline  = patch.underline
+    if (patch.align      !== undefined) textOptions.align      = patch.align
   }
 
-  const handleFont      = (f: string):  void => { setFontFamily(f); applyChange({ fontFamily: f }) }
-  const handleSize      = (v: number):  void => { setFontSize(v);   applyChange({ fontSize: v }) }
-  const handleBold      = (v: boolean): void => { setBold(v);       applyChange({ bold: v }) }
-  const handleItalic    = (v: boolean): void => { setItalic(v);     applyChange({ italic: v }) }
-  const handleUnderline = (v: boolean): void => { setUnderline(v);  applyChange({ underline: v }) }
+  const handleFont      = (f: string):     void => { setFontFamily(f); applyChange({ fontFamily: f }) }
+  const handleSize      = (v: number):     void => { setFontSize(v);   applyChange({ fontSize: v }) }
+  const handleBold      = (v: boolean):    void => { setBold(v);       applyChange({ bold: v }) }
+  const handleItalic    = (v: boolean):    void => { setItalic(v);     applyChange({ italic: v }) }
+  const handleUnderline = (v: boolean):    void => { setUnderline(v);  applyChange({ underline: v }) }
+  const handleAlign     = (a: TextAlign):  void => { setAlign(a);      applyChange({ align: a }) }
+
+  const ALIGN_BUTTONS: { value: TextAlign; title: string; icon: React.JSX.Element }[] = [
+    { value: 'left', title: 'Align Left', icon: (
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor">
+        <rect x="0" y="0"  width="14" height="2"/>
+        <rect x="0" y="5"  width="9"  height="2"/>
+        <rect x="0" y="10" width="14" height="2"/>
+      </svg>
+    )},
+    { value: 'center', title: 'Align Center', icon: (
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor">
+        <rect x="0" y="0"  width="14" height="2"/>
+        <rect x="2.5" y="5" width="9" height="2"/>
+        <rect x="0" y="10" width="14" height="2"/>
+      </svg>
+    )},
+    { value: 'right', title: 'Align Right', icon: (
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor">
+        <rect x="0" y="0"  width="14" height="2"/>
+        <rect x="5" y="5"  width="9"  height="2"/>
+        <rect x="0" y="10" width="14" height="2"/>
+      </svg>
+    )},
+    { value: 'justify', title: 'Justify', icon: (
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor">
+        <rect x="0" y="0"  width="14" height="2"/>
+        <rect x="0" y="5"  width="14" height="2"/>
+        <rect x="0" y="10" width="14" height="2"/>
+      </svg>
+    )},
+  ]
 
   return (
     <>
@@ -232,6 +274,22 @@ function TextOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Eleme
         />
         <span style={{ textDecoration: 'underline' }}>U</span>
       </label>
+      <span className={styles.optSep} />
+      {ALIGN_BUTTONS.map(({ value, title, icon }) => (
+        <button
+          key={value}
+          className={styles.optBtn}
+          title={title}
+          style={{
+            padding: '1px 6px',
+            fontWeight: align === value ? 'bold' : 'normal',
+            outline: align === value ? '2px solid #0078ff' : 'none',
+            outlineOffset: '-2px',
+          }}
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={() => handleAlign(value)}
+        >{icon}</button>
+      ))}
     </>
   )
 }
