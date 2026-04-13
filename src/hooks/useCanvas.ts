@@ -12,6 +12,13 @@ export interface CanvasPointerPosition {
 interface UseCanvasOptions {
   onPointerDown?: (pos: CanvasPointerPosition) => void
   onPointerMove?: (pos: CanvasPointerPosition) => void
+  /**
+   * Called instead of onPointerMove when pen/touch coalesced events are
+   * available. Receives ALL positions for the batch so the handler can
+   * accumulate CPU drawing and flush the GPU only once at the end.
+   * Falls back to calling onPointerMove per-event when not provided.
+   */
+  onPointerMoveBatch?: (positions: CanvasPointerPosition[]) => void
   onPointerUp?: (pos: CanvasPointerPosition) => void
   /** Fires on every pointermove regardless of button state — for hover effects. */
   onHover?: (pos: CanvasPointerPosition) => void
@@ -30,6 +37,7 @@ interface UseCanvasReturn {
 export function useCanvas({
   onPointerDown,
   onPointerMove,
+  onPointerMoveBatch,
   onPointerUp,
   onHover,
   onLeave,
@@ -86,6 +94,7 @@ export function useCanvas({
         const rect = e.currentTarget.getBoundingClientRect()
         const sx = e.currentTarget.width / rect.width
         const sy = e.currentTarget.height / rect.height
+        const positions: CanvasPointerPosition[] = []
         for (const ce of coalesced) {
           const pos: CanvasPointerPosition = {
             x: Math.floor((ce.clientX - rect.left) * sx),
@@ -100,7 +109,16 @@ export function useCanvas({
             timeStamp: ce.timeStamp,
           }
           onHover?.(pos)
-          if (isDrawing.current) onPointerMove?.(pos)
+          if (isDrawing.current) positions.push(pos)
+        }
+        if (positions.length > 0) {
+          if (onPointerMoveBatch) {
+            // Batch path: caller accumulates CPU drawing for all positions, then
+            // does a single GPU flush+render at the end — critical for pen on 4K.
+            onPointerMoveBatch(positions)
+          } else {
+            for (const pos of positions) onPointerMove?.(pos)
+          }
         }
       } else {
         const pos = toCanvasPos(e)
@@ -108,7 +126,7 @@ export function useCanvas({
         if (isDrawing.current) onPointerMove?.(pos)
       }
     },
-    [toCanvasPos, onPointerMove, onPointerUp, onHover]
+    [toCanvasPos, onPointerMove, onPointerMoveBatch, onPointerUp, onHover]
   )
 
   const handlePointerUp = useCallback(

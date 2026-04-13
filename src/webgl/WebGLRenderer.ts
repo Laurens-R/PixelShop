@@ -51,6 +51,12 @@ export class WebGLRenderer {
   private fbTex1: WebGLTexture
   readonly pixelWidth: number
   readonly pixelHeight: number
+  /**
+   * When true, flushLayer() skips the GPU texture upload.
+   * Set this before processing a batch of coalesced pointer events so only
+   * CPU drawing accumulates, then reset and call flushLayer once at the end.
+   */
+  deferFlush = false
 
   constructor(canvas: HTMLCanvasElement, pixelWidth: number, pixelHeight: number) {
     const gl = canvas.getContext('webgl2', {
@@ -136,6 +142,7 @@ export class WebGLRenderer {
   }
 
   flushLayer(layer: WebGLLayer): void {
+    if (this.deferFlush) return
     uploadTextureData(this.gl, layer.texture, layer.layerWidth, layer.layerHeight, layer.data)
   }
 

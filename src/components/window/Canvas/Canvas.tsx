@@ -417,6 +417,27 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onPointerMove(pos, ctx)
     },
+    onPointerMoveBatch: (positions) => {
+      // Pen coalesced-event batch: accumulate all CPU drawing first, then do a
+      // single GPU texture upload + composite render at the end.
+      // This reduces GPU work from N×(flushLayer + render) to 1×(flushLayer + render)
+      // per display frame — critical for Wacom pens on large (4K) canvases.
+      const renderer = rendererRef.current
+      const ctx = buildCtx()
+      if (!ctx || !renderer) return
+
+      // Suppress GPU uploads and renders during the loop
+      renderer.deferFlush = true
+      const noopRender = (): void => { /* deferred */ }
+      for (const pos of positions) {
+        toolHandlerRef.current.onPointerMove(pos, { ...ctx, render: noopRender })
+      }
+
+      // Single GPU flush + composite after all CPU drawing is complete
+      renderer.deferFlush = false
+      renderer.flushLayer(ctx.layer)
+      ctx.render(buildOrderedGLLayers())
+    },
     onPointerUp: (pos) => {
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onPointerUp(pos, ctx)
