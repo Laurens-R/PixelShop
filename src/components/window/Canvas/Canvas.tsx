@@ -3,7 +3,7 @@ import { useWebGL } from '@/hooks/useWebGL'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
-import type { WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { WebGLLayer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
 import type { TextLayerState, ShapeLayerState, PixelLayerState, MaskLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
@@ -51,6 +51,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   })
 
   const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
+  const adjustmentMaskMap = useRef<Map<string, WebGLLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
   const hasInitializedRef = useRef(false)
   // Track isActive in a ref so async init can read the current value
@@ -84,7 +85,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const newPixelLayerRef = useRef<WebGLLayer | null>(null)
 
   // ── Expose handle for save / export / clipboard ────────────────
-  useCanvasHandle({ ref, rendererRef, glLayersRef, layersStateRef, render, buildRenderArgs: () => ({ layers: buildOrderedGLLayers(), maskMap: buildMaskMap() }), width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
+  useCanvasHandle({ ref, rendererRef, glLayersRef, adjustmentMaskMap, layersStateRef, render, buildRenderArgs: () => ({ layers: buildOrderedGLLayers(), maskMap: buildMaskMap() }), width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
 
   // ── Zoom to cursor + scroll save/restore ───────────────────────
   useScrollZoom(
@@ -200,6 +201,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const map = glLayersRef.current
 
     for (const ls of state.layers) {
+      if ('type' in ls && ls.type === 'adjustment') continue
       if (!map.has(ls.id)) {
         if ('type' in ls && ls.type === 'text') {
           // Text layers are created imperatively in addTextLayer before the dispatch;
@@ -247,8 +249,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         map.delete(id)
       }
     }
+    for (const [id, gl] of adjustmentMaskMap.current) {
+      if (!stateIds.has(id)) {
+        renderer.destroyLayer(gl)
+        adjustmentMaskMap.current.delete(id)
+      }
+    }
 
     for (const ls of state.layers) {
+      if ('type' in ls && ls.type === 'adjustment') continue
       const gl = map.get(ls.id)
       if (!gl) continue
       gl.opacity   = 'opacity'   in ls ? ls.opacity   : 1
@@ -275,7 +284,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
     }
 
-    render(buildOrderedGLLayers(), buildMaskMap())
+    renderer.renderPlan(buildRenderPlan())
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.layers, isActive, editingLayerId])
 
@@ -292,15 +301,61 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   function buildOrderedGLLayers(): WebGLLayer[] {
     const map = glLayersRef.current
-    // Exclude mask layers — they are applied via buildMaskMap, not composited independently
+    // Exclude mask and adjustment layers — mask applied via buildMaskMap, adjustments via renderPlan
     const layers = state.layers
-      .filter((ls) => !('type' in ls && ls.type === 'mask'))
+      .filter((ls) => !('type' in ls && (ls.type === 'mask' || ls.type === 'adjustment')))
       .map((ls) => map.get(ls.id))
       .filter((l): l is WebGLLayer => !!l)
     // Include any pending new pixel layer before state re-renders with it
     const pending = newPixelLayerRef.current
     if (pending && !layers.some(l => l === pending)) layers.push(pending)
     return layers
+  }
+
+  function buildRenderPlan(): RenderPlanEntry[] {
+    const plan: RenderPlanEntry[] = []
+    const map = glLayersRef.current
+    const maskMap = buildMaskMap()
+    for (const ls of state.layers) {
+      if ('type' in ls && ls.type === 'mask') continue
+      if ('type' in ls && ls.type === 'adjustment') {
+        if (ls.adjustmentType === 'brightness-contrast') {
+          plan.push({
+            kind: 'brightness-contrast',
+            brightness: ls.params.brightness,
+            contrast: ls.params.contrast,
+            visible: ls.visible,
+            selMaskLayer: adjustmentMaskMap.current.get(ls.id),
+          })
+        } else if (ls.adjustmentType === 'hue-saturation') {
+          plan.push({
+            kind: 'hue-saturation',
+            hue: ls.params.hue,
+            saturation: ls.params.saturation,
+            lightness: ls.params.lightness,
+            visible: ls.visible,
+            selMaskLayer: adjustmentMaskMap.current.get(ls.id),
+          })
+        } else if (ls.adjustmentType === 'color-vibrance') {
+          plan.push({
+            kind: 'color-vibrance',
+            vibrance: ls.params.vibrance,
+            saturation: ls.params.saturation,
+            visible: ls.visible,
+            selMaskLayer: adjustmentMaskMap.current.get(ls.id),
+          })
+        }
+        continue
+      }
+      const gl = map.get(ls.id)
+      if (!gl) continue
+      plan.push({ kind: 'layer', layer: gl, mask: maskMap.get(ls.id) })
+    }
+    const pending = newPixelLayerRef.current
+    if (pending && !plan.some(e => e.kind === 'layer' && e.layer === pending)) {
+      plan.push({ kind: 'layer', layer: pending })
+    }
+    return plan
   }
 
   useEffect(() => {

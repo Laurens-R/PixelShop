@@ -66,8 +66,8 @@ function compositeLayers(
   }
 
   for (const layer of layerList) {
-    // Skip mask layers — they are applied to their parents, not composited independently
-    if ('type' in layer && layer.type === 'mask') continue
+    // Skip mask and adjustment layers — they are not composited independently
+    if ('type' in layer && (layer.type === 'mask' || layer.type === 'adjustment')) continue
     const src = canvasHandleRef.current?.getLayerPixels(layer.id)
     if (!src) continue
     const blendFn = BLEND_FNS[layer.blendMode] ?? BLEND_FNS.normal

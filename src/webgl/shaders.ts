@@ -173,3 +173,179 @@ export const BLIT_FRAG = /* glsl */ `#version 300 es
     fragColor = texture(u_tex, v_texCoord);
   }
 ` as const
+
+// ─── Vertex / Fragment shader – brightness/contrast post-process pass ──────────
+
+export const BC_VERT = /* glsl */ `#version 300 es
+  in vec2 a_position;
+  uniform vec2 u_resolution;
+  out vec2 v_texCoord;
+  void main() {
+    v_texCoord = a_position / u_resolution;
+    gl_Position = vec4(a_position / u_resolution * 2.0 - 1.0, 0.0, 1.0);
+  }
+` as const
+
+export const BC_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform float u_brightness;
+  uniform float u_contrast;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 rgb = src.rgb;
+
+    float b = u_brightness / 100.0;
+    rgb = clamp(rgb + b, 0.0, 1.0);
+
+    float cFactor = (u_contrast + 100.0) / 100.0;
+    rgb = clamp((rgb - 0.5) * cFactor + 0.5, 0.0, 1.0);
+
+    vec4 adjusted = vec4(rgb, src.a);
+
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor = mix(src, adjusted, mask);
+  }
+` as const
+
+// ─── Vertex / Fragment shader – hue/saturation post-process pass ───────────────
+
+export const HS_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform float u_hue;
+  uniform float u_saturation;
+  uniform float u_lightness;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  vec3 rgb2hsl(vec3 c) {
+    float maxC  = max(c.r, max(c.g, c.b));
+    float minC  = min(c.r, min(c.g, c.b));
+    float delta = maxC - minC;
+    float L = (maxC + minC) * 0.5;
+    float S = 0.0;
+    float H = 0.0;
+    if (delta > 0.00001) {
+      S = delta / (1.0 - abs(2.0 * L - 1.0));
+      if (maxC == c.r)      H = mod((c.g - c.b) / delta, 6.0) / 6.0;
+      else if (maxC == c.g) H = ((c.b - c.r) / delta + 2.0)   / 6.0;
+      else                  H = ((c.r - c.g) / delta + 4.0)   / 6.0;
+    }
+    return vec3(H, S, L);
+  }
+
+  vec3 hsl2rgb(vec3 hsl) {
+    float H = hsl.x, S = hsl.y, L = hsl.z;
+    float C = (1.0 - abs(2.0 * L - 1.0)) * S;
+    float X = C * (1.0 - abs(mod(H * 6.0, 2.0) - 1.0));
+    float m = L - C * 0.5;
+    vec3 rgb;
+    float h6 = H * 6.0;
+    if      (h6 < 1.0) rgb = vec3(C, X, 0.0);
+    else if (h6 < 2.0) rgb = vec3(X, C, 0.0);
+    else if (h6 < 3.0) rgb = vec3(0.0, C, X);
+    else if (h6 < 4.0) rgb = vec3(0.0, X, C);
+    else if (h6 < 5.0) rgb = vec3(X, 0.0, C);
+    else               rgb = vec3(C, 0.0, X);
+    return clamp(rgb + m, 0.0, 1.0);
+  }
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 hsl = rgb2hsl(src.rgb);
+
+    hsl.x = fract(hsl.x + u_hue / 360.0);
+    hsl.y = clamp(hsl.y + u_saturation / 100.0, 0.0, 1.0);
+    hsl.z = clamp(hsl.z + u_lightness  / 100.0, 0.0, 1.0);
+
+    vec3 adjustedRGB = hsl2rgb(hsl);
+    vec4 adjusted = vec4(adjustedRGB, src.a);
+
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor = mix(src, adjusted, mask);
+  }
+` as const
+
+// ─── Fragment shader – color vibrance post-process pass ───────────────────────
+
+export const VIB_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform float u_vibrance;
+  uniform float u_saturation;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  vec3 rgb2hsl(vec3 c) {
+    float maxC  = max(c.r, max(c.g, c.b));
+    float minC  = min(c.r, min(c.g, c.b));
+    float delta = maxC - minC;
+    float L = (maxC + minC) * 0.5;
+    float S = 0.0;
+    float H = 0.0;
+    if (delta > 0.00001) {
+      S = delta / (1.0 - abs(2.0 * L - 1.0));
+      if (maxC == c.r)      H = mod((c.g - c.b) / delta, 6.0) / 6.0;
+      else if (maxC == c.g) H = ((c.b - c.r) / delta + 2.0)   / 6.0;
+      else                  H = ((c.r - c.g) / delta + 4.0)   / 6.0;
+    }
+    return vec3(H, S, L);
+  }
+
+  vec3 hsl2rgb(vec3 hsl) {
+    float H = hsl.x, S = hsl.y, L = hsl.z;
+    float C = (1.0 - abs(2.0 * L - 1.0)) * S;
+    float X = C * (1.0 - abs(mod(H * 6.0, 2.0) - 1.0));
+    float m = L - C * 0.5;
+    vec3 rgb;
+    float h6 = H * 6.0;
+    if      (h6 < 1.0) rgb = vec3(C, X, 0.0);
+    else if (h6 < 2.0) rgb = vec3(X, C, 0.0);
+    else if (h6 < 3.0) rgb = vec3(0.0, C, X);
+    else if (h6 < 4.0) rgb = vec3(0.0, X, C);
+    else if (h6 < 5.0) rgb = vec3(X, 0.0, C);
+    else               rgb = vec3(C, 0.0, X);
+    return clamp(rgb + m, 0.0, 1.0);
+  }
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 hsl = rgb2hsl(src.rgb);
+
+    float vib = u_vibrance / 100.0;
+    float w   = (1.0 - hsl.y) * abs(vib) * step(0.0001, hsl.y);
+    hsl.y = clamp(hsl.y + w * sign(vib), 0.0, 1.0);
+
+    hsl.y = clamp(hsl.y + u_saturation / 100.0, 0.0, 1.0);
+
+    vec4 adjusted = vec4(hsl2rgb(hsl), src.a);
+
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor = mix(src, adjusted, mask);
+  }
+` as const

@@ -156,7 +156,58 @@ export interface MaskLayerState {
   parentId: string
 }
 
-export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState
+// ─── Adjustment layers ────────────────────────────────────────────────────────
+
+export type AdjustmentType =
+  | 'brightness-contrast'
+  | 'hue-saturation'
+  | 'color-vibrance'
+
+export interface AdjustmentParamsMap {
+  'brightness-contrast': { brightness: number; contrast: number }
+  'hue-saturation':      { hue: number; saturation: number; lightness: number }
+  'color-vibrance':      { vibrance: number; saturation: number }
+}
+
+interface AdjustmentLayerBase {
+  id:       string
+  name:     string
+  visible:  boolean
+  type:     'adjustment'
+  parentId: string
+}
+
+export interface BrightnessContrastAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'brightness-contrast'
+  params: AdjustmentParamsMap['brightness-contrast']
+  /** True when a selection was active at creation time; baked mask pixels live in Canvas adjustmentMaskMap. */
+  hasMask: boolean
+}
+
+export interface HueSaturationAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'hue-saturation'
+  params: AdjustmentParamsMap['hue-saturation']
+  /** True when a selection was active at creation time; baked mask pixels live in Canvas adjustmentMaskMap. */
+  hasMask: boolean
+}
+
+export interface ColorVibranceAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-vibrance'
+  params: AdjustmentParamsMap['color-vibrance']
+  /** True when a selection was active at creation time; baked mask pixels live in Canvas adjustmentMaskMap. */
+  hasMask: boolean
+}
+
+export type AdjustmentLayerState =
+  | BrightnessContrastAdjustmentLayer
+  | HueSaturationAdjustmentLayer
+  | ColorVibranceAdjustmentLayer
+
+export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
+
+export function isPixelLayer(l: LayerState): l is PixelLayerState {
+  return !('type' in l)
+}
 
 export type BackgroundFill = 'white' | 'black' | 'transparent'
 
@@ -189,4 +240,5 @@ export interface AppState {
     canUndo: boolean
     canRedo: boolean
   }
+  openAdjustmentLayerId: string | null
 }

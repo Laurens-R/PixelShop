@@ -1,7 +1,7 @@
 import { useImperativeHandle } from 'react'
 import type React from 'react'
-import type { WebGLLayer, WebGLRenderer } from '@/webgl/WebGLRenderer'
-import type { LayerState } from '@/types'
+import type { WebGLLayer, WebGLRenderer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
+import type { LayerState, MaskLayerState } from '@/types'
 import { encodePng } from './pngHelpers'
 
 // ─── Public handle type (imported by App.tsx and other callers) ────────────
@@ -34,6 +34,12 @@ export interface CanvasHandle {
   restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>, layerStateForRender?: readonly LayerState[]) => void
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
   fitToWindow: () => void
+  /**
+   * Register a baked selection mask for a brightness-contrast adjustment layer.
+   * selPixels is a full-canvas Uint8Array (1 byte per pixel, 255 = selected) from selectionStore.mask.
+   * The R channel of the resulting WebGL layer drives the shader blend weight.
+   */
+  registerAdjustmentSelectionMask: (layerId: string, selPixels: Uint8Array) => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -42,6 +48,7 @@ interface UseCanvasHandleParams {
   ref: React.ForwardedRef<CanvasHandle>
   rendererRef: { readonly current: WebGLRenderer | null }
   glLayersRef: { readonly current: Map<string, WebGLLayer> }
+  adjustmentMaskMap: { readonly current: Map<string, WebGLLayer> }
   layersStateRef: { readonly current: readonly LayerState[] }
   render: (layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>) => void
   /** Returns the correctly-filtered layers + mask map to pass to render. Used by all internal render calls. */
@@ -56,6 +63,7 @@ export function useCanvasHandle({
   ref,
   rendererRef,
   glLayersRef,
+  adjustmentMaskMap,
   layersStateRef,
   render,
   buildRenderArgs,
@@ -77,20 +85,50 @@ export function useCanvasHandle({
       const renderer = rendererRef.current
       if (!renderer) return null
       const stateLayers = layersStateRef.current
-      // Exclude mask layers from the composite list (they are applied via maskMap)
-      const glLayers = stateLayers
-        .filter((l) => !('type' in l && l.type === 'mask'))
-        .map((l) => glLayersRef.current.get(l.id))
-        .filter((l): l is WebGLLayer => l !== undefined)
-      // Build mask map: parentId → mask GL layer (visible masks only)
+      const plan: RenderPlanEntry[] = []
       const maskMap = new Map<string, WebGLLayer>()
       for (const l of stateLayers) {
         if ('type' in l && l.type === 'mask' && l.visible) {
           const gl = glLayersRef.current.get(l.id)
-          if (gl) maskMap.set((l as { parentId: string }).parentId, gl)
+          if (gl) maskMap.set((l as MaskLayerState).parentId, gl)
         }
       }
-      const data = renderer.readFlattenedPixels(glLayers, maskMap)
+      for (const l of stateLayers) {
+        if ('type' in l && l.type === 'mask') continue
+        if ('type' in l && l.type === 'adjustment') {
+          if (l.adjustmentType === 'brightness-contrast') {
+            plan.push({
+              kind: 'brightness-contrast',
+              brightness: l.params.brightness,
+              contrast: l.params.contrast,
+              visible: l.visible,
+              selMaskLayer: adjustmentMaskMap.current.get(l.id),
+            })
+          } else if (l.adjustmentType === 'hue-saturation') {
+            plan.push({
+              kind: 'hue-saturation',
+              hue: l.params.hue,
+              saturation: l.params.saturation,
+              lightness: l.params.lightness,
+              visible: l.visible,
+              selMaskLayer: adjustmentMaskMap.current.get(l.id),
+            })
+          } else if (l.adjustmentType === 'color-vibrance') {
+            plan.push({
+              kind: 'color-vibrance',
+              vibrance: l.params.vibrance,
+              saturation: l.params.saturation,
+              visible: l.visible,
+              selMaskLayer: adjustmentMaskMap.current.get(l.id),
+            })
+          }
+          continue
+        }
+        const gl = glLayersRef.current.get(l.id)
+        if (!gl) continue
+        plan.push({ kind: 'layer', layer: gl, mask: maskMap.get(l.id) })
+      }
+      const data = renderer.readFlattenedPlan(plan)
       return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
     },
 

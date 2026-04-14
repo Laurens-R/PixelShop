@@ -10,6 +10,7 @@ import { Toolbar } from '@/components/window/Toolbar/Toolbar'
 import { Canvas } from '@/components/window/Canvas/Canvas'
 import { RightPanel } from '@/components/window/RightPanel/RightPanel'
 import { StatusBar } from '@/components/window/StatusBar/StatusBar'
+import { AdjustmentPanel } from '@/components/panels/AdjustmentPanel/AdjustmentPanel'
 import { NewImageDialog } from '@/components/dialogs/NewImageDialog/NewImageDialog'
 import { ExportDialog } from '@/components/dialogs/ExportDialog/ExportDialog'
 import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
@@ -27,7 +28,13 @@ import { useClipboard } from '@/hooks/useClipboard'
 import { useLayers } from '@/hooks/useLayers'
 import { useCanvasTransforms } from '@/hooks/useCanvasTransforms'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
+import { useAdjustments } from '@/hooks/useAdjustments'
+import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
 import styles from './App.module.scss'
+
+// ─── Statics ──────────────────────────────────────────────────────────────────
+
+const ADJUSTMENT_MENU_ITEMS = ADJUSTMENT_REGISTRY.map(e => ({ type: e.adjustmentType, label: e.label }))
 
 // ─── AppContent ───────────────────────────────────────────────────────────────
 
@@ -84,6 +91,9 @@ function AppContent(): React.JSX.Element {
     activeTabId, setTabs, setPendingLayerData, pendingLayerLabelRef,
     canvasWidth: state.canvas.width, canvasHeight: state.canvas.height,
   })
+
+  // ── Adjustments ───────────────────────────────────────────────────
+  const adjustments = useAdjustments({ stateRef, captureHistory, dispatch, layers: state.layers, activeLayerId: state.activeLayerId })
 
   // ── View actions ──────────────────────────────────────────────────
   const handleUndo         = useCallback(() => { historyStore.undo() }, [])
@@ -150,6 +160,9 @@ function AppContent(): React.JSX.Element {
         onFlattenImage={handleFlattenImage}
         onAbout={() => setShowAboutDialog(true)}
         onKeyboardShortcuts={() => setShowShortcutsDialog(true)}
+        onCreateAdjustmentLayer={adjustments.handleCreateAdjustmentLayer}
+        isAdjustmentMenuEnabled={adjustments.isAdjustmentMenuEnabled}
+        adjustmentMenuItems={ADJUSTMENT_MENU_ITEMS}
       />
       <ToolOptionsBar />
       <TabBar
@@ -192,10 +205,15 @@ function AppContent(): React.JSX.Element {
           onMergeVisible={handleMergeVisible}
           onMergeDown={handleMergeDown}
           onFlattenImage={handleFlattenImage}
+          onOpenAdjustmentPanel={adjustments.handleOpenAdjustmentPanel}
         />
       </div>
 
       <StatusBar />
+
+      {state.openAdjustmentLayerId !== null && (
+        <AdjustmentPanel onClose={adjustments.handleCloseAdjustmentPanel} />
+      )}
 
       <NewImageDialog
         open={showNewImageDialog}

@@ -6,7 +6,7 @@ import {
   createStaticBuffer,
   fillRectBuffer
 } from './utils'
-import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT } from './shaders'
+import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG } from './shaders'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,15 @@ const BLEND_MODE_INDEX: Record<string, number> = {
   'difference': 8, 'exclusion': 9, 'color-dodge': 10, 'color-burn': 11,
 }
 
+export type AdjustmentRenderOp =
+  | { kind: 'brightness-contrast'; brightness: number; contrast: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'hue-saturation'; hue: number; saturation: number; lightness: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-vibrance'; vibrance: number; saturation: number; visible: boolean; selMaskLayer?: WebGLLayer }
+
+export type RenderPlanEntry =
+  | { kind: 'layer'; layer: WebGLLayer; mask?: WebGLLayer }
+  | AdjustmentRenderOp
+
 // ─── Renderer ─────────────────────────────────────────────────────────────────
 
 export class WebGLRenderer {
@@ -42,6 +51,9 @@ export class WebGLRenderer {
   private readonly checkerProgram: WebGLProgram
   private readonly blitProgram: WebGLProgram
   private readonly fbBlitProgram: WebGLProgram
+  private readonly bcProgram: WebGLProgram
+  private readonly hsProgram: WebGLProgram
+  private readonly vibProgram: WebGLProgram
   private readonly posBuffer: WebGLBuffer
   private readonly texCoordBuffer: WebGLBuffer
   // Two framebuffers for ping-pong compositing
@@ -90,6 +102,21 @@ export class WebGLRenderer {
       gl,
       compileShader(gl, gl.VERTEX_SHADER, FBO_BLIT_VERT),
       compileShader(gl, gl.FRAGMENT_SHADER, BLIT_FRAG)
+    )
+    this.bcProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, BC_FRAG)
+    )
+    this.hsProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, HS_FRAG)
+    )
+    this.vibProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, VIB_FRAG)
     )
 
     const posBuffer = gl.createBuffer()
@@ -272,9 +299,17 @@ export class WebGLRenderer {
   // ─── Rendering ─────────────────────────────────────────────────────────────
 
   render(layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>): void {
+    const plan: RenderPlanEntry[] = layers.map(layer => ({
+      kind: 'layer' as const,
+      layer,
+      mask: maskMap?.get(layer.id),
+    }))
+    this.renderPlan(plan)
+  }
+
+  renderPlan(plan: RenderPlanEntry[]): void {
     const { gl, pixelWidth: w, pixelHeight: h } = this
 
-    // 1. Clear ping-pong buffers
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb0)
     gl.viewport(0, 0, w, h)
     gl.clearColor(0, 0, 0, 0)
@@ -283,23 +318,29 @@ export class WebGLRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb1)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
-    // 2. Composite layers bottom-up into fb0 using fb1 as the "previous" result
     let srcFb = this.fb1;  let srcTex = this.fbTex1
     let dstFb = this.fb0;  let dstTex = this.fbTex0
 
-    for (const layer of layers) {
-      if (!layer.visible || layer.opacity === 0) continue
-      const maskLayer = maskMap?.get(layer.id)
-      this.compositeLayer(layer, srcTex, dstFb, w, h, maskLayer)
-      // swap
+    for (const entry of plan) {
+      if (entry.kind === 'layer') {
+        if (!entry.layer.visible || entry.layer.opacity === 0) continue
+        this.compositeLayer(entry.layer, srcTex, dstFb, w, h, entry.mask)
+      } else if (entry.kind === 'brightness-contrast') {
+        if (!entry.visible) continue
+        this.applyBrightnessContrastPass(srcTex, dstFb, entry.brightness, entry.contrast, entry.selMaskLayer)
+      } else if (entry.kind === 'hue-saturation') {
+        if (!entry.visible) continue
+        this.applyHueSaturationPass(srcTex, dstFb, entry.hue, entry.saturation, entry.lightness, entry.selMaskLayer)
+      } else if (entry.kind === 'color-vibrance') {
+        if (!entry.visible) continue
+        this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
+      }
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
     }
 
-    // srcTex now holds the fully composited image
     const finalTex = srcTex
 
-    // 3. Render to screen: checkerboard then blit composited result
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, w, h)
     gl.clearColor(0, 0, 0, 0)
@@ -307,7 +348,6 @@ export class WebGLRenderer {
 
     this.renderCheckerboard(w, h)
 
-    // Blit final composited texture over checkerboard using standard alpha blend
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     this.blitTexture(finalTex, w, h)
@@ -485,6 +525,15 @@ export class WebGLRenderer {
    * merged RGBA pixels in top-to-bottom order, suitable for ImageData / export.
    */
   readFlattenedPixels(layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>): Uint8Array {
+    const plan: RenderPlanEntry[] = layers.map(layer => ({
+      kind: 'layer' as const,
+      layer,
+      mask: maskMap?.get(layer.id),
+    }))
+    return this.readFlattenedPlan(plan)
+  }
+
+  readFlattenedPlan(plan: RenderPlanEntry[]): Uint8Array {
     const { gl, pixelWidth: w, pixelHeight: h } = this
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb0)
@@ -498,22 +547,155 @@ export class WebGLRenderer {
     let srcFb = this.fb1; let srcTex = this.fbTex1
     let dstFb = this.fb0; let dstTex = this.fbTex0
 
-    for (const layer of layers) {
-      if (!layer.visible || layer.opacity === 0) continue
-      const maskLayer = maskMap?.get(layer.id)
-      this.compositeLayer(layer, srcTex, dstFb, w, h, maskLayer)
+    for (const entry of plan) {
+      if (entry.kind === 'layer') {
+        if (!entry.layer.visible || entry.layer.opacity === 0) continue
+        this.compositeLayer(entry.layer, srcTex, dstFb, w, h, entry.mask)
+      } else if (entry.kind === 'brightness-contrast') {
+        if (!entry.visible) continue
+        this.applyBrightnessContrastPass(srcTex, dstFb, entry.brightness, entry.contrast, entry.selMaskLayer)
+      } else if (entry.kind === 'hue-saturation') {
+        if (!entry.visible) continue
+        this.applyHueSaturationPass(srcTex, dstFb, entry.hue, entry.saturation, entry.lightness, entry.selMaskLayer)
+      } else if (entry.kind === 'color-vibrance') {
+        if (!entry.visible) continue
+        this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
+      }
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
     }
 
-    // Read back from the framebuffer that holds the final composite.
-    // No vertical flip — see coordinate convention note above.
     gl.bindFramebuffer(gl.FRAMEBUFFER, srcFb)
     const pixels = new Uint8Array(w * h * 4)
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
     return pixels
+  }
+
+  applyBrightnessContrastPass(
+    srcTex: WebGLTexture,
+    dstFb: WebGLFramebuffer,
+    brightness: number,
+    contrast: number,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.bcProgram)
+    gl.uniform2f(gl.getUniformLocation(this.bcProgram, 'u_resolution'), w, h)
+    gl.uniform1f(gl.getUniformLocation(this.bcProgram, 'u_brightness'), brightness)
+    gl.uniform1f(gl.getUniformLocation(this.bcProgram, 'u_contrast'), contrast)
+
+    const posLoc = gl.getAttribLocation(this.bcProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.bcProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.bcProgram, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(this.bcProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.bcProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  applyHueSaturationPass(
+    srcTex: WebGLTexture,
+    dstFb: WebGLFramebuffer,
+    hue: number,
+    saturation: number,
+    lightness: number,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.hsProgram)
+    gl.uniform2f(gl.getUniformLocation(this.hsProgram, 'u_resolution'), w, h)
+    gl.uniform1f(gl.getUniformLocation(this.hsProgram, 'u_hue'),        hue)
+    gl.uniform1f(gl.getUniformLocation(this.hsProgram, 'u_saturation'), saturation)
+    gl.uniform1f(gl.getUniformLocation(this.hsProgram, 'u_lightness'),  lightness)
+
+    const posLoc = gl.getAttribLocation(this.hsProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.hsProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.hsProgram, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(this.hsProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.hsProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  applyColorVibrancePass(
+    srcTex: WebGLTexture,
+    dstFb: WebGLFramebuffer,
+    vibrance: number,
+    saturation: number,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.vibProgram)
+    gl.uniform2f(gl.getUniformLocation(this.vibProgram, 'u_resolution'), w, h)
+    gl.uniform1f(gl.getUniformLocation(this.vibProgram, 'u_vibrance'),   vibrance)
+    gl.uniform1f(gl.getUniformLocation(this.vibProgram, 'u_saturation'), saturation)
+
+    const posLoc = gl.getAttribLocation(this.vibProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.vibProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.vibProgram, 'u_selMask'),    1)
+      gl.uniform1i(gl.getUniformLocation(this.vibProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.vibProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
@@ -525,6 +707,9 @@ export class WebGLRenderer {
     gl.deleteProgram(this.imageProgram)
     gl.deleteProgram(this.checkerProgram)
     gl.deleteProgram(this.blitProgram)
+    gl.deleteProgram(this.bcProgram)
+    gl.deleteProgram(this.hsProgram)
+    gl.deleteProgram(this.vibProgram)
     gl.deleteBuffer(this.posBuffer)
     gl.deleteBuffer(this.texCoordBuffer)
     gl.deleteFramebuffer(this.fb0)

@@ -89,6 +89,7 @@
   border-bottom: 1px solid vars.$color-border;
   transition: background-color vars.$transition-fast;
   min-height: 36px;
+  position: relative;
 
   &:hover {
     background-color: vars.$color-surface-hover;
@@ -247,6 +248,44 @@
 .maskThumb {
   background: linear-gradient(to right, #000 0%, #fff 100%) !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+// Blue-tinted chip thumbnail for adjustment layers
+.adjThumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid rgba(6, 153, 251, 0.35);
+  background: rgba(6, 153, 251, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0699fb;
+  flex-shrink: 0;
+}
+
+// Non-italic name for adjustment layers
+.adjName {
+  flex: 1;
+  font-size: vars.$font-size-sm;
+  font-style: normal;
+  color: #999999;
+  cursor: text;
+
+  @include m.truncate;
+}
+
+// L-shaped connector for child (mask/adjustment) rows
+.childConnector {
+  position: absolute;
+  left: 15px;
+  top: -8px;
+  height: 18px;
+  width: 10px;
+  border-left: 1px solid #444444;
+  border-bottom: 1px solid #444444;
+  border-bottom-left-radius: 2px;
+  pointer-events: none;
 }
 
 // "Layer Mask" label in the blend mode row

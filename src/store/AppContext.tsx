@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +25,9 @@ export type AppAction =
   | { type: 'ADD_SHAPE_LAYER'; payload: ShapeLayerState }
   | { type: 'UPDATE_SHAPE_LAYER'; payload: ShapeLayerState }
   | { type: 'ADD_MASK_LAYER'; payload: MaskLayerState }
+  | { type: 'ADD_ADJUSTMENT_LAYER'; payload: AdjustmentLayerState }
+  | { type: 'UPDATE_ADJUSTMENT_LAYER'; payload: AdjustmentLayerState }
+  | { type: 'SET_OPEN_ADJUSTMENT'; payload: string | null }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'TOGGLE_GRID' }
   | { type: 'SET_GRID_SIZE'; payload: number }
@@ -70,7 +73,8 @@ const initialState: AppState = {
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
   canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, gridSize: 16, gridColor: '#808080', gridType: 'normal' as GridType, backgroundFill: 'white', key: 0 },
-  history: { canUndo: false, canRedo: false }
+  history: { canUndo: false, canRedo: false },
+  openAdjustmentLayerId: null,
 }
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
@@ -114,17 +118,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'REMOVE_LAYER': {
       if (state.layers.length <= 1) return state
-      // Also remove any mask child whose parent is being removed
+      // Also remove any mask or adjustment child whose parent is being removed
       const remaining = state.layers.filter((l) =>
         l.id !== action.payload &&
-        !('type' in l && l.type === 'mask' && (l as MaskLayerState).parentId === action.payload)
+        !(
+          'type' in l &&
+          (l.type === 'mask' || l.type === 'adjustment') &&
+          (l as MaskLayerState | AdjustmentLayerState).parentId === action.payload
+        )
       )
       if (remaining.length === 0) return state
+      const newOpenAdjId =
+        state.openAdjustmentLayerId !== null && remaining.some(l => l.id === state.openAdjustmentLayerId)
+          ? state.openAdjustmentLayerId
+          : null
       return {
         ...state,
         layers: remaining,
         activeLayerId:
-          state.activeLayerId === action.payload ? (remaining[remaining.length - 1]?.id ?? null) : state.activeLayerId
+          state.activeLayerId === action.payload ? (remaining[remaining.length - 1]?.id ?? null) : state.activeLayerId,
+        openAdjustmentLayerId: newOpenAdjId,
       }
     }
 
@@ -135,7 +148,28 @@ function appReducer(state: AppState, action: AppAction): AppState {
       next.splice(parentIdx + 1, 0, action.payload)
       return { ...state, layers: next, activeLayerId: action.payload.id }
     }
+    case 'ADD_ADJUSTMENT_LAYER': {
+      const parentIdx = state.layers.findIndex(l => l.id === action.payload.parentId)
+      if (parentIdx < 0) return state
+      let insertAt = parentIdx + 1
+      while (
+        insertAt < state.layers.length &&
+        'type' in state.layers[insertAt] &&
+        (state.layers[insertAt] as MaskLayerState | AdjustmentLayerState).parentId === action.payload.parentId
+      ) { insertAt++ }
+      const next = [...state.layers]
+      next.splice(insertAt, 0, action.payload)
+      return { ...state, layers: next, activeLayerId: action.payload.id }
+    }
 
+    case 'UPDATE_ADJUSTMENT_LAYER':
+      return {
+        ...state,
+        layers: state.layers.map((l) => l.id === action.payload.id ? action.payload : l),
+      }
+
+    case 'SET_OPEN_ADJUSTMENT':
+      return { ...state, openAdjustmentLayerId: action.payload }
     case 'SET_ACTIVE_LAYER':
       return { ...state, activeLayerId: action.payload }
 

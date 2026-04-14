@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { MenuBar } from '../MenuBar/MenuBar'
 import type { MenuDef } from '../MenuBar/MenuBar'
+import type { AdjustmentType } from '@/types'
 import styles from './TopBar.module.scss'
 
 
@@ -34,9 +35,12 @@ interface TopBarProps {
   onFlattenImage?: () => void
   onAbout?: () => void
   onKeyboardShortcuts?: () => void
+  onCreateAdjustmentLayer?: (type: AdjustmentType) => void
+  isAdjustmentMenuEnabled?: boolean
+  adjustmentMenuItems?: Array<{ type: AdjustmentType; label: string }>
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -67,6 +71,14 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
       ]
     },
     {
+      label: 'Image',
+      items: (adjustmentMenuItems ?? []).map(item => ({
+        label:    item.label,
+        disabled: !isAdjustmentMenuEnabled,
+        action:   () => onCreateAdjustmentLayer?.(item.type),
+      })),
+    },
+    {
       label: 'View',
       items: [
         { label: 'Zoom In',       shortcut: 'Ctrl+=', action: onZoomIn },
@@ -95,7 +107,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
       ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems])
 
   return (
     <div className={styles.topBar}>
