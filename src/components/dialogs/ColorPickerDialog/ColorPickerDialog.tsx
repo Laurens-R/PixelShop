@@ -426,24 +426,66 @@ export function ColorPickerDialog({
         {/* Body */}
         <div className={styles.body}>
 
-          {/* ── Left: gradient + strip ─────────────────────────────────── */}
-          <div className={styles.gradientArea}>
-            <canvas
-              ref={gradRef}
-              className={styles.gradCanvas}
-              width={GRAD_W}
-              height={GRAD_H}
-              onPointerDown={onGradPointer}
-              onPointerMove={onGradPointer}
-            />
-            <canvas
-              ref={stripRef}
-              className={styles.stripCanvas}
-              width={STRIP_W}
-              height={STRIP_H}
-              onPointerDown={onStripPointer}
-              onPointerMove={onStripPointer}
-            />
+          {/* ── Left: gradient + strip + HSV sliders ─────────────────── */}
+          <div className={styles.leftColumn}>
+            <div className={styles.gradientArea}>
+              <canvas
+                ref={gradRef}
+                className={styles.gradCanvas}
+                width={GRAD_W}
+                height={GRAD_H}
+                onPointerDown={onGradPointer}
+                onPointerMove={onGradPointer}
+              />
+              <canvas
+                ref={stripRef}
+                className={styles.stripCanvas}
+                width={STRIP_W}
+                height={STRIP_H}
+                onPointerDown={onStripPointer}
+                onPointerMove={onStripPointer}
+              />
+            </div>
+
+            {/* HSV sliders */}
+            <div className={styles.hsvSliders}>
+              {/* H */}
+              <div className={styles.hsvRow}>
+                <span className={styles.hsvLabel}>H</span>
+                <input
+                  type="range" min={0} max={360} step={1}
+                  value={Math.round(hue)}
+                  className={styles.hsvSlider}
+                  style={{ background: 'linear-gradient(to right, hsl(0,100%,50%), hsl(60,100%,50%), hsl(120,100%,50%), hsl(180,100%,50%), hsl(240,100%,50%), hsl(300,100%,50%), hsl(360,100%,50%))' }}
+                  onChange={(e) => setHue(+e.target.value)}
+                />
+                <span className={styles.hsvValue}>{Math.round(hue)}°</span>
+              </div>
+              {/* S */}
+              <div className={styles.hsvRow}>
+                <span className={styles.hsvLabel}>S</span>
+                <input
+                  type="range" min={0} max={100} step={1}
+                  value={Math.round(sat * 100)}
+                  className={styles.hsvSlider}
+                  style={{ background: `linear-gradient(to right, rgb(${hsvToRgb(hue, 0, val).join(',')}), rgb(${hsvToRgb(hue, 1, val).join(',')}))` }}
+                  onChange={(e) => setSat(+e.target.value / 100)}
+                />
+                <span className={styles.hsvValue}>{Math.round(sat * 100)}%</span>
+              </div>
+              {/* B */}
+              <div className={styles.hsvRow}>
+                <span className={styles.hsvLabel}>B</span>
+                <input
+                  type="range" min={0} max={100} step={1}
+                  value={Math.round(val * 100)}
+                  className={styles.hsvSlider}
+                  style={{ background: `linear-gradient(to right, #000, rgb(${hsvToRgb(hue, sat, 1).join(',')}))` }}
+                  onChange={(e) => setVal(+e.target.value / 100)}
+                />
+                <span className={styles.hsvValue}>{Math.round(val * 100)}%</span>
+              </div>
+            </div>
           </div>
 
           {/* ── Right: buttons + preview + inputs ─────────────────────── */}

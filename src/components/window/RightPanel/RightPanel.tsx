@@ -1,5 +1,4 @@
 import React, { useRef, useState } from 'react'
-import { useAppContext } from '@/store/AppContext'
 import { ColorPicker } from '@/components/panels/ColorPicker/ColorPicker'
 import { LayerPanel } from '@/components/panels/LayerPanel/LayerPanel'
 import { Navigator } from '@/components/panels/Navigator/Navigator'
@@ -18,7 +17,6 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage }: RightPanelProps): React.JSX.Element {
-  const { state, dispatch } = useAppContext()
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
   const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
@@ -98,19 +96,7 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
           </button>
         </div>
 
-        {colorTab === 'Color' && (() => {
-          const activeLayerData = state.layers.find(l => l.id === state.activeLayerId)
-          const isOnMaskLayer = !!(activeLayerData && 'type' in activeLayerData && activeLayerData.type === 'mask')
-          return (
-            <ColorPicker
-              primaryColor={state.primaryColor}
-              secondaryColor={state.secondaryColor}
-              onPrimaryChange={(c) => dispatch({ type: 'SET_PRIMARY_COLOR', payload: c })}
-              onSecondaryChange={(c) => dispatch({ type: 'SET_SECONDARY_COLOR', payload: c })}
-              grayscaleOnly={isOnMaskLayer}
-            />
-          )
-        })()}
+        {colorTab === 'Color' && <ColorPicker />}
         {colorTab === 'Swatches' && (
           <SwatchPanel />
         )}
@@ -156,55 +142,10 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
 
         {layerTab === 'Layers' && (
           <LayerPanel
-
-            layers={state.layers}
-            activeLayerId={state.activeLayerId ?? undefined}
-            onActiveLayerChange={(id) => dispatch({ type: 'SET_ACTIVE_LAYER', payload: id })}
-            onLayerAdd={() => {
-              const id = `layer-${Date.now()}`
-              dispatch({
-                type: 'ADD_LAYER',
-                payload: {
-                  id,
-                  name: `Layer ${state.layers.length + 1}`,
-                  visible: true,
-                  opacity: 1,
-                  locked: false,
-                  blendMode: 'normal'
-                }
-              })
-            }}
-            onLayerDelete={(id) => dispatch({ type: 'REMOVE_LAYER', payload: id })}
-            onLayerToggleVisibility={(id) => dispatch({ type: 'TOGGLE_LAYER_VISIBILITY', payload: id })}
-            onLayerToggleLock={(id) => dispatch({ type: 'TOGGLE_LAYER_LOCK', payload: id })}
-            onLayerOpacityChange={(id, opacity) =>
-              dispatch({ type: 'SET_LAYER_OPACITY', payload: { id, opacity } })
-            }
-            onLayerBlendChange={(id, blendMode) =>
-              dispatch({ type: 'SET_LAYER_BLEND', payload: { id, blendMode } })
-            }
-            onLayerRename={(id, name) =>
-              dispatch({ type: 'RENAME_LAYER', payload: { id, name } })
-            }
-            onLayersReorder={(layers) =>
-              dispatch({ type: 'REORDER_LAYERS', payload: layers })
-            }
             onMergeSelected={onMergeSelected}
             onMergeVisible={onMergeVisible}
             onMergeDown={onMergeDown}
             onFlattenImage={onFlattenImage}
-            onAddMaskLayer={(parentId) => {
-              // Prevent adding a second mask to the same parent
-              const hasMask = state.layers.some(
-                l => 'type' in l && l.type === 'mask' && (l as { parentId: string }).parentId === parentId
-              )
-              if (hasMask) return
-              const maskId = `mask-${Date.now()}`
-              dispatch({
-                type: 'ADD_MASK_LAYER',
-                payload: { id: maskId, name: 'Layer Mask', visible: true, type: 'mask', parentId },
-              })
-            }}
           />
         )}
         {layerTab === 'History' && (

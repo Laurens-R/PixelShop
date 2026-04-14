@@ -1,26 +1,20 @@
 import React, { useState } from 'react'
 import type { RGBAColor } from '@/types'
+import { useAppContext } from '@/store/AppContext'
 import { EmbedColorPicker, hexToRgb, toHex } from '@/components/widgets/EmbedColorPicker/EmbedColorPicker'
 import styles from './ColorPicker.module.scss'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-interface ColorPickerProps {
-  primaryColor?: RGBAColor
-  secondaryColor?: RGBAColor
-  onPrimaryChange?: (color: RGBAColor) => void
-  onSecondaryChange?: (color: RGBAColor) => void
-  /** When true, restricts to grayscale only (mask layer mode). */
-  grayscaleOnly?: boolean
-}
+export function ColorPicker(): React.JSX.Element {
+  const { state, dispatch } = useAppContext()
+  const primaryColor = state.primaryColor ?? { r: 0, g: 0, b: 0, a: 255 }
+  const secondaryColor = state.secondaryColor ?? { r: 255, g: 255, b: 255, a: 255 }
+  const activeLayerData = state.layers.find(l => l.id === state.activeLayerId)
+  const grayscaleOnly = !!(activeLayerData && 'type' in activeLayerData && activeLayerData.type === 'mask')
 
-export function ColorPicker({
-  primaryColor = { r: 0, g: 0, b: 0, a: 255 },
-  secondaryColor = { r: 255, g: 255, b: 255, a: 255 },
-  onPrimaryChange,
-  onSecondaryChange,
-  grayscaleOnly = false,
-}: ColorPickerProps): React.JSX.Element {
+  const onPrimaryChange = (c: RGBAColor): void => { dispatch({ type: 'SET_PRIMARY_COLOR', payload: c }) }
+  const onSecondaryChange = (c: RGBAColor): void => { dispatch({ type: 'SET_SECONDARY_COLOR', payload: c }) }
   const [active, setActive] = useState<'fg' | 'bg'>('fg')
 
   const fgHex = toHex(primaryColor.r, primaryColor.g, primaryColor.b)
@@ -30,8 +24,8 @@ export function ColorPicker({
   const handleChange = (hex: string): void => {
     const [r, g, b] = hexToRgb(hex)
     const color: RGBAColor = { r, g, b, a: 255 }
-    if (active === 'fg') onPrimaryChange?.(color)
-    else onSecondaryChange?.(color)
+    if (active === 'fg') onPrimaryChange(color)
+    else onSecondaryChange(color)
   }
 
   return (

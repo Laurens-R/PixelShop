@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { LayerState, BlendMode } from '@/types'
+import { useAppContext } from '@/store/AppContext'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './LayerPanel.module.scss'
 
@@ -74,44 +75,44 @@ const DeleteLayerIcon = (): React.JSX.Element => (
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface LayerPanelProps {
-  layers: LayerState[]
-  activeLayerId?: string
-  onActiveLayerChange: (id: string) => void
-  onLayerAdd: () => void
-  onLayerDelete: (id: string) => void
-  onLayerToggleVisibility: (id: string) => void
-  onLayerToggleLock: (id: string) => void
-  onLayerOpacityChange: (id: string, opacity: number) => void
-  onLayerBlendChange: (id: string, blendMode: BlendMode) => void
-  onLayerRename: (id: string, name: string) => void
-  onLayersReorder: (layers: LayerState[]) => void
   onMergeSelected: (ids: string[]) => void
   onMergeVisible: () => void
   onMergeDown: () => void
   onFlattenImage: () => void
-  onAddMaskLayer: (parentId: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function LayerPanel({
-  layers,
-  activeLayerId,
-  onActiveLayerChange,
-  onLayerAdd,
-  onLayerDelete,
-  onLayerToggleVisibility,
-  onLayerToggleLock,
-  onLayerOpacityChange,
-  onLayerBlendChange,
-  onLayerRename,
-  onLayersReorder,
   onMergeSelected,
   onMergeVisible,
   onMergeDown,
   onFlattenImage,
-  onAddMaskLayer,
 }: LayerPanelProps): React.JSX.Element {
+  const { state, dispatch } = useAppContext()
+  const layers = state.layers
+  const activeLayerId = state.activeLayerId ?? undefined
+
+  const onActiveLayerChange = (id: string): void => { dispatch({ type: 'SET_ACTIVE_LAYER', payload: id }) }
+  const onLayerAdd = (): void => {
+    const id = `layer-${Date.now()}`
+    dispatch({
+      type: 'ADD_LAYER',
+      payload: { id, name: `Layer ${layers.length + 1}`, visible: true, opacity: 1, locked: false, blendMode: 'normal' },
+    })
+  }
+  const onLayerDelete = (id: string): void => { dispatch({ type: 'REMOVE_LAYER', payload: id }) }
+  const onLayerToggleVisibility = (id: string): void => { dispatch({ type: 'TOGGLE_LAYER_VISIBILITY', payload: id }) }
+  const onLayerToggleLock = (id: string): void => { dispatch({ type: 'TOGGLE_LAYER_LOCK', payload: id }) }
+  const onLayerOpacityChange = (id: string, opacity: number): void => { dispatch({ type: 'SET_LAYER_OPACITY', payload: { id, opacity } }) }
+  const onLayerBlendChange = (id: string, blendMode: BlendMode): void => { dispatch({ type: 'SET_LAYER_BLEND', payload: { id, blendMode } }) }
+  const onLayerRename = (id: string, name: string): void => { dispatch({ type: 'RENAME_LAYER', payload: { id, name } }) }
+  const onLayersReorder = (reordered: LayerState[]): void => { dispatch({ type: 'REORDER_LAYERS', payload: reordered }) }
+  const onAddMaskLayer = (parentId: string): void => {
+    const hasMask = layers.some(l => 'type' in l && l.type === 'mask' && (l as { parentId: string }).parentId === parentId)
+    if (hasMask) return
+    dispatch({ type: 'ADD_MASK_LAYER', payload: { id: `mask-${Date.now()}`, name: 'Layer Mask', visible: true, type: 'mask', parentId } })
+  }
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())

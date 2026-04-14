@@ -10,13 +10,90 @@
   padding: 14px;
 }
 
-// ─── Gradient + strip ─────────────────────────────────────────────────────────
+// ─── Left column (gradient + strip + HSV sliders) ────────────────────────────
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
 
 .gradientArea {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
   align-items: flex-start;
+}
+
+// ─── HSV sliders ──────────────────────────────────────────────────────────────
+
+.hsvSliders {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hsvRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hsvLabel {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-dim;
+  width: 12px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.hsvSlider {
+  // Total left width = GRAD_W(240) + gap(8) + STRIP_W(18) - label(12) - gap(6) - value(32) - gap(6) = 204px
+  flex: 1;
+  height: 10px;
+  cursor: ew-resize;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 5px;
+  outline: none;
+  border: 1px solid vars.$color-border-light;
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    cursor: ew-resize;
+  }
+
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    cursor: ew-resize;
+  }
+
+  &::-webkit-slider-runnable-track,
+  &::-moz-range-track {
+    height: 10px;
+    border-radius: 5px;
+  }
+}
+
+.hsvValue {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+  font-family: vars.$font-mono;
 }
 
 .gradCanvas {

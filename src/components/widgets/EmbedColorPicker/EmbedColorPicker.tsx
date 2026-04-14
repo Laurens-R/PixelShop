@@ -127,17 +127,18 @@ export function EmbedColorPicker({ value, onChange, grayscaleOnly = false }: Emb
   const [sat, setSat] = useState(initHsv[1])
   const [val, setVal] = useState(initHsv[2])
 
-  // Draw gradient — re-runs whenever hue/sat/val change
+  // Draw gradient — re-runs whenever hue/sat/val change, or when the canvas
+  // is newly mounted after switching away from grayscaleOnly mode.
   useEffect(() => {
     const c = gradRef.current; if (!c) return
     drawSvGradient(c, hue, sat, val)
-  }, [hue, sat, val])
+  }, [hue, sat, val, grayscaleOnly])
 
-  // Draw hue strip — only re-runs when hue changes
+  // Draw hue strip — same: re-runs when canvas is newly mounted.
   useEffect(() => {
     const c = hueRef.current; if (!c) return
     drawHueStrip(c, hue)
-  }, [hue])
+  }, [hue, grayscaleOnly])
 
   const fire = useCallback((r: number, g: number, b: number): void => {
     setRgb([r, g, b])
