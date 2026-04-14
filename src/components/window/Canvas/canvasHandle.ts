@@ -2,6 +2,7 @@ import { useImperativeHandle } from 'react'
 import type React from 'react'
 import type { WebGLLayer, WebGLRenderer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
 import type { LayerState, MaskLayerState } from '@/types'
+import { buildAdjustmentEntry } from './canvasPlan'
 import { encodePng } from './pngHelpers'
 
 // ─── Public handle type (imported by App.tsx and other callers) ────────────
@@ -35,7 +36,7 @@ export interface CanvasHandle {
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
   fitToWindow: () => void
   /**
-   * Register a baked selection mask for a brightness-contrast adjustment layer.
+   * Register a baked selection mask for an adjustment layer.
    * selPixels is a full-canvas Uint8Array (1 byte per pixel, 255 = selected) from selectionStore.mask.
    * The R channel of the resulting WebGL layer drives the shader blend weight.
    */
@@ -96,32 +97,8 @@ export function useCanvasHandle({
       for (const l of stateLayers) {
         if ('type' in l && l.type === 'mask') continue
         if ('type' in l && l.type === 'adjustment') {
-          if (l.adjustmentType === 'brightness-contrast') {
-            plan.push({
-              kind: 'brightness-contrast',
-              brightness: l.params.brightness,
-              contrast: l.params.contrast,
-              visible: l.visible,
-              selMaskLayer: adjustmentMaskMap.current.get(l.id),
-            })
-          } else if (l.adjustmentType === 'hue-saturation') {
-            plan.push({
-              kind: 'hue-saturation',
-              hue: l.params.hue,
-              saturation: l.params.saturation,
-              lightness: l.params.lightness,
-              visible: l.visible,
-              selMaskLayer: adjustmentMaskMap.current.get(l.id),
-            })
-          } else if (l.adjustmentType === 'color-vibrance') {
-            plan.push({
-              kind: 'color-vibrance',
-              vibrance: l.params.vibrance,
-              saturation: l.params.saturation,
-              visible: l.visible,
-              selMaskLayer: adjustmentMaskMap.current.get(l.id),
-            })
-          }
+          const entry = buildAdjustmentEntry(l, adjustmentMaskMap.current.get(l.id))
+          if (entry) plan.push(entry)
           continue
         }
         const gl = glLayersRef.current.get(l.id)

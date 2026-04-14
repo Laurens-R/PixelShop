@@ -1,9 +1,14 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer } from '@/types'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
 import { ColorVibrancePanel } from '../ColorVibrancePanel/ColorVibrancePanel'
+import { ColorBalancePanel } from '../ColorBalancePanel/ColorBalancePanel'
+import { BlackAndWhitePanel } from '../BlackAndWhitePanel/BlackAndWhitePanel'
+import { ColorTemperaturePanel } from '../ColorTemperaturePanel/ColorTemperaturePanel'
+import { InvertPanel } from '../InvertPanel/InvertPanel'
+import { SelectiveColorPanel } from '../SelectiveColorPanel/SelectiveColorPanel'
 import styles from './AdjustmentPanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -19,6 +24,11 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'brightness-contrast': return 'Brightness/Contrast'
     case 'hue-saturation':      return 'Hue/Saturation'
     case 'color-vibrance':      return 'Color Vibrance'
+    case 'color-balance':       return 'Color Balance'
+    case 'black-and-white':     return 'Black and White'
+    case 'color-temperature':   return 'Color Temperature'
+    case 'color-invert':        return 'Invert'
+    case 'selective-color':     return 'Selective Color'
   }
 }
 
@@ -50,9 +60,57 @@ const ColorVibranceHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const ColorBalanceHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" aria-hidden="true">
+    <line x1="6" y1="1.5" x2="6" y2="10.5" />
+    <line x1="2" y1="4" x2="10" y2="4" />
+    <polygon points="2,4 1.1,6.2 2.9,6.2" fill="currentColor" stroke="none" />
+    <polygon points="10,4 9.1,6.2 10.9,6.2" fill="currentColor" stroke="none" />
+    <line x1="4.5" y1="10.5" x2="7.5" y2="10.5" />
+  </svg>
+)
+
+const BlackAndWhiteHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <path d="M6 1.5 A4.5 4.5 0 0 0 6 10.5 Z" fill="currentColor" />
+    <circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+)
+
+const ColorTemperatureHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" aria-hidden="true">
+    <line x1="6" y1="1" x2="6" y2="7" />
+    <circle cx="6" cy="9" r="2" />
+    <line x1="8.5" y1="2" x2="10" y2="2" />
+    <line x1="8.5" y1="4" x2="9.5" y2="4" />
+    <line x1="8.5" y1="6" x2="10" y2="6" />
+  </svg>
+)
+
+const ColorInvertHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+    <path d="M6 1.5 A4.5 4.5 0 0 1 6 10.5 Z" fill="currentColor" />
+    <path d="M6 1.5 A4.5 4.5 0 0 0 6 10.5 Z" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    <circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+)
+
+const SelectiveColorHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true">
+    <circle cx="4.5" cy="4.5" r="2.8" stroke="#ff6060" />
+    <circle cx="7.5" cy="4.5" r="2.8" stroke="#60d060" />
+    <circle cx="6" cy="7" r="2.8" stroke="#6060ff" />
+  </svg>
+)
+
 function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }): React.JSX.Element {
   if (type === 'brightness-contrast') return <BrightnessContrastHeaderIcon />
   if (type === 'hue-saturation') return <HueSaturationHeaderIcon />
+  if (type === 'color-balance') return <ColorBalanceHeaderIcon />
+  if (type === 'black-and-white') return <BlackAndWhiteHeaderIcon />
+  if (type === 'color-temperature') return <ColorTemperatureHeaderIcon />
+  if (type === 'color-invert') return <ColorInvertHeaderIcon />
+  if (type === 'selective-color') return <SelectiveColorHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
@@ -101,6 +159,21 @@ export function AdjustmentPanel({ onClose }: AdjustmentPanelProps): React.JSX.El
         )}
         {adjLayer.adjustmentType === 'color-vibrance' && (
           <ColorVibrancePanel layer={adjLayer as ColorVibranceAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'color-balance' && (
+          <ColorBalancePanel layer={adjLayer as ColorBalanceAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'black-and-white' && (
+          <BlackAndWhitePanel layer={adjLayer as BlackAndWhiteAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'color-temperature' && (
+          <ColorTemperaturePanel layer={adjLayer as ColorTemperatureAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'color-invert' && (
+          <InvertPanel layer={adjLayer as ColorInvertAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'selective-color' && (
+          <SelectiveColorPanel layer={adjLayer as SelectiveColorAdjustmentLayer} parentLayerName={parentLayerName} />
         )}
       </div>
     </div>

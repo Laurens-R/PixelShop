@@ -349,3 +349,321 @@ export const VIB_FRAG = /* glsl */ `#version 300 es
     fragColor = mix(src, adjusted, mask);
   }
 ` as const
+
+// ─── Fragment shader – color balance post-process pass ────────────────────────
+
+export const CB_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+
+  // Shadows tonal range (lum bias toward dark pixels)
+  uniform float u_sha_cr;   // Cyan↔Red:      −100 … +100
+  uniform float u_sha_mg;   // Magenta↔Green: −100 … +100
+  uniform float u_sha_yb;   // Yellow↔Blue:   −100 … +100
+
+  // Midtones tonal range (lum bias toward mid-gray pixels)
+  uniform float u_mid_cr;
+  uniform float u_mid_mg;
+  uniform float u_mid_yb;
+
+  // Highlights tonal range (lum bias toward bright pixels)
+  uniform float u_hil_cr;
+  uniform float u_hil_mg;
+  uniform float u_hil_yb;
+
+  uniform bool u_preserveLuminosity;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 rgb = src.rgb;
+
+    // ── Step 1: luminance-based tonal masks ──────────────────────────────
+    float lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+
+    float shadowMask    = 1.0 - lum;
+    float highlightMask = lum;
+    float midtoneMask   = 1.0 - abs(lum * 2.0 - 1.0);
+
+    // ── Step 2: weighted per-channel shifts ──────────────────────────────
+    float rShift = (u_sha_cr * shadowMask + u_mid_cr * midtoneMask + u_hil_cr * highlightMask) / 100.0;
+    float gShift = (u_sha_mg * shadowMask + u_mid_mg * midtoneMask + u_hil_mg * highlightMask) / 100.0;
+    float bShift = (u_sha_yb * shadowMask + u_mid_yb * midtoneMask + u_hil_yb * highlightMask) / 100.0;
+
+    vec3 adjusted = clamp(rgb + vec3(rShift, gShift, bShift), 0.0, 1.0);
+
+    // ── Step 3: preserve luminosity ──────────────────────────────────────
+    if (u_preserveLuminosity) {
+      float newLum = dot(adjusted, vec3(0.2126, 0.7152, 0.0722));
+      if (newLum > 0.0001) {
+        adjusted = clamp(adjusted * (lum / newLum), 0.0, 1.0);
+      }
+    }
+
+    // ── Step 4: selection mask blend ─────────────────────────────────────
+    vec4 result = vec4(adjusted, src.a);
+    float mask  = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor   = mix(src, result, mask);
+  }
+` as const
+
+// ─── Fragment shader – black and white post-process pass ─────────────────────
+
+export const BW_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform float u_reds;
+  uniform float u_yellows;
+  uniform float u_greens;
+  uniform float u_cyans;
+  uniform float u_blues;
+  uniform float u_magentas;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  // ── RGB → HSL (identical to HS_FRAG / VIB_FRAG) ──────────────────────
+  vec3 rgb2hsl(vec3 c) {
+    float maxC  = max(c.r, max(c.g, c.b));
+    float minC  = min(c.r, min(c.g, c.b));
+    float delta = maxC - minC;
+    float L = (maxC + minC) * 0.5;
+    float S = 0.0;
+    float H = 0.0;
+    if (delta > 0.00001) {
+      S = delta / (1.0 - abs(2.0 * L - 1.0));
+      if (maxC == c.r)      H = mod((c.g - c.b) / delta, 6.0) / 6.0;
+      else if (maxC == c.g) H = ((c.b - c.r) / delta + 2.0)   / 6.0;
+      else                  H = ((c.r - c.g) / delta + 4.0)   / 6.0;
+    }
+    return vec3(H, S, L);
+  }
+
+  // ── Hue circular distance ────────────────────────────────────────────
+  float hueDist(float h, float center) {
+    float d = abs(h - center);
+    return min(d, 1.0 - d);
+  }
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 hsl = rgb2hsl(src.rgb);
+    float H = hsl.x;
+    float S = hsl.y;
+    float L = hsl.z;
+
+    float wR = max(0.0, 1.0 - 6.0 * hueDist(H, 0.0 / 6.0));
+    float wY = max(0.0, 1.0 - 6.0 * hueDist(H, 1.0 / 6.0));
+    float wG = max(0.0, 1.0 - 6.0 * hueDist(H, 2.0 / 6.0));
+    float wC = max(0.0, 1.0 - 6.0 * hueDist(H, 3.0 / 6.0));
+    float wB = max(0.0, 1.0 - 6.0 * hueDist(H, 4.0 / 6.0));
+    float wM = max(0.0, 1.0 - 6.0 * hueDist(H, 5.0 / 6.0));
+
+    float uniformSlider = (u_reds + u_yellows + u_greens + u_cyans + u_blues + u_magentas) / 6.0;
+    float hueBased      = wR * u_reds + wY * u_yellows + wG * u_greens
+                        + wC * u_cyans + wB * u_blues  + wM * u_magentas;
+    float satBlend      = clamp(S * 10.0, 0.0, 1.0);
+    float weightedSlider = mix(uniformSlider, hueBased, satBlend);
+
+    float gray = clamp(2.0 * L * weightedSlider / 100.0, 0.0, 1.0);
+
+    vec4 adjusted = vec4(gray, gray, gray, src.a);
+
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor   = mix(src, adjusted, mask);
+  }
+` as const
+
+// ─── Fragment shader – color temperature post-process pass ────────────────────
+
+export const TEMP_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform float u_temperature;
+  uniform float u_tint;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    float t = u_temperature / 100.0;
+    float n = u_tint         / 100.0;
+
+    float dR = t * 0.2 + n * 0.1;
+    float dG = -n * 0.2;
+    float dB = -t * 0.2 + n * 0.1;
+
+    vec3 adjusted = clamp(src.rgb + vec3(dR, dG, dB), 0.0, 1.0);
+    vec4 result   = vec4(adjusted, src.a);
+
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor   = mix(src, result, mask);
+  }
+` as const
+
+// ─── Fragment shader – color invert post-process pass ─────────────────────────
+
+export const INVERT_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec4 adjusted = vec4(1.0 - src.rgb, src.a);
+
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor   = mix(src, adjusted, mask);
+  }
+` as const
+
+// ─── Fragment shader – selective color post-process pass ──────────────────────
+
+export const SEL_COLOR_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+
+  uniform float u_cyan[9];
+  uniform float u_magenta[9];
+  uniform float u_yellow[9];
+  uniform float u_black[9];
+
+  uniform bool u_relative;
+
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  vec3 rgb2hsl(vec3 c) {
+    float maxC  = max(c.r, max(c.g, c.b));
+    float minC  = min(c.r, min(c.g, c.b));
+    float delta = maxC - minC;
+    float L = (maxC + minC) * 0.5;
+    float S = 0.0;
+    float H = 0.0;
+    if (delta > 0.00001) {
+      S = delta / (1.0 - abs(2.0 * L - 1.0));
+      if (maxC == c.r)      H = mod((c.g - c.b) / delta, 6.0) / 6.0;
+      else if (maxC == c.g) H = ((c.b - c.r) / delta + 2.0)   / 6.0;
+      else                  H = ((c.r - c.g) / delta + 4.0)   / 6.0;
+    }
+    return vec3(H, S, L);
+  }
+
+  float hueDist(float h, float center) {
+    float d = abs(h - center);
+    return min(d, 1.0 - d);
+  }
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 rgb = src.rgb;
+
+    vec3 hsl = rgb2hsl(rgb);
+    float H = hsl.x;
+    float S = hsl.y;
+    float L = hsl.z;
+
+    float maxRGB = max(rgb.r, max(rgb.g, rgb.b));
+    float K = 1.0 - maxRGB;
+    float C = 0.0, M = 0.0, Y = 0.0;
+    if (K < 0.9999) {
+      float denom = 1.0 - K;
+      C = (1.0 - rgb.r - K) / denom;
+      M = (1.0 - rgb.g - K) / denom;
+      Y = (1.0 - rgb.b - K) / denom;
+    }
+
+    float satBlend = clamp(S * 10.0, 0.0, 1.0);
+
+    float wR = max(0.0, 1.0 - 6.0 * hueDist(H, 0.0 / 6.0));
+    float wY = max(0.0, 1.0 - 6.0 * hueDist(H, 1.0 / 6.0));
+    float wG = max(0.0, 1.0 - 6.0 * hueDist(H, 2.0 / 6.0));
+    float wC = max(0.0, 1.0 - 6.0 * hueDist(H, 3.0 / 6.0));
+    float wB = max(0.0, 1.0 - 6.0 * hueDist(H, 4.0 / 6.0));
+    float wM = max(0.0, 1.0 - 6.0 * hueDist(H, 5.0 / 6.0));
+
+    const float UNIFORM_W = 1.0 / 6.0;
+    wR = mix(UNIFORM_W, wR, satBlend);
+    wY = mix(UNIFORM_W, wY, satBlend);
+    wG = mix(UNIFORM_W, wG, satBlend);
+    wC = mix(UNIFORM_W, wC, satBlend);
+    wB = mix(UNIFORM_W, wB, satBlend);
+    wM = mix(UNIFORM_W, wM, satBlend);
+
+    float wWhite   = clamp((L - 0.8) * 5.0, 0.0, 1.0);
+    float wBlack   = clamp((0.2 - L) * 5.0, 0.0, 1.0);
+    float wNeutral = clamp(1.0 - satBlend, 0.0, 1.0);
+
+    float weights[9];
+    weights[0] = wR;
+    weights[1] = wY;
+    weights[2] = wG;
+    weights[3] = wC;
+    weights[4] = wB;
+    weights[5] = wM;
+    weights[6] = wWhite;
+    weights[7] = wNeutral;
+    weights[8] = wBlack;
+
+    float dC = 0.0, dM = 0.0, dY = 0.0, dK = 0.0;
+    for (int i = 0; i < 9; i++) {
+      float w = weights[i];
+      if (u_relative) {
+        dC += w * (u_cyan[i]    / 100.0) * C;
+        dM += w * (u_magenta[i] / 100.0) * M;
+        dY += w * (u_yellow[i]  / 100.0) * Y;
+        dK += w * (u_black[i]   / 100.0) * K;
+      } else {
+        dC += w * (u_cyan[i]    / 100.0);
+        dM += w * (u_magenta[i] / 100.0);
+        dY += w * (u_yellow[i]  / 100.0);
+        dK += w * (u_black[i]   / 100.0);
+      }
+    }
+
+    C = clamp(C + dC, 0.0, 1.0);
+    M = clamp(M + dM, 0.0, 1.0);
+    Y = clamp(Y + dY, 0.0, 1.0);
+    K = clamp(K + dK, 0.0, 1.0);
+
+    float kComp = 1.0 - K;
+    vec3 adjusted = vec3((1.0 - C) * kComp, (1.0 - M) * kComp, (1.0 - Y) * kComp);
+
+    vec4 result = vec4(adjusted, src.a);
+    float mask  = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor   = mix(src, result, mask);
+  }
+` as const

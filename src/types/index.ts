@@ -162,11 +162,47 @@ export type AdjustmentType =
   | 'brightness-contrast'
   | 'hue-saturation'
   | 'color-vibrance'
+  | 'color-balance'
+  | 'black-and-white'
+  | 'color-temperature'
+  | 'color-invert'
+  | 'selective-color'
 
 export interface AdjustmentParamsMap {
   'brightness-contrast': { brightness: number; contrast: number }
   'hue-saturation':      { hue: number; saturation: number; lightness: number }
   'color-vibrance':      { vibrance: number; saturation: number }
+  'color-balance': {
+    shadows:    { cr: number; mg: number; yb: number }
+    midtones:   { cr: number; mg: number; yb: number }
+    highlights: { cr: number; mg: number; yb: number }
+    preserveLuminosity: boolean
+  }
+  'black-and-white': {
+    reds:     number
+    yellows:  number
+    greens:   number
+    cyans:    number
+    blues:    number
+    magentas: number
+  }
+  'color-temperature': {
+    temperature: number
+    tint:        number
+  }
+  'color-invert': Record<never, never>
+  'selective-color': {
+    reds:     { cyan: number; magenta: number; yellow: number; black: number }
+    yellows:  { cyan: number; magenta: number; yellow: number; black: number }
+    greens:   { cyan: number; magenta: number; yellow: number; black: number }
+    cyans:    { cyan: number; magenta: number; yellow: number; black: number }
+    blues:    { cyan: number; magenta: number; yellow: number; black: number }
+    magentas: { cyan: number; magenta: number; yellow: number; black: number }
+    whites:   { cyan: number; magenta: number; yellow: number; black: number }
+    neutrals: { cyan: number; magenta: number; yellow: number; black: number }
+    blacks:   { cyan: number; magenta: number; yellow: number; black: number }
+    mode:     'relative' | 'absolute'
+  }
 }
 
 interface AdjustmentLayerBase {
@@ -198,10 +234,55 @@ export interface ColorVibranceAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface ColorBalanceAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-balance'
+  params: AdjustmentParamsMap['color-balance']
+  /** True when a selection was active at creation time; the baked mask pixels
+   *  live in useCanvas.adjustmentMaskMap (not in React state). */
+  hasMask: boolean
+}
+
+export interface BlackAndWhiteAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'black-and-white'
+  params: AdjustmentParamsMap['black-and-white']
+  /** True when a selection was active at creation time; the baked mask pixels
+   *  live in useCanvas.adjustmentMaskMap (not in React state). */
+  hasMask: boolean
+}
+
+export interface ColorTemperatureAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-temperature'
+  params: AdjustmentParamsMap['color-temperature']
+  /** True when a selection was active at creation time; the baked mask pixels
+   *  live in useCanvas.adjustmentMaskMap (not in React state). */
+  hasMask: boolean
+}
+
+export interface ColorInvertAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-invert'
+  params: AdjustmentParamsMap['color-invert']
+  /** True when a selection was active at creation time; the baked mask pixels
+   *  live in useCanvas.adjustmentMaskMap (not in React state). */
+  hasMask: boolean
+}
+
+export interface SelectiveColorAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'selective-color'
+  params: AdjustmentParamsMap['selective-color']
+  /** True when a selection was active at creation time; the baked mask pixels
+   *  live in useCanvas.adjustmentMaskMap (not in React state). */
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
   | ColorVibranceAdjustmentLayer
+  | ColorBalanceAdjustmentLayer
+  | BlackAndWhiteAdjustmentLayer
+  | ColorTemperatureAdjustmentLayer
+  | ColorInvertAdjustmentLayer
+  | SelectiveColorAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 

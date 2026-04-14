@@ -17,6 +17,7 @@ import { rasterizeShapeToLayer } from './shapeRasterizer'
 import { decodePng } from './pngHelpers'
 import { useCanvasHandle } from './canvasHandle'
 import type { CanvasHandle } from './canvasHandle'
+import { buildAdjustmentEntry } from './canvasPlan'
 import { useMarchingAnts } from './useMarchingAnts'
 import { useScrollZoom } from './useScrollZoom'
 import styles from './Canvas.module.scss'
@@ -319,32 +320,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     for (const ls of state.layers) {
       if ('type' in ls && ls.type === 'mask') continue
       if ('type' in ls && ls.type === 'adjustment') {
-        if (ls.adjustmentType === 'brightness-contrast') {
-          plan.push({
-            kind: 'brightness-contrast',
-            brightness: ls.params.brightness,
-            contrast: ls.params.contrast,
-            visible: ls.visible,
-            selMaskLayer: adjustmentMaskMap.current.get(ls.id),
-          })
-        } else if (ls.adjustmentType === 'hue-saturation') {
-          plan.push({
-            kind: 'hue-saturation',
-            hue: ls.params.hue,
-            saturation: ls.params.saturation,
-            lightness: ls.params.lightness,
-            visible: ls.visible,
-            selMaskLayer: adjustmentMaskMap.current.get(ls.id),
-          })
-        } else if (ls.adjustmentType === 'color-vibrance') {
-          plan.push({
-            kind: 'color-vibrance',
-            vibrance: ls.params.vibrance,
-            saturation: ls.params.saturation,
-            visible: ls.visible,
-            selMaskLayer: adjustmentMaskMap.current.get(ls.id),
-          })
-        }
+        const entry = buildAdjustmentEntry(ls, adjustmentMaskMap.current.get(ls.id))
+        if (entry) plan.push(entry)
         continue
       }
       const gl = map.get(ls.id)

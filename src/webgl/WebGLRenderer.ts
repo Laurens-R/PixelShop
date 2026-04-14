@@ -6,9 +6,14 @@ import {
   createStaticBuffer,
   fillRectBuffer
 } from './utils'
-import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG } from './shaders'
+import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG, CB_FRAG, BW_FRAG, TEMP_FRAG, INVERT_FRAG, SEL_COLOR_FRAG } from './shaders'
+import type { AdjustmentParamsMap } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+type ColorBalancePassParams  = AdjustmentParamsMap['color-balance']
+type BlackAndWhitePassParams = AdjustmentParamsMap['black-and-white']
+type SelectiveColorPassParams = AdjustmentParamsMap['selective-color']
 
 export interface WebGLLayer {
   id: string
@@ -38,6 +43,11 @@ export type AdjustmentRenderOp =
   | { kind: 'brightness-contrast'; brightness: number; contrast: number; visible: boolean; selMaskLayer?: WebGLLayer }
   | { kind: 'hue-saturation'; hue: number; saturation: number; lightness: number; visible: boolean; selMaskLayer?: WebGLLayer }
   | { kind: 'color-vibrance'; vibrance: number; saturation: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-balance'; params: ColorBalancePassParams; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'black-and-white'; params: BlackAndWhitePassParams; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-temperature'; temperature: number; tint: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-invert'; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'selective-color'; params: SelectiveColorPassParams; visible: boolean; selMaskLayer?: WebGLLayer }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: WebGLLayer; mask?: WebGLLayer }
@@ -54,6 +64,11 @@ export class WebGLRenderer {
   private readonly bcProgram: WebGLProgram
   private readonly hsProgram: WebGLProgram
   private readonly vibProgram: WebGLProgram
+  private readonly cbProgram: WebGLProgram
+  private readonly bwProgram: WebGLProgram
+  private readonly tempProgram: WebGLProgram
+  private readonly invertProgram: WebGLProgram
+  private readonly selColorProgram: WebGLProgram
   private readonly posBuffer: WebGLBuffer
   private readonly texCoordBuffer: WebGLBuffer
   // Two framebuffers for ping-pong compositing
@@ -117,6 +132,31 @@ export class WebGLRenderer {
       gl,
       compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
       compileShader(gl, gl.FRAGMENT_SHADER, VIB_FRAG)
+    )
+    this.cbProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, CB_FRAG)
+    )
+    this.bwProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, BW_FRAG)
+    )
+    this.tempProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, TEMP_FRAG)
+    )
+    this.invertProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, INVERT_FRAG)
+    )
+    this.selColorProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, SEL_COLOR_FRAG)
     )
 
     const posBuffer = gl.createBuffer()
@@ -334,6 +374,21 @@ export class WebGLRenderer {
       } else if (entry.kind === 'color-vibrance') {
         if (!entry.visible) continue
         this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
+      } else if (entry.kind === 'color-balance') {
+        if (!entry.visible) continue
+        this.applyColorBalancePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      } else if (entry.kind === 'black-and-white') {
+        if (!entry.visible) continue
+        this.applyBlackAndWhitePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      } else if (entry.kind === 'color-temperature') {
+        if (!entry.visible) continue
+        this.applyColorTemperaturePass(srcTex, dstFb, entry.temperature, entry.tint, entry.selMaskLayer)
+      } else if (entry.kind === 'color-invert') {
+        if (!entry.visible) continue
+        this.applyInvertPass(srcTex, dstFb, entry.selMaskLayer)
+      } else if (entry.kind === 'selective-color') {
+        if (!entry.visible) continue
+        this.applySelectiveColorPass(srcTex, dstFb, entry.params, entry.selMaskLayer)
       }
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
@@ -560,6 +615,21 @@ export class WebGLRenderer {
       } else if (entry.kind === 'color-vibrance') {
         if (!entry.visible) continue
         this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
+      } else if (entry.kind === 'color-balance') {
+        if (!entry.visible) continue
+        this.applyColorBalancePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      } else if (entry.kind === 'black-and-white') {
+        if (!entry.visible) continue
+        this.applyBlackAndWhitePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      } else if (entry.kind === 'color-temperature') {
+        if (!entry.visible) continue
+        this.applyColorTemperaturePass(srcTex, dstFb, entry.temperature, entry.tint, entry.selMaskLayer)
+      } else if (entry.kind === 'color-invert') {
+        if (!entry.visible) continue
+        this.applyInvertPass(srcTex, dstFb, entry.selMaskLayer)
+      } else if (entry.kind === 'selective-color') {
+        if (!entry.visible) continue
+        this.applySelectiveColorPass(srcTex, dstFb, entry.params, entry.selMaskLayer)
       }
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
@@ -697,6 +767,228 @@ export class WebGLRenderer {
 
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
+  applyColorBalancePass(
+    srcTex:        WebGLTexture,
+    dstFb:         WebGLFramebuffer,
+    params:        ColorBalancePassParams,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.cbProgram)
+    gl.uniform2f(gl.getUniformLocation(this.cbProgram, 'u_resolution'), w, h)
+
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_sha_cr'), params.shadows.cr)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_sha_mg'), params.shadows.mg)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_sha_yb'), params.shadows.yb)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_mid_cr'), params.midtones.cr)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_mid_mg'), params.midtones.mg)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_mid_yb'), params.midtones.yb)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_hil_cr'), params.highlights.cr)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_hil_mg'), params.highlights.mg)
+    gl.uniform1f(gl.getUniformLocation(this.cbProgram, 'u_hil_yb'), params.highlights.yb)
+    gl.uniform1i(gl.getUniformLocation(this.cbProgram, 'u_preserveLuminosity'), params.preserveLuminosity ? 1 : 0)
+
+    const posLoc = gl.getAttribLocation(this.cbProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.cbProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.cbProgram, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(this.cbProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.cbProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  applyBlackAndWhitePass(
+    srcTex:        WebGLTexture,
+    dstFb:         WebGLFramebuffer,
+    params:        BlackAndWhitePassParams,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.bwProgram)
+    gl.uniform2f(gl.getUniformLocation(this.bwProgram, 'u_resolution'), w, h)
+    gl.uniform1f(gl.getUniformLocation(this.bwProgram, 'u_reds'),     params.reds)
+    gl.uniform1f(gl.getUniformLocation(this.bwProgram, 'u_yellows'),  params.yellows)
+    gl.uniform1f(gl.getUniformLocation(this.bwProgram, 'u_greens'),   params.greens)
+    gl.uniform1f(gl.getUniformLocation(this.bwProgram, 'u_cyans'),    params.cyans)
+    gl.uniform1f(gl.getUniformLocation(this.bwProgram, 'u_blues'),    params.blues)
+    gl.uniform1f(gl.getUniformLocation(this.bwProgram, 'u_magentas'), params.magentas)
+
+    const posLoc = gl.getAttribLocation(this.bwProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.bwProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.bwProgram, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(this.bwProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.bwProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  applyColorTemperaturePass(
+    srcTex:        WebGLTexture,
+    dstFb:         WebGLFramebuffer,
+    temperature:   number,
+    tint:          number,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.tempProgram)
+    gl.uniform2f(gl.getUniformLocation(this.tempProgram, 'u_resolution'),   w, h)
+    gl.uniform1f(gl.getUniformLocation(this.tempProgram, 'u_temperature'),  temperature)
+    gl.uniform1f(gl.getUniformLocation(this.tempProgram, 'u_tint'),         tint)
+
+    const posLoc = gl.getAttribLocation(this.tempProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.tempProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.tempProgram, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(this.tempProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.tempProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  applyInvertPass(
+    srcTex:        WebGLTexture,
+    dstFb:         WebGLFramebuffer,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.invertProgram)
+    gl.uniform2f(gl.getUniformLocation(this.invertProgram, 'u_resolution'), w, h)
+
+    const posLoc = gl.getAttribLocation(this.invertProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.invertProgram, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.invertProgram, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(this.invertProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.invertProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  applySelectiveColorPass(
+    srcTex:        WebGLTexture,
+    dstFb:         WebGLFramebuffer,
+    params:        SelectiveColorPassParams,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+    const prog = this.selColorProgram
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(prog)
+    gl.uniform2f(gl.getUniformLocation(prog, 'u_resolution'), w, h)
+
+    const RANGE_ORDER = [
+      params.reds, params.yellows, params.greens,
+      params.cyans, params.blues, params.magentas,
+      params.whites, params.neutrals, params.blacks,
+    ] as const
+
+    gl.uniform1fv(gl.getUniformLocation(prog, 'u_cyan'),    Float32Array.from(RANGE_ORDER.map(r => r.cyan)))
+    gl.uniform1fv(gl.getUniformLocation(prog, 'u_magenta'), Float32Array.from(RANGE_ORDER.map(r => r.magenta)))
+    gl.uniform1fv(gl.getUniformLocation(prog, 'u_yellow'),  Float32Array.from(RANGE_ORDER.map(r => r.yellow)))
+    gl.uniform1fv(gl.getUniformLocation(prog, 'u_black'),   Float32Array.from(RANGE_ORDER.map(r => r.black)))
+
+    gl.uniform1i(gl.getUniformLocation(prog, 'u_relative'), params.mode === 'relative' ? 1 : 0)
+
+    const posLoc = gl.getAttribLocation(prog, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(prog, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(prog, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(prog, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(prog, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
 
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -710,6 +1002,11 @@ export class WebGLRenderer {
     gl.deleteProgram(this.bcProgram)
     gl.deleteProgram(this.hsProgram)
     gl.deleteProgram(this.vibProgram)
+    gl.deleteProgram(this.cbProgram)
+    gl.deleteProgram(this.bwProgram)
+    gl.deleteProgram(this.tempProgram)
+    gl.deleteProgram(this.invertProgram)
+    gl.deleteProgram(this.selColorProgram)
     gl.deleteBuffer(this.posBuffer)
     gl.deleteBuffer(this.texCoordBuffer)
     gl.deleteFramebuffer(this.fb0)
