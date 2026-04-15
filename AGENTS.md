@@ -82,7 +82,25 @@ Avoid re-initializing canvas layers in effects that list `rendererRef.current` a
 
 `WebGLRenderer.ts` is the low-level pixel read/write layer. It operates on `WebGLLayer` objects and exposes methods used by tools and layer operations. Do not bypass it to manipulate pixel data directly.
 
-Layer compositing for merge operations is implemented in TypeScript (`compositeLayers`) and **must match** the GLSL blend-mode shader in `WebGLRenderer.ts` exactly. If you change one, change the other.
+Layer compositing for flatten/merge/export is centralized in the unified rasterization pipeline (`src/rasterization/`) and executed from a shared render plan. Do not add separate compositing implementations for these operations.
+
+### Unified Rasterization Pipeline
+
+- Flatten, merge, and export must all run through the same centralized rasterization pipeline. Do not add ad-hoc compositing paths for one operation.
+- GPU render-plan execution is the source of truth for compositing parity.
+- Temporary preview-bypass state must never leak into final flatten/export/merge outputs.
+- If flatten/export/merge execution fails, surface the error to the user. Never silently no-op.
+
+Maintenance checklist for new adjustment/filter types:
+1. Add the new adjustment/filter to the adjustment registry and related adjustment types.
+2. Add its render-plan entry mapping.
+3. Add its WebGL pass/shader path.
+4. Ensure unified rasterization includes it for flatten/export/merge.
+5. Add or update parity tests across screen preview, flatten, and export outputs.
+
+CPU fallback policy:
+- If CPU fallback is introduced or re-enabled, parity-validate it against the GPU path before activation.
+- CPU fallback must not silently degrade output quality or compositing correctness.
 
 ### Drawing / Pixel Operations
 
