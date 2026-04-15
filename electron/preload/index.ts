@@ -17,6 +17,10 @@ const api = {
     ipcRenderer.invoke('file:exportImage', path, base64),
   readFileBase64: (path: string): Promise<string> =>
     ipcRenderer.invoke('file:readFileBase64', path),
+  loadCurvesPresets: (): Promise<unknown> =>
+    ipcRenderer.invoke('presets:loadCurvesPresets'),
+  saveCurvesPresets: (presets: unknown): Promise<void> =>
+    ipcRenderer.invoke('presets:saveCurvesPresets', presets),
 }
 
 if (process.contextIsolated) {

@@ -61,9 +61,27 @@ export interface PixelOpsModule {
     pixelsPtr: number, pixelCount: number,
     paletteOutPtr: number, maxColors: number
   ): number
+
+  /**
+   * Computes histogram for curves adjustment.
+    * Returns pointer to 4*256 float32 array (rgb, red, green, blue channels).
+   * maskPtr may be null for no selection mask.
+   */
+  _pixelops_curves_histogram(
+    inputPtr: number, width: number, height: number,
+    maskPtr: number
+  ): number
 }
 
 /** Factory function exported by the Emscripten-generated ES module */
 export type PixelOpsFactory = (options: {
   locateFile: (filename: string) => string
 }) => Promise<PixelOpsModule>
+
+/** Result of histogram computation for curves adjustment */
+export interface CurvesHistogramResult {
+  rgb: Float32Array
+  red: Float32Array
+  green: Float32Array
+  blue: Float32Array
+}

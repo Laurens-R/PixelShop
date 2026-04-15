@@ -14,6 +14,26 @@ declare global {
       exportBrowse: (ext: string) => Promise<string | null>
       exportImage: (path: string, base64: string) => Promise<void>
       readFileBase64: (path: string) => Promise<string>
+      loadCurvesPresets: () => Promise<CurvesPreset[]>
+      saveCurvesPresets: (presets: CurvesPreset[]) => Promise<void>
     }
+  }
+
+  interface CurvesControlPoint {
+    id: string
+    x: number
+    y: number
+  }
+
+  interface CurvesChannelCurve {
+    points: CurvesControlPoint[]
+  }
+
+  type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
+
+  interface CurvesPreset {
+    id: string
+    name: string
+    channels: Record<CurvesChannel, CurvesChannelCurve>
   }
 }

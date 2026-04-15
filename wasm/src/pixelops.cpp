@@ -18,6 +18,7 @@
 #include "quantize.h"
 #include "resize.h"
 #include "dither.h"
+#include "curves_histogram.h"
 
 extern "C" {
 
@@ -101,6 +102,16 @@ int pixelops_quantize(
     uint8_t* paletteOut, int maxColors
 ) {
     return quantize_median_cut(pixels, pixelCount, paletteOut, maxColors);
+}
+
+// ─── Curves Histogram ────────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+float* pixelops_curves_histogram(
+    const uint8_t* inputPtr, uint32_t width, uint32_t height,
+    const uint8_t* maskPtr
+) {
+    return computeCurvesHistogram(inputPtr, width, height, maskPtr);
 }
 
 } // extern "C"

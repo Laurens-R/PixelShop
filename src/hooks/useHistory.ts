@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, MutableRefObject } from 'react'
 import { historyStore } from '@/store/historyStore'
+import type { ClearHistoryOptions } from '@/store/historyStore'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
@@ -51,6 +52,7 @@ export function useHistory({
     const layerPixels = canvasHandleRef.current?.captureAllLayerPixels()
     if (!layerPixels || layerPixels.size === 0) return
     const layerGeometry = canvasHandleRef.current?.captureAllLayerGeometry() ?? new Map()
+    const adjustmentMasks = canvasHandleRef.current?.captureAllAdjustmentMasks() ?? new Map()
     const s = stateRef.current
     historyStore.push({
       id: `hist-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -58,6 +60,7 @@ export function useHistory({
       timestamp: Date.now(),
       layerPixels,
       layerGeometry,
+      adjustmentMasks,
       layerState: s.layers,
       activeLayerId: s.activeLayerId,
       canvasWidth: s.canvas.width,
@@ -75,6 +78,7 @@ export function useHistory({
         entry.canvasHeight !== stateRef.current.canvas.height
       ) return
       canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry, entry.layerState)
+      canvasHandleRef.current?.restoreAllAdjustmentMasks(entry.adjustmentMasks)
     }
     return () => { historyStore.onPreview = null }
   }, [canvasHandleRef, stateRef])
@@ -104,6 +108,17 @@ export function useHistory({
           encoded.set(id, tmp.toDataURL('image/png'))
           if (geo) encoded.set(`${id}:geo`, JSON.stringify(geo))
         }
+        for (const [layerId, maskPixels] of entry.adjustmentMasks) {
+          const maskCanvas = document.createElement('canvas')
+          maskCanvas.width = entry.canvasWidth
+          maskCanvas.height = entry.canvasHeight
+          const maskCtx2d = maskCanvas.getContext('2d')!
+          maskCtx2d.putImageData(
+            new ImageData(new Uint8ClampedArray(maskPixels.buffer as ArrayBuffer), entry.canvasWidth, entry.canvasHeight),
+            0, 0
+          )
+          encoded.set(`${layerId}:adjustment-mask`, maskCanvas.toDataURL('image/png'))
+        }
         suppressReadyCaptureRef.current = true
         setPendingLayerData(encoded)
         const jumpTabId = activeTabIdRef.current
@@ -125,6 +140,7 @@ export function useHistory({
         })
       } else {
         canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry, entry.layerState)
+        canvasHandleRef.current?.restoreAllAdjustmentMasks(entry.adjustmentMasks)
         dispatch({
           type: 'RESTORE_LAYERS',
           payload: { layers: entry.layerState, activeLayerId: entry.activeLayerId },
@@ -139,7 +155,10 @@ export function useHistory({
 
   // Register onClear: capture current state as 'History Cleared' entry
   useEffect(() => {
-    historyStore.onClear = (): void => { captureHistory('History Cleared') }
+    historyStore.onClear = (options?: ClearHistoryOptions): void => {
+      if (options?.recaptureSnapshot === false) return
+      captureHistory('History Cleared')
+    }
     return () => { historyStore.onClear = null }
   }, [captureHistory])
 

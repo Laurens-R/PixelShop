@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { historyStore } from '@/store/historyStore'
+import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
 import { IMAGE_EXTENSIONS, EXT_TO_MIME, loadImagePixels } from '@/export/imageLoader'
 import { makeTabId, fileTitle } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
@@ -50,7 +50,7 @@ export function useFileOps({
 
   const handleNewConfirm = useCallback(({ width, height, backgroundFill }: { width: number; height: number; backgroundFill: BackgroundFill }): void => {
     const snapshot        = captureActiveSnapshot()
-    const savedHistory    = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+    const savedHistory    = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
     const savedLayerData  = serializeActiveTabPixels()
     const n               = untitledCounter
     setUntitledCounter(n + 1)
@@ -66,7 +66,7 @@ export function useFileOps({
     ]
     setTabs(updated)
     setActiveTabId(newId)
-    historyStore.clear()
+    historyStore.clear({ recaptureSnapshot: false })
     setPendingLayerData(null)
     dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
   }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, serializeActiveTabPixels, dispatch, setTabs, setActiveTabId, setPendingLayerData])
@@ -94,7 +94,7 @@ export function useFileOps({
         layers, activeLayerId: layerId, zoom: 1,
       }
       const snapshot      = captureActiveSnapshot()
-      const savedHistory   = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+      const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
       const savedLayerData = serializeActiveTabPixels()
       const newId          = makeTabId()
       const updated: TabRecord[] = [
@@ -103,7 +103,7 @@ export function useFileOps({
       ]
       setTabs(updated)
       setActiveTabId(newId)
-      historyStore.clear()
+      historyStore.clear({ recaptureSnapshot: false })
       setPendingLayerData(null)
       dispatch({ type: 'SWITCH_TAB', payload: { width, height, backgroundFill: 'transparent', layers, activeLayerId: layerId, zoom: 1 } })
       return
@@ -119,13 +119,18 @@ export function useFileOps({
       version: number
       canvas: { width: number; height: number; backgroundFill?: BackgroundFill }
       activeLayerId: string | null
-      layers: Array<LayerState & { pngData?: string | null; layerGeo?: { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number } | null }>
+      layers: Array<LayerState & {
+        pngData?: string | null
+        layerGeo?: { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number } | null
+        adjustmentMaskPng?: string | null
+      }>
     }
 
     const layerData = new Map<string, string>()
-    const layers: LayerState[] = doc.layers.map(({ pngData, layerGeo, ...meta }) => {
+    const layers: LayerState[] = doc.layers.map(({ pngData, layerGeo, adjustmentMaskPng, ...meta }) => {
       if (pngData)  layerData.set(meta.id, pngData)
       if (layerGeo) layerData.set(`${meta.id}:geo`, JSON.stringify(layerGeo))
+      if (adjustmentMaskPng) layerData.set(`${meta.id}:adjustment-mask`, adjustmentMaskPng)
       return meta as LayerState
     })
     const title       = fileTitle(path)
@@ -135,7 +140,7 @@ export function useFileOps({
       layers, activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null, zoom: 1,
     }
     const snapshot      = captureActiveSnapshot()
-    const savedHistory   = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+    const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
     const savedLayerData = serializeActiveTabPixels()
     const newId          = makeTabId()
     const updated: TabRecord[] = [
@@ -144,7 +149,7 @@ export function useFileOps({
     ]
     setTabs(updated)
     setActiveTabId(newId)
-    historyStore.clear()
+    historyStore.clear({ recaptureSnapshot: false })
     setPendingLayerData(null)
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
   }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
@@ -158,6 +163,7 @@ export function useFileOps({
     }
 
     const layerPngs: Record<string, string>  = {}
+    const adjustmentMaskPngs: Record<string, string> = {}
     const layerGeos: Record<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }> = {}
     for (const layer of state.layers) {
       const result = canvasHandleRef.current?.exportLayerPng(layer.id)
@@ -165,12 +171,21 @@ export function useFileOps({
         layerPngs[layer.id] = result.png
         layerGeos[layer.id] = { layerWidth: result.layerWidth, layerHeight: result.layerHeight, offsetX: result.offsetX, offsetY: result.offsetY }
       }
+      if ('type' in layer && layer.type === 'adjustment') {
+        const maskPng = canvasHandleRef.current?.exportAdjustmentMaskPng(layer.id)
+        if (maskPng) adjustmentMaskPngs[layer.id] = maskPng
+      }
     }
     const doc = {
       version: 1,
       canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
-      layers: state.layers.map(l => ({ ...l, pngData: layerPngs[l.id] ?? null, layerGeo: layerGeos[l.id] ?? null })),
+      layers: state.layers.map(l => ({
+        ...l,
+        pngData: layerPngs[l.id] ?? null,
+        layerGeo: layerGeos[l.id] ?? null,
+        adjustmentMaskPng: adjustmentMaskPngs[l.id] ?? null,
+      })),
     }
     await window.api.savePxshopFile(path, JSON.stringify(doc))
     const savedPath = path

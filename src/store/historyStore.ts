@@ -10,10 +10,48 @@ export interface HistoryEntry {
   layerPixels: Map<string, Uint8Array>
   /** Per-layer dimensions and canvas-space offset at the time of the snapshot. */
   layerGeometry: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>
+  /** Baked adjustment mask pixels keyed by adjustment layer ID. */
+  adjustmentMasks: Map<string, Uint8Array>
   layerState: LayerState[]
   activeLayerId: string | null
   canvasWidth: number
   canvasHeight: number
+}
+
+export interface ClearHistoryOptions {
+  recaptureSnapshot?: boolean
+}
+
+function cloneLayerPixels(layerPixels: Map<string, Uint8Array>): Map<string, Uint8Array> {
+  const cloned = new Map<string, Uint8Array>()
+  for (const [layerId, pixels] of layerPixels) cloned.set(layerId, new Uint8Array(pixels))
+  return cloned
+}
+
+function cloneLayerGeometry(layerGeometry: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>): Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }> {
+  const cloned = new Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>()
+  for (const [layerId, geometry] of layerGeometry) cloned.set(layerId, { ...geometry })
+  return cloned
+}
+
+function cloneAdjustmentMasks(adjustmentMasks: Map<string, Uint8Array>): Map<string, Uint8Array> {
+  const cloned = new Map<string, Uint8Array>()
+  for (const [layerId, maskPixels] of adjustmentMasks) cloned.set(layerId, new Uint8Array(maskPixels))
+  return cloned
+}
+
+export function cloneHistoryEntry(entry: HistoryEntry): HistoryEntry {
+  return {
+    ...entry,
+    layerPixels: cloneLayerPixels(entry.layerPixels),
+    layerGeometry: cloneLayerGeometry(entry.layerGeometry),
+    adjustmentMasks: cloneAdjustmentMasks(entry.adjustmentMasks),
+    layerState: structuredClone(entry.layerState),
+  }
+}
+
+export function cloneHistoryEntries(entries: HistoryEntry[]): HistoryEntry[] {
+  return entries.map(cloneHistoryEntry)
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -42,11 +80,12 @@ class HistoryStore {
    * Registered by useHistory. Called after clearing — allows a fresh snapshot
    * to be pushed so the cleared state is still recoverable via undo.
    */
-  onClear: (() => void) | null = null
+  onClear: ((options?: ClearHistoryOptions) => void) | null = null
 
   private releaseEntry(e: HistoryEntry): void {
     e.layerPixels.clear()
     e.layerGeometry.clear()
+    e.adjustmentMasks.clear()
   }
 
   push(entry: HistoryEntry): void {
@@ -102,13 +141,13 @@ class HistoryStore {
     this.notify()
   }
 
-  clear(): void {
+  clear(options?: ClearHistoryOptions): void {
     this.entries.forEach(e => this.releaseEntry(e))
     this.entries = []
     this.currentIndex = -1
     this.selectedIndex = -1
     this.notify()
-    this.onClear?.()
+    this.onClear?.(options)
   }
 
   /**

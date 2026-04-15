@@ -194,6 +194,12 @@ export interface CurvesPresetRef {
   dirty: boolean
 }
 
+export interface CurvesPreset {
+  id: string
+  name: string
+  channels: Record<CurvesChannel, CurvesChannelCurve>
+}
+
 export interface AdjustmentParamsMap {
   'brightness-contrast': { brightness: number; contrast: number }
   'hue-saturation':      { hue: number; saturation: number; lightness: number }

@@ -12,7 +12,7 @@ const GRAPH_SIZE = 216
 interface CurvesGraphProps {
   channel: CurvesChannel
   points: CurvesControlPoint[]
-  histogram: Uint32Array | null
+  histogram: Float32Array | null
   visualAids: CurvesVisualAids
   selectedPointId: string | null
   onAddPoint: (input: number, output: number) => void

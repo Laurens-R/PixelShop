@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { CurvesAdjustmentLayer, CurvesChannel, CurvesControlPoint } from '@/types'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import { useCurvesHistogram } from '@/hooks/useCurvesHistogram'
 import {
   cloneCurvesParams,
   nextPointId,
@@ -27,7 +28,7 @@ import styles from './CurvesPanel.module.scss'
 interface CurvesPanelProps {
   layer: CurvesAdjustmentLayer
   parentLayerName: string
-  canvasHandleRef: React.RefObject<CanvasHandle | null>
+  canvasHandleRef?: { readonly current: CanvasHandle | null }
 }
 
 // ─── Channel config ───────────────────────────────────────────────────────────
@@ -45,8 +46,8 @@ const CHANNEL_LABEL: Record<CurvesChannel, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function CurvesPanel({ layer, parentLayerName, canvasHandleRef: _canvasHandleRef }: CurvesPanelProps): React.JSX.Element {
-  const { dispatch } = useAppContext()
+export function CurvesPanel({ layer, parentLayerName, canvasHandleRef }: CurvesPanelProps): React.JSX.Element {
+  const { state, dispatch } = useAppContext()
 
   const params = layer.params
   const ch = params.ui.selectedChannel
@@ -61,6 +62,39 @@ export function CurvesPanel({ layer, parentLayerName, canvasHandleRef: _canvasHa
   const [previewEnabled, setPreviewEnabled] = useState(true)
   const [showHistogram, setShowHistogram] = useState(true)
   const pasteErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const histogramSourceRevisionHint = useMemo(() => {
+    return state.layers.map((ls) => {
+      if ('type' in ls && ls.type === 'adjustment') {
+        if (ls.id === layer.id) {
+          return `${ls.id}:self:${ls.visible ? 1 : 0}:${ls.parentId}`
+        }
+        return `${ls.id}:${ls.adjustmentType}:${ls.visible ? 1 : 0}:${ls.parentId}:${JSON.stringify(ls.params)}`
+      }
+      if ('type' in ls && ls.type === 'mask') {
+        return `${ls.id}:mask:${ls.visible ? 1 : 0}:${ls.parentId}`
+      }
+      return `${ls.id}:pixel:${ls.visible ? 1 : 0}:${'opacity' in ls ? ls.opacity : 1}:${'blendMode' in ls ? ls.blendMode : 'normal'}`
+    }).join('|')
+  }, [state.layers, layer.id])
+
+  const { histogram, status: histogramStatus, message: histogramMessage } = useCurvesHistogram({
+    canvasHandleRef: canvasHandleRef ?? { current: null },
+    adjustmentLayerId: layer.id,
+    selectedChannel: ch,
+    showHistogram,
+    width: state.canvas.width,
+    height: state.canvas.height,
+    sourceRevisionHint: histogramSourceRevisionHint,
+  })
+
+  const histogramStatusText = showHistogram
+    ? (histogramStatus === 'loading'
+      ? 'Histogram loading...'
+      : (histogramStatus === 'unavailable' || histogramStatus === 'error')
+        ? (histogramMessage ?? 'Histogram unavailable.')
+        : '')
+    : ''
 
   // Preview store integration
   useEffect(() => {
@@ -401,12 +435,12 @@ export function CurvesPanel({ layer, parentLayerName, canvasHandleRef: _canvasHa
           <div className={styles.curveTitle}>
             Curve Editor <strong>{CHANNEL_LABEL[ch]}</strong>
           </div>
-          <div className={styles.curveReadout}>{readoutText()}</div>
+          <div className={styles.curveReadout}>{histogramStatusText || readoutText()}</div>
         </div>
         <CurvesGraph
           channel={ch}
           points={currentPoints}
-          histogram={null}
+          histogram={showHistogram ? histogram : null}
           visualAids={params.ui.visualAids}
           selectedPointId={selectedPointId}
           onAddPoint={handleAddPoint}

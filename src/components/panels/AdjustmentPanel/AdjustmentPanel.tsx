@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer } from '@/types'
-import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
+import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
 import { ColorVibrancePanel } from '../ColorVibrancePanel/ColorVibrancePanel'
@@ -17,7 +17,7 @@ import styles from './AdjustmentPanel.module.scss'
 
 interface AdjustmentPanelProps {
   onClose: () => void
-  canvasHandleRef: React.RefObject<CanvasHandle | null>
+  canvasHandleRef?: { readonly current: CanvasHandle | null }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -189,7 +189,11 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
           <SelectiveColorPanel layer={adjLayer as SelectiveColorAdjustmentLayer} parentLayerName={parentLayerName} />
         )}
         {adjLayer.adjustmentType === 'curves' && (
-          <CurvesPanel layer={adjLayer as CurvesAdjustmentLayer} parentLayerName={parentLayerName} canvasHandleRef={canvasHandleRef} />
+          <CurvesPanel
+            layer={adjLayer as CurvesAdjustmentLayer}
+            parentLayerName={parentLayerName}
+            canvasHandleRef={canvasHandleRef}
+          />
         )}
       </div>
     </div>

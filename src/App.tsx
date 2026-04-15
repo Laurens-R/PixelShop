@@ -30,6 +30,7 @@ import { useCanvasTransforms } from '@/hooks/useCanvasTransforms'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
+import { selectionStore } from '@/store/selectionStore'
 import styles from './App.module.scss'
 
 // ─── Statics ──────────────────────────────────────────────────────────────────
@@ -93,7 +94,23 @@ function AppContent(): React.JSX.Element {
   })
 
   // ── Adjustments ───────────────────────────────────────────────────
-  const adjustments = useAdjustments({ stateRef, captureHistory, dispatch, layers: state.layers, activeLayerId: state.activeLayerId })
+  const getSelectionPixels = useCallback((): Uint8Array | null => {
+    return selectionStore.mask ? selectionStore.mask.slice() : null
+  }, [])
+
+  const registerAdjMask = useCallback((layerId: string, pixels: Uint8Array): void => {
+    canvasHandleRef.current?.registerAdjustmentSelectionMask(layerId, pixels)
+  }, [canvasHandleRef])
+
+  const adjustments = useAdjustments({
+    stateRef,
+    captureHistory,
+    dispatch,
+    layers: state.layers,
+    activeLayerId: state.activeLayerId,
+    getSelectionPixels,
+    registerAdjMask,
+  })
 
   // ── View actions ──────────────────────────────────────────────────
   const handleUndo         = useCallback(() => { historyStore.undo() }, [])
@@ -211,7 +228,10 @@ function AppContent(): React.JSX.Element {
       <StatusBar />
 
       {state.openAdjustmentLayerId !== null && (
-        <AdjustmentPanel onClose={adjustments.handleCloseAdjustmentPanel} canvasHandleRef={canvasHandleRef} />
+        <AdjustmentPanel
+          onClose={adjustments.handleCloseAdjustmentPanel}
+          canvasHandleRef={canvasHandleRef}
+        />
       )}
 
       <NewImageDialog

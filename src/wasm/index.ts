@@ -12,7 +12,7 @@
  *   const wasmReady = getPixelOps() // call once; subsequent calls return cache
  */
 
-import type { PixelOpsModule, PixelOpsFactory } from './types'
+import type { PixelOpsModule, PixelOpsFactory, CurvesHistogramResult } from './types'
 
 // ─── Module singleton ─────────────────────────────────────────────────────────
 
@@ -198,5 +198,51 @@ export async function quantize(
   } finally {
     m._free(pixPtr)
     m._free(palPtr)
+  }
+}
+
+/** Compute histogram for curves adjustment.
+ *  Returns RGB, Red, Green, Blue channel histograms (256 bins each).
+ *  Optional selectionMask weights the contribution of each pixel. */
+export async function computeHistogramRGBA(
+  pixelData: Uint8Array, width: number, height: number,
+  mask?: Uint8Array
+): Promise<CurvesHistogramResult> {
+  const m = await getPixelOps()
+  const pixPtr = m._malloc(pixelData.byteLength)
+  let maskPtr = 0
+  try {
+    m.HEAPU8.set(pixelData, pixPtr)
+    if (mask) {
+      maskPtr = m._malloc(mask.byteLength)
+      m.HEAPU8.set(mask, maskPtr)
+    }
+
+    // Call WASM function to get histogram buffer pointer.
+    const histPtr = m._pixelops_curves_histogram(pixPtr, width, height, maskPtr)
+    if (!histPtr) {
+      throw new Error('WASM histogram allocation failed')
+    }
+
+    // Re-read HEAPF32 in case memory grew.
+    const heapf32 = m.HEAPF32
+    const histFloatOffset = histPtr >> 2 // Convert byte offset to float32 offset.
+    const histogramFloat32 = heapf32.slice(histFloatOffset, histFloatOffset + (4 * 256))
+
+    // Free the histogram buffer returned by WASM.
+    m._free(histPtr)
+
+    // Split into separate channels (each 256 float32s)
+    const rgb = histogramFloat32.subarray(0, 256)
+    const red = histogramFloat32.subarray(256, 512)
+    const green = histogramFloat32.subarray(512, 768)
+    const blue = histogramFloat32.subarray(768, 1024)
+
+    return { rgb, red, green, blue }
+  } finally {
+    m._free(pixPtr)
+    if (maskPtr) {
+      m._free(maskPtr)
+    }
   }
 }

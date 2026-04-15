@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { historyStore } from '@/store/historyStore'
+import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
@@ -100,6 +100,11 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
       result.set(id, tmp.toDataURL('image/png'))
       if (geo) result.set(`${id}:geo`, JSON.stringify(geo))
     }
+    for (const layer of snap.layers) {
+      if (!('type' in layer) || layer.type !== 'adjustment') continue
+      const maskPng = canvasHandleRef.current?.exportAdjustmentMaskPng(layer.id)
+      if (maskPng) result.set(`${layer.id}:adjustment-mask`, maskPng)
+    }
     return result
   }, [canvasHandleRef, captureActiveSnapshot])
 
@@ -109,7 +114,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
     if (toTab.savedHistory && toTab.savedHistory.entries.length > 0) {
       historyStore.restore(toTab.savedHistory.entries, toTab.savedHistory.currentIndex)
     } else {
-      historyStore.clear()
+      historyStore.clear({ recaptureSnapshot: false })
     }
     // Null savedHistory after handing ownership to historyStore — prevents
     // the Tab record from keeping dead Uint8Array refs after the first new push.
@@ -133,7 +138,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
   const handleSwitchTab = useCallback((toId: string): void => {
     if (toId === activeTabId) return
     const snapshot        = captureActiveSnapshot()
-    const savedHistory    = { entries: historyStore.entries.slice(), currentIndex: historyStore.currentIndex }
+    const savedHistory    = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
     const savedLayerData  = serializeActiveTabPixels()
     const updated         = tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t)
     setTabs(updated)

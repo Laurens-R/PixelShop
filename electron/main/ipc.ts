@@ -1,5 +1,6 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('debug:openDevTools', (event) => {
@@ -73,5 +74,22 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('file:exportImage', async (_event, path: string, base64: string) => {
     const buffer = Buffer.from(base64, 'base64')
     await writeFile(path, buffer)
+  })
+
+  ipcMain.handle('presets:loadCurvesPresets', async () => {
+    const presetsPath = join(app.getPath('userData'), 'curves-presets.json')
+    try {
+      const data = await readFile(presetsPath, 'utf-8')
+      return JSON.parse(data)
+    } catch {
+      // File doesn't exist yet or is corrupt; return empty array
+      return []
+    }
+  })
+
+  ipcMain.handle('presets:saveCurvesPresets', async (_event, presets: unknown) => {
+    const presetsPath = join(app.getPath('userData'), 'curves-presets.json')
+    const json = JSON.stringify(presets, null, 2)
+    await writeFile(presetsPath, json, 'utf-8')
   })
 }
