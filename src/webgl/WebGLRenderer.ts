@@ -374,7 +374,7 @@ export class WebGLRenderer {
     this.renderPlan(plan)
   }
 
-  renderPlan(plan: RenderPlanEntry[]): void {
+  private executePlanToComposite(plan: RenderPlanEntry[]): { finalTexture: WebGLTexture; finalFramebuffer: WebGLFramebuffer } {
     const { gl, pixelWidth: w, pixelHeight: h } = this
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb0)
@@ -385,14 +385,17 @@ export class WebGLRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb1)
     gl.clear(gl.COLOR_BUFFER_BIT)
 
-    let srcFb = this.fb1;  let srcTex = this.fbTex1
-    let dstFb = this.fb0;  let dstTex = this.fbTex0
+    let srcFb = this.fb1
+    let srcTex = this.fbTex1
+    let dstFb = this.fb0
+    let dstTex = this.fbTex0
 
     for (const entry of plan) {
       if (entry.kind === 'layer') {
         if (!entry.layer.visible || entry.layer.opacity === 0) continue
         this.compositeLayer(entry.layer, srcTex, dstFb, w, h, entry.mask)
       } else if (entry.kind === 'adjustment-group') {
+        if (!entry.baseLayer.visible || entry.baseLayer.opacity === 0) continue
         const scopedTex = this.renderScopedAdjustmentGroup(entry)
         this.compositeTexture(scopedTex, srcTex, dstFb, entry.baseLayer.opacity, entry.baseLayer.blendMode)
       } else {
@@ -403,7 +406,15 @@ export class WebGLRenderer {
       ;[srcTex, dstTex] = [dstTex, srcTex]
     }
 
-    const finalTex = srcTex
+    return {
+      finalTexture: srcTex,
+      finalFramebuffer: srcFb,
+    }
+  }
+
+  renderPlan(plan: RenderPlanEntry[]): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+    const { finalTexture } = this.executePlanToComposite(plan)
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, w, h)
@@ -414,7 +425,7 @@ export class WebGLRenderer {
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-    this.blitTexture(finalTex, w, h)
+    this.blitTexture(finalTexture, w, h)
     gl.disable(gl.BLEND)
   }
 
@@ -698,36 +709,16 @@ export class WebGLRenderer {
   readFlattenedPlan(plan: RenderPlanEntry[]): Uint8Array {
     const { gl, pixelWidth: w, pixelHeight: h } = this
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb0)
-    gl.viewport(0, 0, w, h)
-    gl.clearColor(0, 0, 0, 0)
-    gl.clear(gl.COLOR_BUFFER_BIT)
+    const prevFramebuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null
+    const prevViewport = gl.getParameter(gl.VIEWPORT) as Int32Array
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fb1)
-    gl.clear(gl.COLOR_BUFFER_BIT)
+    const { finalFramebuffer } = this.executePlanToComposite(plan)
 
-    let srcFb = this.fb1; let srcTex = this.fbTex1
-    let dstFb = this.fb0; let dstTex = this.fbTex0
-
-    for (const entry of plan) {
-      if (entry.kind === 'layer') {
-        if (!entry.layer.visible || entry.layer.opacity === 0) continue
-        this.compositeLayer(entry.layer, srcTex, dstFb, w, h, entry.mask)
-      } else if (entry.kind === 'adjustment-group') {
-        const scopedTex = this.renderScopedAdjustmentGroup(entry)
-        this.compositeTexture(scopedTex, srcTex, dstFb, entry.baseLayer.opacity, entry.baseLayer.blendMode)
-      } else {
-        if (!entry.visible) continue
-        this.applyAdjustmentOp(entry, srcTex, dstFb)
-      }
-      ;[srcFb, dstFb] = [dstFb, srcFb]
-      ;[srcTex, dstTex] = [dstTex, srcTex]
-    }
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, srcFb)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, finalFramebuffer)
     const pixels = new Uint8Array(w * h * 4)
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, prevFramebuffer)
+    gl.viewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3])
 
     return pixels
   }

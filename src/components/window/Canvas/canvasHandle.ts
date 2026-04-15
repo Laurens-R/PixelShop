@@ -5,6 +5,7 @@ import type { LayerState } from '@/types'
 import { buildRenderPlan as buildCanvasRenderPlan } from './canvasPlan'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import { encodePng } from './pngHelpers'
+import { rasterizeDocument, type RasterBackend, type RasterReason } from '@/rasterization'
 
 // ─── Public handle type (imported by App.tsx and other callers) ────────────
 
@@ -18,7 +19,9 @@ export interface CanvasHandle {
    * pixel data together with the image dimensions.
    * Returns null when the renderer is not yet initialised.
    */
-  exportFlatPixels: () => { data: Uint8Array; width: number; height: number } | null
+  rasterizeComposite: (reason: RasterReason) => { data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }
+  /** Rasterize a provided subset of layer state using the same plan builder logic as canvas rendering. */
+  rasterizeLayers: (layers: readonly LayerState[], reason: RasterReason) => { data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }
   /** Return a copy of a layer's raw RGBA pixel data IN CANVAS-SIZE buffer (pixels outside layer bounds are transparent). */
   getLayerPixels: (layerId: string) => Uint8Array | null
   /**
@@ -82,6 +85,12 @@ export function useCanvasHandle({
   viewportRef,
   onZoom,
 }: UseCanvasHandleParams): void {
+  const requireRenderer = (): WebGLRenderer => {
+    const renderer = rendererRef.current
+    if (!renderer) throw new Error('Rasterization failed because the GPU renderer is not ready.')
+    return renderer
+  }
+
   const renderFromPlan = (): void => {
     const renderer = rendererRef.current
     if (!renderer) return
@@ -122,12 +131,46 @@ export function useCanvasHandle({
       return encodePng(renderer.readLayerPixels(maskLayer), renderer.pixelWidth, renderer.pixelHeight)
     },
 
-    exportFlatPixels: () => {
-      const renderer = rendererRef.current
-      if (!renderer) return null
+    rasterizeComposite: (reason) => {
+      const renderer = requireRenderer()
       const { plan } = buildRenderArgs()
-      const data = renderer.readFlattenedPlan(plan)
-      return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
+      const result = rasterizeDocument({
+        plan,
+        width: renderer.pixelWidth,
+        height: renderer.pixelHeight,
+        reason,
+        renderer,
+      })
+      if (result.warning) {
+        console.warn('[Rasterization]', result.warning)
+      }
+      return {
+        data: result.data,
+        width: result.width,
+        height: result.height,
+        backendUsed: result.backendUsed,
+      }
+    },
+
+    rasterizeLayers: (layers, reason) => {
+      const renderer = requireRenderer()
+      const plan = rebuildPlanForLayers(layers)
+      const result = rasterizeDocument({
+        plan,
+        width: renderer.pixelWidth,
+        height: renderer.pixelHeight,
+        reason,
+        renderer,
+      })
+      if (result.warning) {
+        console.warn('[Rasterization]', result.warning)
+      }
+      return {
+        data: result.data,
+        width: result.width,
+        height: result.height,
+        backendUsed: result.backendUsed,
+      }
     },
 
     getLayerPixels: (layerId) => {

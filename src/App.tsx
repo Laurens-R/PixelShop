@@ -13,17 +13,14 @@ import { StatusBar } from '@/components/window/StatusBar/StatusBar'
 import { AdjustmentPanel } from '@/components/panels/AdjustmentPanel/AdjustmentPanel'
 import { NewImageDialog } from '@/components/dialogs/NewImageDialog/NewImageDialog'
 import { ExportDialog } from '@/components/dialogs/ExportDialog/ExportDialog'
-import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
 import { ResizeImageDialog } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
 import { ResizeCanvasDialog } from '@/components/dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
 import { AboutDialog } from '@/components/dialogs/AboutDialog/AboutDialog'
 import { KeyboardShortcutsDialog } from '@/components/dialogs/KeyboardShortcutsDialog/KeyboardShortcutsDialog'
-import { exportPng } from '@/export/exportPng'
-import { exportJpeg } from '@/export/exportJpeg'
-import { exportWebp } from '@/export/exportWebp'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
+import { useExportOps } from '@/hooks/useExportOps'
 import { useClipboard } from '@/hooks/useClipboard'
 import { useLayers } from '@/hooks/useLayers'
 import { useCanvasTransforms } from '@/hooks/useCanvasTransforms'
@@ -74,6 +71,9 @@ function AppContent(): React.JSX.Element {
     setTabs, setActiveTabId, setPendingLayerData,
     captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch,
   })
+
+  // ── Export operations ────────────────────────────────────────────
+  const { handleExportConfirm } = useExportOps({ canvasHandleRef, stateRef })
 
   // ── Clipboard ─────────────────────────────────────────────────────
   const { handleCopy, handleCut, handlePaste, handleDelete } = useClipboard({
@@ -132,18 +132,6 @@ function AppContent(): React.JSX.Element {
   })
 
   // ── Export ────────────────────────────────────────────────────────
-  const handleExportConfirm = useCallback(async (settings: ExportSettings): Promise<void> => {
-    setShowExportDialog(false)
-    const flat = canvasHandleRef.current?.exportFlatPixels()
-    if (!flat) return
-    const { data, width, height } = flat
-    let dataUrl: string
-    if      (settings.format === 'png')  dataUrl = exportPng(data, width, height)
-    else if (settings.format === 'webp') dataUrl = exportWebp(data, width, height, { quality: settings.webpQuality })
-    else                                 dataUrl = exportJpeg(data, width, height, { quality: settings.jpegQuality, background: settings.jpegBackground })
-    await window.api.exportImage(settings.filePath, dataUrl.replace(/^data:[^;]+;base64,/, ''))
-  }, [canvasHandleRef])
-
   // ── Render ────────────────────────────────────────────────────────
   const tabInfos: TabInfo[] = tabs.map(t => ({ id: t.id, title: t.title }))
 
@@ -242,7 +230,10 @@ function AppContent(): React.JSX.Element {
       <ExportDialog
         open={showExportDialog}
         onCancel={() => setShowExportDialog(false)}
-        onConfirm={handleExportConfirm}
+        onConfirm={async (settings) => {
+          setShowExportDialog(false)
+          await handleExportConfirm(settings)
+        }}
       />
       <ResizeImageDialog
         open={showResizeDialog}
