@@ -667,3 +667,45 @@ export const SEL_COLOR_FRAG = /* glsl */ `#version 300 es
     fragColor   = mix(src, result, mask);
   }
 ` as const
+
+// ─── Fragment shader – curves post-process pass ─────────────────────────────
+
+export const CURVES_FRAG = /* glsl */ `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_src;
+  uniform sampler2D u_rgbLut;
+  uniform sampler2D u_redLut;
+  uniform sampler2D u_greenLut;
+  uniform sampler2D u_blueLut;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in vec2 v_texCoord;
+  out vec4 fragColor;
+
+  float sampleLut(sampler2D lut, float channelValue) {
+    return texture(lut, vec2(clamp(channelValue, 0.0, 1.0), 0.5)).r;
+  }
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 rgb1 = vec3(
+      sampleLut(u_rgbLut, src.r),
+      sampleLut(u_rgbLut, src.g),
+      sampleLut(u_rgbLut, src.b)
+    );
+
+    vec3 adjusted = vec3(
+      sampleLut(u_redLut, rgb1.r),
+      sampleLut(u_greenLut, rgb1.g),
+      sampleLut(u_blueLut, rgb1.b)
+    );
+
+    vec4 result = vec4(adjusted, src.a);
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor = mix(src, result, mask);
+  }
+` as const

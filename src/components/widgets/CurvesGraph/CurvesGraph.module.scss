@@ -1,0 +1,193 @@
+@use '@/styles/variables' as vars;
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+
+.graphWrap {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  grid-template-rows: 1fr 18px;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.yAxis {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  font-size: 9px;
+  color: vars.$color-text-muted;
+  text-align: right;
+  padding: 2px 0;
+}
+
+.graphColumn {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.graphStage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #1f1f1f;
+  border: 1px solid #3a3a3a;
+  cursor: crosshair;
+  overflow: hidden;
+  touch-action: none;
+
+  --curve-color: #d4d4d4;
+  --hist-fill: rgba(255, 255, 255, 0.12);
+
+  &[data-channel='red'] {
+    --curve-color: #ff6b6b;
+    --hist-fill: rgba(255, 107, 107, 0.18);
+  }
+
+  &[data-channel='green'] {
+    --curve-color: #67cf77;
+    --hist-fill: rgba(103, 207, 119, 0.16);
+  }
+
+  &[data-channel='blue'] {
+    --curve-color: #5ca7ff;
+    --hist-fill: rgba(92, 167, 255, 0.18);
+  }
+
+  svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+}
+
+.gridMajor {
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.gridMinor {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+}
+
+.baseline {
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-dasharray: 4 3;
+  stroke-width: 1;
+}
+
+.histBar {
+  fill: var(--hist-fill);
+}
+
+.curvePath {
+  fill: none;
+  stroke: var(--curve-color);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pointNormal {
+  fill: #d4d4d4;
+  stroke: #111;
+  stroke-width: 1.2;
+  cursor: pointer;
+}
+
+.pointNormalSelected {
+  fill: var(--curve-color);
+  stroke: #111;
+  stroke-width: 1.2;
+  cursor: pointer;
+  filter: drop-shadow(0 0 3px rgba(6, 153, 251, 0.45));
+}
+
+.pointEndpoint {
+  fill: #d4d4d4;
+  stroke: #111;
+  stroke-width: 1.2;
+  cursor: pointer;
+}
+
+.pointEndpointSelected {
+  fill: var(--curve-color);
+  stroke: #111;
+  stroke-width: 1.2;
+  cursor: pointer;
+  filter: drop-shadow(0 0 3px rgba(6, 153, 251, 0.45));
+}
+
+.crosshair {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+  pointer-events: none;
+}
+
+.clippingLow {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  background: rgba(192, 64, 64, 0.7);
+  pointer-events: none;
+}
+
+.clippingHigh {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 3px;
+  background: rgba(192, 64, 64, 0.7);
+  pointer-events: none;
+}
+
+.linearHint {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  background: rgba(25, 25, 25, 0.88);
+  font-size: 9px;
+  color: vars.$color-text-muted;
+  pointer-events: none;
+}
+
+.axisCaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  color: vars.$color-text-muted;
+  padding: 0 2px;
+}
+
+.xAxis {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: vars.$color-text-muted;
+  padding: 0 2px;
+}

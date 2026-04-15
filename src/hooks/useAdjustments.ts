@@ -4,6 +4,7 @@ import type { AppState, AdjustmentLayerState, AdjustmentType, LayerState } from 
 import { isPixelLayer } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
+import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,14 +49,17 @@ export function useAdjustments({
   }, [layers, activeLayerId])
 
   const handleCloseAdjustmentPanel = useCallback((): void => {
+    const openLayerId = stateRef.current.openAdjustmentLayerId
+    if (openLayerId) adjustmentPreviewStore.clear(openLayerId)
     captureHistory('Adjustment')
     dispatch({ type: 'SET_OPEN_ADJUSTMENT', payload: null })
-  }, [captureHistory, dispatch])
+  }, [stateRef, captureHistory, dispatch])
 
   const handleCreateAdjustmentLayer = useCallback((adjustmentType: AdjustmentType): void => {
     const { activeLayerId, layers, openAdjustmentLayerId } = stateRef.current
 
     if (openAdjustmentLayerId !== null) {
+      adjustmentPreviewStore.clear(openAdjustmentLayerId)
       captureHistory('Adjustment')
       dispatch({ type: 'SET_OPEN_ADJUSTMENT', payload: null })
     }

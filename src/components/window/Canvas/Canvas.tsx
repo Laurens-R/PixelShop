@@ -17,9 +17,10 @@ import { rasterizeShapeToLayer } from './shapeRasterizer'
 import { decodePng } from './pngHelpers'
 import { useCanvasHandle } from './canvasHandle'
 import type { CanvasHandle } from './canvasHandle'
-import { buildAdjustmentEntry } from './canvasPlan'
+import { buildRenderPlan as buildCanvasRenderPlan } from './canvasPlan'
 import { useMarchingAnts } from './useMarchingAnts'
 import { useScrollZoom } from './useScrollZoom'
+import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import styles from './Canvas.module.scss'
 
 // Re-export so external importers (App.tsx etc.) don't need to change their paths.
@@ -46,7 +47,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 ) {
   const { state, dispatch } = useAppContext()
   const { canvasElRef } = useCanvasContext()
-  const { canvasRef, rendererRef, render } = useWebGL({
+  const { canvasRef, rendererRef } = useWebGL({
     pixelWidth: width,
     pixelHeight: height
   })
@@ -86,7 +87,22 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const newPixelLayerRef = useRef<WebGLLayer | null>(null)
 
   // ── Expose handle for save / export / clipboard ────────────────
-  useCanvasHandle({ ref, rendererRef, glLayersRef, adjustmentMaskMap, layersStateRef, render, buildRenderArgs: () => ({ layers: buildOrderedGLLayers(), maskMap: buildMaskMap() }), width, height, viewportRef, onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }) })
+  useCanvasHandle({
+    ref,
+    rendererRef,
+    glLayersRef,
+    adjustmentMaskMap,
+    layersStateRef,
+    buildRenderArgs: () => ({
+      layers: buildOrderedGLLayers(),
+      maskMap: buildMaskMap(),
+      plan: buildRenderPlan(),
+    }),
+    width,
+    height,
+    viewportRef,
+    onZoom: (zoom) => dispatch({ type: 'SET_ZOOM', payload: zoom }),
+  })
 
   // ── Zoom to cursor + scroll save/restore ───────────────────────
   useScrollZoom(
@@ -118,14 +134,42 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     if (!renderer) return
     if (!state.layers.length) return
     hasInitializedRef.current = true
+    let cancelled = false
+    const isStale = (): boolean => cancelled || rendererRef.current !== renderer
 
     const init = async (): Promise<void> => {
+      if (isStale()) return
       const { pixelWidth: cw, pixelHeight: ch } = renderer
       for (let i = 0; i < state.layers.length; i++) {
         const ls = state.layers[i]
 
+        if ('type' in ls && ls.type === 'adjustment') {
+          const maskPng = initialLayerData?.get(`${ls.id}:adjustment-mask`)
+          if (maskPng) {
+            const maskLayer = renderer.createLayer(`${ls.id}:adjustment-mask`, `${ls.name} Mask`, cw, ch, 0, 0)
+            try {
+              const rgba = await decodePng(maskPng, cw, ch)
+              if (isStale()) return
+              maskLayer.data.set(rgba)
+              renderer.flushLayer(maskLayer)
+              adjustmentMaskMap.current.set(ls.id, maskLayer)
+            } catch (e) {
+              renderer.destroyLayer(maskLayer)
+              console.error('[Canvas] Failed to load adjustment mask PNG:', e)
+            }
+          }
+          continue
+        }
+
         let layer
         const pngData = initialLayerData?.get(ls.id)
+        if (!('type' in ls) && !pngData) {
+          const prev = glLayersRef.current.get(ls.id)
+          if (prev) {
+            layer = renderer.createLayer(ls.id, ls.name, prev.layerWidth, prev.layerHeight, prev.offsetX, prev.offsetY)
+            layer.data.set(prev.data)
+          }
+        }
         if (pngData) {
           // ── Opening a file: pngData may be layer-local or canvas-size.
           // We store a JSON-encoded geometry blob alongside or fall back to canvas-size.
@@ -136,6 +180,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             layer = renderer.createLayer(ls.id, ls.name, geo.layerWidth, geo.layerHeight, geo.offsetX, geo.offsetY)
             try {
               const rgba = await decodePng(pngData, geo.layerWidth, geo.layerHeight)
+              if (isStale()) return
               layer.data.set(rgba)
             } catch (e) {
               console.error('[Canvas] Failed to load layer PNG:', e)
@@ -145,6 +190,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             layer = renderer.createLayer(ls.id, ls.name, cw, ch, 0, 0)
             try {
               const rgba = await decodePng(pngData, cw, ch)
+              if (isStale()) return
               layer.data.set(rgba)
             } catch (e) {
               console.error('[Canvas] Failed to load layer PNG:', e)
@@ -181,16 +227,22 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         layer.opacity   = 'opacity'   in ls ? ls.opacity   : 1
         layer.visible   = ls.visible
         layer.blendMode = 'blendMode' in ls ? ls.blendMode : 'normal'
+        if (isStale()) return
         renderer.flushLayer(layer)
         glLayersRef.current.set(ls.id, layer)
       }
-      render(buildOrderedGLLayers(), buildMaskMap())
-      if (isActiveRef.current) {
+      if (isStale()) return
+      rendererRef.current?.renderPlan(buildRenderPlan())
+      if (!isStale() && isActiveRef.current) {
         onReadyRef.current?.()
       }
     }
 
     init()
+    return () => {
+      cancelled = true
+      hasInitializedRef.current = false
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rendererRef.current])
 
@@ -289,6 +341,17 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.layers, isActive, editingLayerId])
 
+  useEffect(() => {
+    if (!isActive) return
+    const unsubscribe = adjustmentPreviewStore.subscribe(() => {
+      const renderer = rendererRef.current
+      if (!renderer) return
+      renderer.renderPlan(buildRenderPlan())
+    })
+    return unsubscribe
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive])
+
   function buildMaskMap(): Map<string, WebGLLayer> {
     const maskMap = new Map<string, WebGLLayer>()
     for (const ls of state.layers) {
@@ -314,20 +377,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   }
 
   function buildRenderPlan(): RenderPlanEntry[] {
-    const plan: RenderPlanEntry[] = []
-    const map = glLayersRef.current
-    const maskMap = buildMaskMap()
-    for (const ls of state.layers) {
-      if ('type' in ls && ls.type === 'mask') continue
-      if ('type' in ls && ls.type === 'adjustment') {
-        const entry = buildAdjustmentEntry(ls, adjustmentMaskMap.current.get(ls.id))
-        if (entry) plan.push(entry)
-        continue
-      }
-      const gl = map.get(ls.id)
-      if (!gl) continue
-      plan.push({ kind: 'layer', layer: gl, mask: maskMap.get(ls.id) })
-    }
+    const plan = buildCanvasRenderPlan(
+      state.layers,
+      glLayersRef.current,
+      buildMaskMap(),
+      adjustmentMaskMap.current,
+      adjustmentPreviewStore.snapshot()
+    )
     const pending = newPixelLayerRef.current
     if (pending && !plan.some(e => e.kind === 'layer' && e.layer === pending)) {
       plan.push({ kind: 'layer', layer: pending })
@@ -404,7 +460,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       primaryColor: isMaskLayer ? toGray(state.primaryColor) : state.primaryColor,
       secondaryColor: isMaskLayer ? toGray(state.secondaryColor) : state.secondaryColor,
       selectionMask: selectionStore.mask,
-      render: (layers) => render(layers, buildMaskMap()),
+      render: () => {
+        const activeRenderer = rendererRef.current
+        if (!activeRenderer) return
+        activeRenderer.renderPlan(buildRenderPlan())
+      },
       growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
         // Mask layers are always full-canvas sized — never grow them.
         // Growing a mask shifts its existing pixel data to a non-zero offset inside
@@ -428,7 +488,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         rasterizeTextToLayer(ls, gl)
         renderer.flushLayer(gl)
         glLayersRef.current.set(ls.id, gl)
-        render([...buildOrderedGLLayers(), gl])
+        renderer.renderPlan(buildRenderPlan())
         dispatch({ type: 'ADD_TEXT_LAYER', payload: ls })
         setEditingLayerId(ls.id)
       },
@@ -447,7 +507,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         if (!gl) return
         rasterizeTextToLayer({ ...ls, x, y }, gl)
         renderer.flushLayer(gl)
-        render(buildOrderedGLLayers())
+        renderer.renderPlan(buildRenderPlan())
       },
       addShapeLayer: (ls) => {
         const cw = renderer.pixelWidth
@@ -456,7 +516,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         rasterizeShapeToLayer(ls, gl, cw, ch)
         renderer.flushLayer(gl)
         glLayersRef.current.set(ls.id, gl)
-        render([...buildOrderedGLLayers(), gl])
+        renderer.renderPlan(buildRenderPlan())
         dispatch({ type: 'ADD_SHAPE_LAYER', payload: ls })
       },
       updateShapeLayer: (ls) => {
@@ -469,7 +529,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         const ch = renderer.pixelHeight
         rasterizeShapeToLayer(ls, gl, cw, ch)
         renderer.flushLayer(gl)
-        render(buildOrderedGLLayers())
+        renderer.renderPlan(buildRenderPlan())
       },
       shapeLayers: state.layers.filter(
         (l): l is ShapeLayerState => 'type' in l && l.type === 'shape'
@@ -510,7 +570,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       // Single GPU flush + composite after all CPU drawing is complete
       renderer.deferFlush = false
       renderer.flushLayer(ctx.layer)
-      ctx.render(buildOrderedGLLayers())
+      ctx.render()
     },
     onPointerUp: (pos) => {
       const ctx = buildCtx()

@@ -1,8 +1,9 @@
 import { useImperativeHandle } from 'react'
 import type React from 'react'
 import type { WebGLLayer, WebGLRenderer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
-import type { LayerState, MaskLayerState } from '@/types'
-import { buildAdjustmentEntry } from './canvasPlan'
+import type { LayerState } from '@/types'
+import { buildRenderPlan as buildCanvasRenderPlan } from './canvasPlan'
+import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import { encodePng } from './pngHelpers'
 
 // ─── Public handle type (imported by App.tsx and other callers) ────────────
@@ -10,6 +11,8 @@ import { encodePng } from './pngHelpers'
 export interface CanvasHandle {
   /** Encode a layer's pixel data to a PNG data-URL synchronously. Returns layer-local PNG + geometry. */
   exportLayerPng: (layerId: string) => { png: string; layerWidth: number; layerHeight: number; offsetX: number; offsetY: number } | null
+  /** Encode a baked adjustment mask to a PNG data-URL synchronously. */
+  exportAdjustmentMaskPng: (layerId: string) => string | null
   /**
    * Composite all visible layers (in state order) and return the raw RGBA
    * pixel data together with the image dimensions.
@@ -30,9 +33,17 @@ export interface CanvasHandle {
   captureAllLayerPixels: () => Map<string, Uint8Array>
   /** Snapshot per-layer geometry (width/height/offset). */
   captureAllLayerGeometry: () => Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>
+  /** Snapshot baked selection masks for adjustment layers. */
+  captureAllAdjustmentMasks: () => Map<string, Uint8Array>
   /** Restore previously snapshotted pixel data + geometry and flush+render for each layer.
    * Pass layerStateForRender (the history snapshot's layer state) so the render uses the correct mask map. */
   restoreAllLayerPixels: (data: Map<string, Uint8Array>, geometry?: Map<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }>, layerStateForRender?: readonly LayerState[]) => void
+  /** Restore baked selection masks for adjustment layers and re-render. */
+  restoreAllAdjustmentMasks: (masks: Map<string, Uint8Array>) => void
+  /** Return full-canvas RGBA pixels that feed into the target adjustment layer. */
+  readAdjustmentInputPixels: (adjustmentLayerId: string) => Uint8Array | null
+  /** Return a copy of a baked adjustment selection mask by adjustment layer ID. */
+  getAdjustmentMaskPixels: (adjustmentLayerId: string) => Uint8Array | null
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
   fitToWindow: () => void
   /**
@@ -51,9 +62,8 @@ interface UseCanvasHandleParams {
   glLayersRef: { readonly current: Map<string, WebGLLayer> }
   adjustmentMaskMap: { readonly current: Map<string, WebGLLayer> }
   layersStateRef: { readonly current: readonly LayerState[] }
-  render: (layers: WebGLLayer[], maskMap?: Map<string, WebGLLayer>) => void
-  /** Returns the correctly-filtered layers + mask map to pass to render. Used by all internal render calls. */
-  buildRenderArgs: () => { layers: WebGLLayer[]; maskMap: Map<string, WebGLLayer> }
+  /** Returns the correctly-filtered layers + mask map + full render plan. */
+  buildRenderArgs: () => { layers: WebGLLayer[]; maskMap: Map<string, WebGLLayer>; plan: RenderPlanEntry[] }
   width: number
   height: number
   viewportRef: React.RefObject<HTMLDivElement | null>
@@ -66,13 +76,36 @@ export function useCanvasHandle({
   glLayersRef,
   adjustmentMaskMap,
   layersStateRef,
-  render,
   buildRenderArgs,
   width,
   height,
   viewportRef,
   onZoom,
 }: UseCanvasHandleParams): void {
+  const renderFromPlan = (): void => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+    const { plan } = buildRenderArgs()
+    renderer.renderPlan(plan)
+  }
+
+  const rebuildPlanForLayers = (layers: readonly LayerState[]): RenderPlanEntry[] => {
+    const maskMap = new Map<string, WebGLLayer>()
+    for (const layer of layers) {
+      if ('type' in layer && layer.type === 'mask' && layer.visible) {
+        const gl = glLayersRef.current.get(layer.id)
+        if (gl) maskMap.set(layer.parentId, gl)
+      }
+    }
+    return buildCanvasRenderPlan(
+      layers,
+      glLayersRef.current,
+      maskMap,
+      adjustmentMaskMap.current,
+      adjustmentPreviewStore.snapshot()
+    )
+  }
+
   useImperativeHandle(ref, () => ({
     exportLayerPng: (layerId) => {
       const renderer = rendererRef.current
@@ -82,29 +115,17 @@ export function useCanvasHandle({
       return { png, layerWidth: layer.layerWidth, layerHeight: layer.layerHeight, offsetX: layer.offsetX, offsetY: layer.offsetY }
     },
 
+    exportAdjustmentMaskPng: (layerId) => {
+      const renderer = rendererRef.current
+      const maskLayer = adjustmentMaskMap.current.get(layerId)
+      if (!renderer || !maskLayer) return null
+      return encodePng(renderer.readLayerPixels(maskLayer), renderer.pixelWidth, renderer.pixelHeight)
+    },
+
     exportFlatPixels: () => {
       const renderer = rendererRef.current
       if (!renderer) return null
-      const stateLayers = layersStateRef.current
-      const plan: RenderPlanEntry[] = []
-      const maskMap = new Map<string, WebGLLayer>()
-      for (const l of stateLayers) {
-        if ('type' in l && l.type === 'mask' && l.visible) {
-          const gl = glLayersRef.current.get(l.id)
-          if (gl) maskMap.set((l as MaskLayerState).parentId, gl)
-        }
-      }
-      for (const l of stateLayers) {
-        if ('type' in l && l.type === 'mask') continue
-        if ('type' in l && l.type === 'adjustment') {
-          const entry = buildAdjustmentEntry(l, adjustmentMaskMap.current.get(l.id))
-          if (entry) plan.push(entry)
-          continue
-        }
-        const gl = glLayersRef.current.get(l.id)
-        if (!gl) continue
-        plan.push({ kind: 'layer', layer: gl, mask: maskMap.get(l.id) })
-      }
+      const { plan } = buildRenderArgs()
       const data = renderer.readFlattenedPlan(plan)
       return { data, width: renderer.pixelWidth, height: renderer.pixelHeight }
     },
@@ -144,12 +165,7 @@ export function useCanvasHandle({
       layer.data.set(data)
       renderer.flushLayer(layer)
       glLayersRef.current.set(layerId, layer)
-      render([
-        ...layersStateRef.current
-          .map((l) => glLayersRef.current.get(l.id))
-          .filter((l): l is WebGLLayer => !!l),
-        layer,
-      ], new Map())
+      renderFromPlan()
     },
 
     clearLayerPixels: (layerId, mask) => {
@@ -172,8 +188,7 @@ export function useCanvasHandle({
         layer.data[pi + 3] = Math.round(layer.data[pi + 3] * f)
       }
       renderer.flushLayer(layer)
-      const { layers: rl, maskMap: rm } = buildRenderArgs()
-      render(rl, rm)
+      renderFromPlan()
     },
 
     captureAllLayerPixels: () => {
@@ -190,6 +205,14 @@ export function useCanvasHandle({
       for (const ls of layersStateRef.current) {
         const layer = glLayersRef.current.get(ls.id)
         if (layer) result.set(ls.id, { layerWidth: layer.layerWidth, layerHeight: layer.layerHeight, offsetX: layer.offsetX, offsetY: layer.offsetY })
+      }
+      return result
+    },
+
+    captureAllAdjustmentMasks: () => {
+      const result = new Map<string, Uint8Array>()
+      for (const [layerId, maskLayer] of adjustmentMaskMap.current) {
+        result.set(layerId, maskLayer.data.slice())
       }
       return result
     },
@@ -229,22 +252,65 @@ export function useCanvasHandle({
         layer.data.set(pixels)
         renderer.flushLayer(layer)
       }
-      // Build render args from the snapshot's layer state when provided, so the
-      // render uses the correct mask map before RESTORE_LAYERS dispatch settles.
       const refLayers = layerStateForRender ?? layersStateRef.current
-      const glMap = glLayersRef.current
-      const orderedLayers = refLayers
-        .filter((l) => !('type' in l && l.type === 'mask'))
-        .map((l) => glMap.get(l.id))
-        .filter((l): l is WebGLLayer => !!l)
-      const maskMap = new Map<string, WebGLLayer>()
-      for (const l of refLayers) {
-        if ('type' in l && l.type === 'mask' && l.visible) {
-          const gl = glMap.get(l.id)
-          if (gl) maskMap.set((l as { parentId: string }).parentId, gl)
+      renderer.renderPlan(rebuildPlanForLayers(refLayers))
+    },
+
+    restoreAllAdjustmentMasks: (masks) => {
+      const renderer = rendererRef.current
+      if (!renderer) return
+      for (const [layerId, existing] of adjustmentMaskMap.current) {
+        if (!masks.has(layerId)) {
+          renderer.destroyLayer(existing)
+          adjustmentMaskMap.current.delete(layerId)
         }
       }
-      render(orderedLayers, maskMap)
+      for (const [layerId, data] of masks) {
+        let maskLayer = adjustmentMaskMap.current.get(layerId)
+        if (!maskLayer) {
+          maskLayer = renderer.createLayer(`${layerId}:adjustment-mask`, 'Adjustment Mask', renderer.pixelWidth, renderer.pixelHeight, 0, 0)
+          adjustmentMaskMap.current.set(layerId, maskLayer)
+        }
+        maskLayer.data.set(data)
+        renderer.flushLayer(maskLayer)
+      }
+      renderFromPlan()
+    },
+
+    readAdjustmentInputPixels: (adjustmentLayerId) => {
+      const renderer = rendererRef.current
+      if (!renderer) return null
+      const { plan } = buildRenderArgs()
+      return renderer.readAdjustmentInputPlan(plan, adjustmentLayerId)
+    },
+
+    getAdjustmentMaskPixels: (adjustmentLayerId) => {
+      const maskLayer = adjustmentMaskMap.current.get(adjustmentLayerId)
+      if (!maskLayer) return null
+      return maskLayer.data.slice()
+    },
+
+    registerAdjustmentSelectionMask: (layerId, selPixels) => {
+      const renderer = rendererRef.current
+      if (!renderer) return
+      const w = renderer.pixelWidth
+      const h = renderer.pixelHeight
+      let maskLayer = adjustmentMaskMap.current.get(layerId)
+      if (!maskLayer) {
+        maskLayer = renderer.createLayer(`${layerId}:adjustment-mask`, 'Adjustment Mask', w, h, 0, 0)
+        adjustmentMaskMap.current.set(layerId, maskLayer)
+      }
+      const input = selPixels.length === w * h ? selPixels : new Uint8Array(w * h)
+      for (let i = 0; i < w * h; i++) {
+        const v = input[i]
+        const di = i * 4
+        maskLayer.data[di] = v
+        maskLayer.data[di + 1] = v
+        maskLayer.data[di + 2] = v
+        maskLayer.data[di + 3] = 255
+      }
+      renderer.flushLayer(maskLayer)
+      renderFromPlan()
     },
   }), [width, height]) // eslint-disable-line react-hooks/exhaustive-deps
 }

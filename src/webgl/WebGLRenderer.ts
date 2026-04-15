@@ -6,14 +6,16 @@ import {
   createStaticBuffer,
   fillRectBuffer
 } from './utils'
-import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG, CB_FRAG, BW_FRAG, TEMP_FRAG, INVERT_FRAG, SEL_COLOR_FRAG } from './shaders'
+import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG, CB_FRAG, BW_FRAG, TEMP_FRAG, INVERT_FRAG, SEL_COLOR_FRAG, CURVES_FRAG } from './shaders'
 import type { AdjustmentParamsMap } from '@/types'
+import type { CurvesLuts } from '@/adjustments/curves'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ColorBalancePassParams  = AdjustmentParamsMap['color-balance']
 type BlackAndWhitePassParams = AdjustmentParamsMap['black-and-white']
 type SelectiveColorPassParams = AdjustmentParamsMap['selective-color']
+type CurvesPassParams = AdjustmentParamsMap['curves']
 
 export interface WebGLLayer {
   id: string
@@ -40,17 +42,25 @@ const BLEND_MODE_INDEX: Record<string, number> = {
 }
 
 export type AdjustmentRenderOp =
-  | { kind: 'brightness-contrast'; brightness: number; contrast: number; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'hue-saturation'; hue: number; saturation: number; lightness: number; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'color-vibrance'; vibrance: number; saturation: number; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'color-balance'; params: ColorBalancePassParams; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'black-and-white'; params: BlackAndWhitePassParams; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'color-temperature'; temperature: number; tint: number; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'color-invert'; visible: boolean; selMaskLayer?: WebGLLayer }
-  | { kind: 'selective-color'; params: SelectiveColorPassParams; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'brightness-contrast'; layerId: string; brightness: number; contrast: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'hue-saturation'; layerId: string; hue: number; saturation: number; lightness: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-vibrance'; layerId: string; vibrance: number; saturation: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-balance'; layerId: string; params: ColorBalancePassParams; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'black-and-white'; layerId: string; params: BlackAndWhitePassParams; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-temperature'; layerId: string; temperature: number; tint: number; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-invert'; layerId: string; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'selective-color'; layerId: string; params: SelectiveColorPassParams; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'curves'; layerId: string; params: CurvesPassParams; luts: CurvesLuts; visible: boolean; selMaskLayer?: WebGLLayer }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: WebGLLayer; mask?: WebGLLayer }
+  | {
+      kind: 'adjustment-group'
+      parentLayerId: string
+      baseLayer: WebGLLayer
+      baseMask?: WebGLLayer
+      adjustments: AdjustmentRenderOp[]
+    }
   | AdjustmentRenderOp
 
 // ─── Renderer ─────────────────────────────────────────────────────────────────
@@ -69,6 +79,7 @@ export class WebGLRenderer {
   private readonly tempProgram: WebGLProgram
   private readonly invertProgram: WebGLProgram
   private readonly selColorProgram: WebGLProgram
+  private readonly curvesProgram: WebGLProgram
   private readonly posBuffer: WebGLBuffer
   private readonly texCoordBuffer: WebGLBuffer
   // Two framebuffers for ping-pong compositing
@@ -76,6 +87,12 @@ export class WebGLRenderer {
   private fb1: WebGLFramebuffer
   private fbTex0: WebGLTexture
   private fbTex1: WebGLTexture
+  private groupFb0: WebGLFramebuffer
+  private groupFb1: WebGLFramebuffer
+  private groupTex0: WebGLTexture
+  private groupTex1: WebGLTexture
+  private readonly curvesLutTextures = new Map<string, { rgb: WebGLTexture; red: WebGLTexture; green: WebGLTexture; blue: WebGLTexture }>()
+  private readonly curvesLutSignatures = new Map<string, string>()
   readonly pixelWidth: number
   readonly pixelHeight: number
   /**
@@ -158,6 +175,11 @@ export class WebGLRenderer {
       compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
       compileShader(gl, gl.FRAGMENT_SHADER, SEL_COLOR_FRAG)
     )
+    this.curvesProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, CURVES_FRAG)
+    )
 
     const posBuffer = gl.createBuffer()
     if (!posBuffer) throw new Error('Failed to allocate position buffer')
@@ -173,6 +195,11 @@ export class WebGLRenderer {
     const [fb1, tex1] = this.createFramebuffer(pixelWidth, pixelHeight)
     this.fb0 = fb0; this.fbTex0 = tex0
     this.fb1 = fb1; this.fbTex1 = tex1
+
+    const [groupFb0, groupTex0] = this.createFramebuffer(pixelWidth, pixelHeight)
+    const [groupFb1, groupTex1] = this.createFramebuffer(pixelWidth, pixelHeight)
+    this.groupFb0 = groupFb0; this.groupTex0 = groupTex0
+    this.groupFb1 = groupFb1; this.groupTex1 = groupTex1
 
     gl.disable(gl.BLEND)
   }
@@ -365,30 +392,12 @@ export class WebGLRenderer {
       if (entry.kind === 'layer') {
         if (!entry.layer.visible || entry.layer.opacity === 0) continue
         this.compositeLayer(entry.layer, srcTex, dstFb, w, h, entry.mask)
-      } else if (entry.kind === 'brightness-contrast') {
+      } else if (entry.kind === 'adjustment-group') {
+        const scopedTex = this.renderScopedAdjustmentGroup(entry)
+        this.compositeTexture(scopedTex, srcTex, dstFb, entry.baseLayer.opacity, entry.baseLayer.blendMode)
+      } else {
         if (!entry.visible) continue
-        this.applyBrightnessContrastPass(srcTex, dstFb, entry.brightness, entry.contrast, entry.selMaskLayer)
-      } else if (entry.kind === 'hue-saturation') {
-        if (!entry.visible) continue
-        this.applyHueSaturationPass(srcTex, dstFb, entry.hue, entry.saturation, entry.lightness, entry.selMaskLayer)
-      } else if (entry.kind === 'color-vibrance') {
-        if (!entry.visible) continue
-        this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
-      } else if (entry.kind === 'color-balance') {
-        if (!entry.visible) continue
-        this.applyColorBalancePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
-      } else if (entry.kind === 'black-and-white') {
-        if (!entry.visible) continue
-        this.applyBlackAndWhitePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
-      } else if (entry.kind === 'color-temperature') {
-        if (!entry.visible) continue
-        this.applyColorTemperaturePass(srcTex, dstFb, entry.temperature, entry.tint, entry.selMaskLayer)
-      } else if (entry.kind === 'color-invert') {
-        if (!entry.visible) continue
-        this.applyInvertPass(srcTex, dstFb, entry.selMaskLayer)
-      } else if (entry.kind === 'selective-color') {
-        if (!entry.visible) continue
-        this.applySelectiveColorPass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+        this.applyAdjustmentOp(entry, srcTex, dstFb)
       }
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
@@ -407,6 +416,104 @@ export class WebGLRenderer {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
     this.blitTexture(finalTex, w, h)
     gl.disable(gl.BLEND)
+  }
+
+  private applyAdjustmentOp(entry: AdjustmentRenderOp, srcTex: WebGLTexture, dstFb: WebGLFramebuffer): void {
+    if (entry.kind === 'brightness-contrast') {
+      this.applyBrightnessContrastPass(srcTex, dstFb, entry.brightness, entry.contrast, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'hue-saturation') {
+      this.applyHueSaturationPass(srcTex, dstFb, entry.hue, entry.saturation, entry.lightness, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'color-vibrance') {
+      this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'color-balance') {
+      this.applyColorBalancePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'black-and-white') {
+      this.applyBlackAndWhitePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'color-temperature') {
+      this.applyColorTemperaturePass(srcTex, dstFb, entry.temperature, entry.tint, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'color-invert') {
+      this.applyInvertPass(srcTex, dstFb, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'selective-color') {
+      this.applySelectiveColorPass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'curves') {
+      this.applyCurvesPass(srcTex, dstFb, entry.layerId, entry.luts, entry.selMaskLayer)
+      return
+    }
+    const _exhaustive: never = entry
+    return _exhaustive
+  }
+
+  private renderScopedAdjustmentGroup(entry: Extract<RenderPlanEntry, { kind: 'adjustment-group' }>): WebGLTexture {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.groupFb0)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.groupFb1)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    let srcTex = this.groupTex1
+    let dstFb = this.groupFb0
+    let dstTex = this.groupTex0
+
+    const baseAsSource: WebGLLayer = {
+      ...entry.baseLayer,
+      opacity: 1,
+      blendMode: 'normal',
+    }
+    this.compositeLayer(baseAsSource, srcTex, dstFb, w, h, entry.baseMask)
+    ;[srcTex, dstTex] = [dstTex, srcTex]
+    ;[dstFb] = [this.groupFb1]
+
+    for (const op of entry.adjustments) {
+      if (!op.visible) continue
+      this.applyAdjustmentOp(op, srcTex, dstFb)
+      ;[srcTex, dstTex] = [dstTex, srcTex]
+      dstFb = dstFb === this.groupFb0 ? this.groupFb1 : this.groupFb0
+    }
+
+    return srcTex
+  }
+
+  private compositeTexture(
+    texture: WebGLTexture,
+    srcTex: WebGLTexture,
+    targetFb: WebGLFramebuffer,
+    opacity: number,
+    blendMode: string
+  ): void {
+    const pseudoLayer: WebGLLayer = {
+      id: '__group-composite__',
+      name: 'group',
+      texture,
+      data: new Uint8Array(0),
+      layerWidth: this.pixelWidth,
+      layerHeight: this.pixelHeight,
+      offsetX: 0,
+      offsetY: 0,
+      opacity,
+      visible: true,
+      blendMode,
+    }
+    this.compositeLayer(pseudoLayer, srcTex, targetFb, this.pixelWidth, this.pixelHeight)
   }
 
   private compositeLayer(
@@ -606,30 +713,12 @@ export class WebGLRenderer {
       if (entry.kind === 'layer') {
         if (!entry.layer.visible || entry.layer.opacity === 0) continue
         this.compositeLayer(entry.layer, srcTex, dstFb, w, h, entry.mask)
-      } else if (entry.kind === 'brightness-contrast') {
+      } else if (entry.kind === 'adjustment-group') {
+        const scopedTex = this.renderScopedAdjustmentGroup(entry)
+        this.compositeTexture(scopedTex, srcTex, dstFb, entry.baseLayer.opacity, entry.baseLayer.blendMode)
+      } else {
         if (!entry.visible) continue
-        this.applyBrightnessContrastPass(srcTex, dstFb, entry.brightness, entry.contrast, entry.selMaskLayer)
-      } else if (entry.kind === 'hue-saturation') {
-        if (!entry.visible) continue
-        this.applyHueSaturationPass(srcTex, dstFb, entry.hue, entry.saturation, entry.lightness, entry.selMaskLayer)
-      } else if (entry.kind === 'color-vibrance') {
-        if (!entry.visible) continue
-        this.applyColorVibrancePass(srcTex, dstFb, entry.vibrance, entry.saturation, entry.selMaskLayer)
-      } else if (entry.kind === 'color-balance') {
-        if (!entry.visible) continue
-        this.applyColorBalancePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
-      } else if (entry.kind === 'black-and-white') {
-        if (!entry.visible) continue
-        this.applyBlackAndWhitePass(srcTex, dstFb, entry.params, entry.selMaskLayer)
-      } else if (entry.kind === 'color-temperature') {
-        if (!entry.visible) continue
-        this.applyColorTemperaturePass(srcTex, dstFb, entry.temperature, entry.tint, entry.selMaskLayer)
-      } else if (entry.kind === 'color-invert') {
-        if (!entry.visible) continue
-        this.applyInvertPass(srcTex, dstFb, entry.selMaskLayer)
-      } else if (entry.kind === 'selective-color') {
-        if (!entry.visible) continue
-        this.applySelectiveColorPass(srcTex, dstFb, entry.params, entry.selMaskLayer)
+        this.applyAdjustmentOp(entry, srcTex, dstFb)
       }
       ;[srcFb, dstFb] = [dstFb, srcFb]
       ;[srcTex, dstTex] = [dstTex, srcTex]
@@ -990,6 +1079,142 @@ export class WebGLRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
 
+  private ensureCurvesLutTextures(
+    layerId: string,
+    luts: CurvesLuts
+  ): { rgb: WebGLTexture; red: WebGLTexture; green: WebGLTexture; blue: WebGLTexture } {
+    const { gl } = this
+    const signature = `${Array.from(luts.rgb).join('.')}-${Array.from(luts.red).join('.')}-${Array.from(luts.green).join('.')}-${Array.from(luts.blue).join('.')}`
+    const existing = this.curvesLutTextures.get(layerId)
+    const prevSig = this.curvesLutSignatures.get(layerId)
+    if (existing && prevSig === signature) return existing
+
+    const write = (target: WebGLTexture | null, data: Uint8Array): WebGLTexture => {
+      const tex = target ?? gl.createTexture()
+      if (!tex) throw new Error('Failed to create Curves LUT texture')
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, 256, 1, 0, gl.RED, gl.UNSIGNED_BYTE, data)
+      return tex
+    }
+
+    const next = {
+      rgb: write(existing?.rgb ?? null, luts.rgb),
+      red: write(existing?.red ?? null, luts.red),
+      green: write(existing?.green ?? null, luts.green),
+      blue: write(existing?.blue ?? null, luts.blue),
+    }
+    this.curvesLutTextures.set(layerId, next)
+    this.curvesLutSignatures.set(layerId, signature)
+    return next
+  }
+
+  applyCurvesPass(
+    srcTex: WebGLTexture,
+    dstFb: WebGLFramebuffer,
+    layerId: string,
+    luts: CurvesLuts,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+    const textures = this.ensureCurvesLutTextures(layerId, luts)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(this.curvesProgram)
+    gl.uniform2f(gl.getUniformLocation(this.curvesProgram, 'u_resolution'), w, h)
+
+    const posLoc = gl.getAttribLocation(this.curvesProgram, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_src'), 0)
+
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, textures.rgb)
+    gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_rgbLut'), 1)
+
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_2D, textures.red)
+    gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_redLut'), 2)
+
+    gl.activeTexture(gl.TEXTURE3)
+    gl.bindTexture(gl.TEXTURE_2D, textures.green)
+    gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_greenLut'), 3)
+
+    gl.activeTexture(gl.TEXTURE4)
+    gl.bindTexture(gl.TEXTURE_2D, textures.blue)
+    gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_blueLut'), 4)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE5)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_selMask'), 5)
+      gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(this.curvesProgram, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
+  readAdjustmentInputPlan(plan: RenderPlanEntry[], adjustmentLayerId: string): Uint8Array | null {
+    const groupEntry = plan.find((entry): entry is Extract<RenderPlanEntry, { kind: 'adjustment-group' }> => {
+      if (entry.kind !== 'adjustment-group') return false
+      return entry.adjustments.some(op => op.layerId === adjustmentLayerId)
+    })
+    if (!groupEntry) return null
+
+    const targetIndex = groupEntry.adjustments.findIndex(op => op.layerId === adjustmentLayerId)
+    if (targetIndex < 0) return null
+
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.groupFb0)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.groupFb1)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    let srcTex = this.groupTex1
+    let dstFb = this.groupFb0
+    let dstTex = this.groupTex0
+
+    const baseAsSource: WebGLLayer = {
+      ...groupEntry.baseLayer,
+      opacity: 1,
+      blendMode: 'normal',
+    }
+    this.compositeLayer(baseAsSource, srcTex, dstFb, w, h, groupEntry.baseMask)
+    ;[srcTex, dstTex] = [dstTex, srcTex]
+    dstFb = this.groupFb1
+
+    for (let i = 0; i < targetIndex; i++) {
+      const op = groupEntry.adjustments[i]
+      if (!op.visible) continue
+      this.applyAdjustmentOp(op, srcTex, dstFb)
+      ;[srcTex, dstTex] = [dstTex, srcTex]
+      dstFb = dstFb === this.groupFb0 ? this.groupFb1 : this.groupFb0
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, srcTex === this.groupTex0 ? this.groupFb0 : this.groupFb1)
+    const pixels = new Uint8Array(w * h * 4)
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    return pixels
+  }
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   resize(_canvasWidth: number, _canvasHeight: number): void {}
@@ -1007,12 +1232,25 @@ export class WebGLRenderer {
     gl.deleteProgram(this.tempProgram)
     gl.deleteProgram(this.invertProgram)
     gl.deleteProgram(this.selColorProgram)
+    gl.deleteProgram(this.curvesProgram)
     gl.deleteBuffer(this.posBuffer)
     gl.deleteBuffer(this.texCoordBuffer)
     gl.deleteFramebuffer(this.fb0)
     gl.deleteFramebuffer(this.fb1)
+    gl.deleteFramebuffer(this.groupFb0)
+    gl.deleteFramebuffer(this.groupFb1)
     gl.deleteTexture(this.fbTex0)
     gl.deleteTexture(this.fbTex1)
+    gl.deleteTexture(this.groupTex0)
+    gl.deleteTexture(this.groupTex1)
+    for (const textures of this.curvesLutTextures.values()) {
+      gl.deleteTexture(textures.rgb)
+      gl.deleteTexture(textures.red)
+      gl.deleteTexture(textures.green)
+      gl.deleteTexture(textures.blue)
+    }
+    this.curvesLutTextures.clear()
+    this.curvesLutSignatures.clear()
   }
 }
 

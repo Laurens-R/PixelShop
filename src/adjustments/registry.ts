@@ -1,5 +1,12 @@
 import type { AdjustmentType, AdjustmentParamsMap } from '@/types'
 
+const identityCurve = (prefix: string) => ({
+  points: [
+    { id: `${prefix}-0`, x: 0, y: 0 },
+    { id: `${prefix}-255`, x: 255, y: 255 },
+  ],
+})
+
 export interface AdjustmentRegistrationEntry<T extends AdjustmentType = AdjustmentType> {
   adjustmentType: T
   label: string
@@ -68,6 +75,24 @@ export const ADJUSTMENT_REGISTRY = [
       neutrals: { cyan: 0, magenta: 0, yellow: 0, black: 0 },
       blacks:   { cyan: 0, magenta: 0, yellow: 0, black: 0 },
       mode: 'relative',
+    },
+  },
+  {
+    adjustmentType: 'curves' as const,
+    label: 'Curves…',
+    defaultParams: {
+      version: 1,
+      channels: {
+        rgb: identityCurve('rgb'),
+        red: identityCurve('red'),
+        green: identityCurve('green'),
+        blue: identityCurve('blue'),
+      },
+      ui: {
+        selectedChannel: 'rgb',
+        visualAids: { gridDensity: '4x4', showClippingIndicators: true, showReadout: true },
+        presetRef: null,
+      },
     },
   },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

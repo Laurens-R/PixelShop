@@ -167,6 +167,32 @@ export type AdjustmentType =
   | 'color-temperature'
   | 'color-invert'
   | 'selective-color'
+  | 'curves'
+
+export type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
+
+export interface CurvesControlPoint {
+  id: string
+  x: number
+  y: number
+}
+
+export interface CurvesChannelCurve {
+  points: CurvesControlPoint[]
+}
+
+export interface CurvesVisualAids {
+  gridDensity: '4x4' | '8x8'
+  showClippingIndicators: boolean
+  showReadout: boolean
+}
+
+export interface CurvesPresetRef {
+  source: 'builtin' | 'custom'
+  id: string
+  name: string
+  dirty: boolean
+}
 
 export interface AdjustmentParamsMap {
   'brightness-contrast': { brightness: number; contrast: number }
@@ -202,6 +228,15 @@ export interface AdjustmentParamsMap {
     neutrals: { cyan: number; magenta: number; yellow: number; black: number }
     blacks:   { cyan: number; magenta: number; yellow: number; black: number }
     mode:     'relative' | 'absolute'
+  }
+  'curves': {
+    version: 1
+    channels: Record<CurvesChannel, CurvesChannelCurve>
+    ui: {
+      selectedChannel: CurvesChannel
+      visualAids: CurvesVisualAids
+      presetRef: CurvesPresetRef | null
+    }
   }
 }
 
@@ -274,6 +309,14 @@ export interface SelectiveColorAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface CurvesAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'curves'
+  params: AdjustmentParamsMap['curves']
+  /** True when a selection was active at creation time; the baked mask pixels
+   *  live in useCanvas.adjustmentMaskMap (not in React state). */
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -283,6 +326,7 @@ export type AdjustmentLayerState =
   | ColorTemperatureAdjustmentLayer
   | ColorInvertAdjustmentLayer
   | SelectiveColorAdjustmentLayer
+  | CurvesAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 

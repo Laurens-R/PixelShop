@@ -1,0 +1,497 @@
+@use '@/styles/variables' as vars;
+@use '@/styles/mixins' as m;
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+// ─── Generic row ──────────────────────────────────────────────────────────────
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+// ─── Scope row ────────────────────────────────────────────────────────────────
+
+.scopeRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: space-between;
+  padding-bottom: 1px;
+}
+
+.scopeChip {
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  background: #262626;
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+
+  strong {
+    color: vars.$color-text-dim;
+    font-weight: 500;
+  }
+}
+
+.denseNote {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+// ─── Field label ──────────────────────────────────────────────────────────────
+
+.fieldLabel {
+  width: 48px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+}
+
+// ─── Segmented channel control ────────────────────────────────────────────────
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  background: #262626;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  padding: 2px;
+}
+
+.segBtn {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  border: none;
+  background: transparent;
+  border-radius: 2px;
+  color: vars.$color-text-muted;
+  font-size: 11px;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  transition: background vars.$transition-fast, color vars.$transition-fast;
+
+  &:hover {
+    color: vars.$color-text-dim;
+  }
+
+  &.active {
+    background: vars.$color-surface-selected;
+    color: vars.$color-text;
+  }
+
+  &.red.active  { color: #ff6b6b; }
+  &.green.active { color: #67cf77; }
+  &.blue.active  { color: #5ca7ff; }
+}
+
+// ─── Preset row ───────────────────────────────────────────────────────────────
+
+.presetSelect {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  background: #3c3c3c;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  color: vars.$color-text;
+  font-size: 11px;
+  font-family: vars.$font-sans;
+  padding: 0 22px 0 6px;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%237a7a7a'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+
+  &:focus {
+    border-color: vars.$color-accent-solid;
+    box-shadow: 0 0 0 1px vars.$color-accent-border;
+  }
+}
+
+.miniBtn {
+  height: 20px;
+  padding: 0 6px;
+  background: transparent;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  color: vars.$color-text-muted;
+  font-size: 10px;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background vars.$transition-fast, color vars.$transition-fast, border-color vars.$transition-fast;
+
+  &:hover:not(:disabled) {
+    background: vars.$color-surface-hover;
+    border-color: #777;
+    color: vars.$color-text;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// ─── Curve region ─────────────────────────────────────────────────────────────
+
+.curveRegion {
+  padding: 6px;
+  border: 1px solid vars.$color-border;
+  border-radius: 2px;
+  background: #252525;
+}
+
+.curveHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  gap: 6px;
+}
+
+.curveTitle {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+
+  strong {
+    color: vars.$color-text-dim;
+    font-weight: 600;
+  }
+}
+
+.curveReadout {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ─── Telemetry row ────────────────────────────────────────────────────────────
+
+.telemetryRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  min-width: 0;
+}
+
+.telemetryMeta {
+  width: 34px;
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.telemetryGroup {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.telemetryTag {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+}
+
+.telemetryInput {
+  width: 38px;
+  height: 18px;
+  padding: 0 4px;
+  background: #3c3c3c;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  color: vars.$color-text;
+  font-size: 11px;
+  font-family: vars.$font-mono;
+  text-align: right;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    border-color: vars.$color-accent-solid;
+    box-shadow: 0 0 0 1px vars.$color-accent-border;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.telemetrySpacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.hoverPill {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border: 1px solid #3a3a3a;
+  border-radius: 2px;
+  background: #262626;
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ghostBtn {
+  height: 20px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  color: vars.$color-text-muted;
+  font-size: 11px;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background vars.$transition-fast, color vars.$transition-fast, border-color vars.$transition-fast;
+
+  &:hover:not(:disabled) {
+    background: vars.$color-surface-hover;
+    border-color: #777;
+    color: vars.$color-text;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// ─── Aid row ──────────────────────────────────────────────────────────────────
+
+.aidRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+  padding-bottom: 1px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.aidGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.checkOpt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: vars.$color-text-dim;
+  white-space: nowrap;
+  cursor: pointer;
+
+  input {
+    width: 13px;
+    height: 13px;
+    accent-color: vars.$color-accent-solid;
+    cursor: pointer;
+  }
+}
+
+.gridSelect {
+  width: 58px;
+  height: 18px;
+  background: #3c3c3c;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  color: vars.$color-text;
+  font-size: 10px;
+  font-family: vars.$font-sans;
+  outline: none;
+  padding: 0 4px;
+
+  &:focus {
+    border-color: vars.$color-accent-solid;
+  }
+}
+
+// ─── Action row ───────────────────────────────────────────────────────────────
+
+.actionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.actionLeft,
+.actionRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.actionBtn {
+  height: 20px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  color: vars.$color-text-muted;
+  font-size: 11px;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background vars.$transition-fast, color vars.$transition-fast, border-color vars.$transition-fast;
+
+  &:hover:not(:disabled) {
+    background: vars.$color-surface-hover;
+    border-color: #777;
+    color: vars.$color-text;
+  }
+
+  &.primary {
+    border-color: rgba(6, 153, 251, 0.4);
+    color: vars.$color-text-dim;
+
+    &:hover:not(:disabled) {
+      border-color: rgba(6, 153, 251, 0.7);
+    }
+  }
+}
+
+// ─── Preview row ──────────────────────────────────────────────────────────────
+
+.previewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 1px;
+}
+
+.previewToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: vars.$color-text-dim;
+  font-size: 11px;
+  cursor: pointer;
+
+  input {
+    width: 13px;
+    height: 13px;
+    accent-color: vars.$color-accent-solid;
+    cursor: pointer;
+  }
+}
+
+.previewNote {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  text-align: right;
+  white-space: nowrap;
+}
+
+// ─── Paste error banner ───────────────────────────────────────────────────────
+
+.errorBanner {
+  padding: 6px 8px;
+  background: #262626;
+  border: 1px solid rgba(192, 64, 64, 0.35);
+  border-radius: 2px;
+  font-size: 11px;
+  color: vars.$color-text-dim;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border-top: 1px solid vars.$color-border;
+  padding: 5px 8px 5px;
+  // Bleed past .body padding (8px left/right, 6px bottom)
+  margin: 0 -8px -6px -8px;
+}
+
+.layerIndicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.layerIndicatorIcon {
+  color: vars.$color-text-muted;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.layerIndicatorText {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+
+  strong {
+    color: vars.$color-text-dim;
+    font-weight: 500;
+  }
+}
+
+.footerHint {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &.layerHidden {
+    color: #e0ae60;
+  }
+}

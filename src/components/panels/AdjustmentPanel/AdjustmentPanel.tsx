@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer } from '@/types'
+import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
 import { ColorVibrancePanel } from '../ColorVibrancePanel/ColorVibrancePanel'
@@ -9,12 +10,14 @@ import { BlackAndWhitePanel } from '../BlackAndWhitePanel/BlackAndWhitePanel'
 import { ColorTemperaturePanel } from '../ColorTemperaturePanel/ColorTemperaturePanel'
 import { InvertPanel } from '../InvertPanel/InvertPanel'
 import { SelectiveColorPanel } from '../SelectiveColorPanel/SelectiveColorPanel'
+import { CurvesPanel } from '../CurvesPanel/CurvesPanel'
 import styles from './AdjustmentPanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface AdjustmentPanelProps {
   onClose: () => void
+  canvasHandleRef: React.RefObject<CanvasHandle | null>
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -29,6 +32,7 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'color-temperature':   return 'Color Temperature'
     case 'color-invert':        return 'Invert'
     case 'selective-color':     return 'Selective Color'
+    case 'curves':              return 'Curves'
   }
 }
 
@@ -103,6 +107,14 @@ const SelectiveColorHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const CurvesHeaderIcon = (): React.JSX.Element => (
+  <svg viewBox="0 0 12 12" fill="none" width="12" height="12" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M1.5 9.5 C3.2 9.5 3.9 5.8 5.7 5.8 C7 5.8 7.2 7.4 8.7 7.4 C10 7.4 10.5 3.2 10.5 2.2" />
+    <circle cx="1.5" cy="9.5" r="0.8" fill="currentColor" stroke="none" />
+    <circle cx="10.5" cy="2.2" r="0.8" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }): React.JSX.Element {
   if (type === 'brightness-contrast') return <BrightnessContrastHeaderIcon />
   if (type === 'hue-saturation') return <HueSaturationHeaderIcon />
@@ -111,12 +123,13 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'color-temperature') return <ColorTemperatureHeaderIcon />
   if (type === 'color-invert') return <ColorInvertHeaderIcon />
   if (type === 'selective-color') return <SelectiveColorHeaderIcon />
+  if (type === 'curves') return <CurvesHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AdjustmentPanel({ onClose }: AdjustmentPanelProps): React.JSX.Element | null {
+export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelProps): React.JSX.Element | null {
   const { state } = useAppContext()
   const { openAdjustmentLayerId, layers } = state
 
@@ -140,7 +153,7 @@ export function AdjustmentPanel({ onClose }: AdjustmentPanelProps): React.JSX.El
   const parentLayerName = parentLayer?.name ?? 'Layer'
 
   return (
-    <div className={styles.panel} role="dialog" aria-label={adjustmentTitle(adjLayer)}>
+    <div className={[styles.panel, adjLayer.adjustmentType === 'curves' ? styles.panelWide : ''].join(' ')} role="dialog" aria-label={adjustmentTitle(adjLayer)}>
       <div className={styles.header}>
         <span className={styles.headerIcon}>
           <AdjPanelIcon type={adjLayer.adjustmentType} />
@@ -174,6 +187,9 @@ export function AdjustmentPanel({ onClose }: AdjustmentPanelProps): React.JSX.El
         )}
         {adjLayer.adjustmentType === 'selective-color' && (
           <SelectiveColorPanel layer={adjLayer as SelectiveColorAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'curves' && (
+          <CurvesPanel layer={adjLayer as CurvesAdjustmentLayer} parentLayerName={parentLayerName} canvasHandleRef={canvasHandleRef} />
         )}
       </div>
     </div>

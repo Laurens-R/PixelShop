@@ -192,7 +192,6 @@ function AppContent(): React.JSX.Element {
                 onStrokeEnd={captureHistory}
                 onReady={() => {
                   setPendingLayerData(null)
-                  setTabs(prev => prev.map(t => t.id === tab.id ? { ...t, savedLayerData: null } : t))
                   captureHistory(pendingLayerLabelRef.current ?? 'Initial State')
                   pendingLayerLabelRef.current = null
                 }}
@@ -212,7 +211,7 @@ function AppContent(): React.JSX.Element {
       <StatusBar />
 
       {state.openAdjustmentLayerId !== null && (
-        <AdjustmentPanel onClose={adjustments.handleCloseAdjustmentPanel} />
+        <AdjustmentPanel onClose={adjustments.handleCloseAdjustmentPanel} canvasHandleRef={canvasHandleRef} />
       )}
 
       <NewImageDialog
