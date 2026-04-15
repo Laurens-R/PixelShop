@@ -44,6 +44,15 @@ void pixelops_gaussian_blur(
     filters_gaussian_blur(pixels, width, height, radius);
 }
 
+// ─── Box Blur (in-place) ──────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_box_blur(
+    uint8_t* pixels, int width, int height, int radius
+) {
+    filters_box_blur(pixels, width, height, radius);
+}
+
 // ─── Generic Convolution (src → dst) ─────────────────────────────────────────
 
 EMSCRIPTEN_KEEPALIVE

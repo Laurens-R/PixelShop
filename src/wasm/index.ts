@@ -112,6 +112,16 @@ export async function gaussianBlur(
   )
 }
 
+/** Single-pass box blur (in-place). radius controls the box half-width. */
+export async function boxBlur(
+  pixels: Uint8Array, width: number, height: number, radius: number
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  return withInPlaceBuffer(m, pixels, ptr =>
+    m._pixelops_box_blur(ptr, width, height, radius)
+  )
+}
+
 /** Generic 2-D convolution. kernelSize must be odd. src and dst are separate. */
 export async function convolve(
   pixels: Uint8Array, width: number, height: number,

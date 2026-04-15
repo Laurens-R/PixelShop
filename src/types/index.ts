@@ -169,6 +169,8 @@ export type AdjustmentType =
   | 'selective-color'
   | 'curves'
 
+export type FilterKey = 'gaussian-blur' | 'box-blur'
+
 export type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
 
 export interface CurvesControlPoint {

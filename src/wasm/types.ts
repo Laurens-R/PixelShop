@@ -28,6 +28,10 @@ export interface PixelOpsModule {
     pixelsPtr: number, width: number, height: number, radius: number
   ): void
 
+  _pixelops_box_blur(
+    pixelsPtr: number, width: number, height: number, radius: number
+  ): void
+
   _pixelops_convolve(
     srcPtr: number, dstPtr: number,
     width: number, height: number,

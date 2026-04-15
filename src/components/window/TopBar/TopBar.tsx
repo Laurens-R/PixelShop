@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { MenuBar } from '../MenuBar/MenuBar'
 import type { MenuDef } from '../MenuBar/MenuBar'
-import type { AdjustmentType } from '@/types'
+import type { AdjustmentType, FilterKey } from '@/types'
 import styles from './TopBar.module.scss'
 
 
@@ -38,9 +38,12 @@ interface TopBarProps {
   onCreateAdjustmentLayer?: (type: AdjustmentType) => void
   isAdjustmentMenuEnabled?: boolean
   adjustmentMenuItems?: Array<{ type: AdjustmentType; label: string }>
+  onOpenFilterDialog?: (key: FilterKey) => void
+  isFiltersMenuEnabled?: boolean
+  filterMenuItems?: Array<{ key: FilterKey; label: string }>
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, onOpenFilterDialog, isFiltersMenuEnabled, filterMenuItems }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -79,6 +82,14 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
       })),
     },
     {
+      label: 'Filters',
+      items: (filterMenuItems ?? []).map(item => ({
+        label:    item.label,
+        disabled: !isFiltersMenuEnabled,
+        action:   () => onOpenFilterDialog?.(item.key),
+      })),
+    },
+    {
       label: 'View',
       items: [
         { label: 'Zoom In',       shortcut: 'Ctrl+=', action: onZoomIn },
@@ -107,7 +118,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
       ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, onOpenFilterDialog, isFiltersMenuEnabled, filterMenuItems])
 
   return (
     <div className={styles.topBar}>

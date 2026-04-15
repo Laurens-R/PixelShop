@@ -17,6 +17,8 @@ import { ResizeImageDialog } from '@/components/dialogs/ResizeImageDialog/Resize
 import { ResizeCanvasDialog } from '@/components/dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
 import { AboutDialog } from '@/components/dialogs/AboutDialog/AboutDialog'
 import { KeyboardShortcutsDialog } from '@/components/dialogs/KeyboardShortcutsDialog/KeyboardShortcutsDialog'
+import { GaussianBlurDialog } from '@/components/dialogs/GaussianBlurDialog/GaussianBlurDialog'
+import { BoxBlurDialog } from '@/components/dialogs/BoxBlurDialog/BoxBlurDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -26,13 +28,17 @@ import { useLayers } from '@/hooks/useLayers'
 import { useCanvasTransforms } from '@/hooks/useCanvasTransforms'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
+import { useFilters } from '@/hooks/useFilters'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
+import { FILTER_REGISTRY } from '@/filters/registry'
+import type { FilterKey } from '@/types'
 import { selectionStore } from '@/store/selectionStore'
 import styles from './App.module.scss'
 
 // ─── Statics ──────────────────────────────────────────────────────────────────
 
 const ADJUSTMENT_MENU_ITEMS = ADJUSTMENT_REGISTRY.map(e => ({ type: e.adjustmentType, label: e.label }))
+const FILTER_MENU_ITEMS = FILTER_REGISTRY.map(e => ({ key: e.key, label: e.label }))
 
 // ─── AppContent ───────────────────────────────────────────────────────────────
 
@@ -47,6 +53,8 @@ function AppContent(): React.JSX.Element {
   const [showResizeCanvasDialog,  setShowResizeCanvasDialog]  = useState(false)
   const [showAboutDialog,         setShowAboutDialog]         = useState(false)
   const [showShortcutsDialog,     setShowShortcutsDialog]     = useState(false)
+  const [showGaussianBlurDialog,  setShowGaussianBlurDialog]  = useState(false)
+  const [showBoxBlurDialog,        setShowBoxBlurDialog]        = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -112,6 +120,18 @@ function AppContent(): React.JSX.Element {
     registerAdjMask,
   })
 
+  // ── Filters ───────────────────────────────────────────────────────
+  const handleOpenFilterDialog = useCallback((key: FilterKey): void => {
+    if (key === 'gaussian-blur') setShowGaussianBlurDialog(true)
+    if (key === 'box-blur')      setShowBoxBlurDialog(true)
+  }, [])
+
+  const filters = useFilters({
+    layers:             state.layers,
+    activeLayerId:      state.activeLayerId,
+    onOpenFilterDialog: handleOpenFilterDialog,
+  })
+
   // ── View actions ──────────────────────────────────────────────────
   const handleUndo         = useCallback(() => { historyStore.undo() }, [])
   const handleRedo         = useCallback(() => { historyStore.redo() }, [])
@@ -168,6 +188,9 @@ function AppContent(): React.JSX.Element {
         onCreateAdjustmentLayer={adjustments.handleCreateAdjustmentLayer}
         isAdjustmentMenuEnabled={adjustments.isAdjustmentMenuEnabled}
         adjustmentMenuItems={ADJUSTMENT_MENU_ITEMS}
+        onOpenFilterDialog={handleOpenFilterDialog}
+        isFiltersMenuEnabled={filters.isFiltersMenuEnabled}
+        filterMenuItems={FILTER_MENU_ITEMS}
       />
       <ToolOptionsBar />
       <TabBar
@@ -257,6 +280,28 @@ function AppContent(): React.JSX.Element {
         open={showShortcutsDialog}
         onClose={() => setShowShortcutsDialog(false)}
       />
+      {showGaussianBlurDialog && (
+        <GaussianBlurDialog
+          isOpen={showGaussianBlurDialog}
+          onClose={() => setShowGaussianBlurDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showBoxBlurDialog && (
+        <BoxBlurDialog
+          isOpen={showBoxBlurDialog}
+          onClose={() => setShowBoxBlurDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
     </div>
   )
 }

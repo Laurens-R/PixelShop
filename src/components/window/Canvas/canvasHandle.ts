@@ -50,6 +50,12 @@ export interface CanvasHandle {
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
   fitToWindow: () => void
   /**
+   * Write a canvas-size RGBA pixel buffer into an existing layer, flush to GPU,
+   * and re-render. `pixels` must be Uint8Array of length (canvasWidth × canvasHeight × 4),
+   * the same format returned by `getLayerPixels`. Does NOT push to undo history.
+   */
+  writeLayerPixels: (layerId: string, pixels: Uint8Array) => void
+  /**
    * Register a baked selection mask for an adjustment layer.
    * selPixels is a full-canvas Uint8Array (1 byte per pixel, 255 = selected) from selectionStore.mask.
    * The R channel of the resulting WebGL layer drives the shader blend weight.
@@ -334,6 +340,30 @@ export function useCanvasHandle({
       const maskLayer = adjustmentMaskMap.current.get(adjustmentLayerId)
       if (!maskLayer) return null
       return maskLayer.data.slice()
+    },
+
+    writeLayerPixels: (layerId, pixels) => {
+      const renderer = rendererRef.current
+      const layer    = glLayersRef.current.get(layerId)
+      if (!renderer || !layer) return
+      const w = renderer.pixelWidth
+      const h = renderer.pixelHeight
+      for (let ly = 0; ly < layer.layerHeight; ly++) {
+        const cy = layer.offsetY + ly
+        if (cy < 0 || cy >= h) continue
+        for (let lx = 0; lx < layer.layerWidth; lx++) {
+          const cx = layer.offsetX + lx
+          if (cx < 0 || cx >= w) continue
+          const si = (cy * w + cx) * 4
+          const di = (ly * layer.layerWidth + lx) * 4
+          layer.data[di]     = pixels[si]
+          layer.data[di + 1] = pixels[si + 1]
+          layer.data[di + 2] = pixels[si + 2]
+          layer.data[di + 3] = pixels[si + 3]
+        }
+      }
+      renderer.flushLayer(layer)
+      renderFromPlan()
     },
 
     registerAdjustmentSelectionMask: (layerId, selPixels) => {

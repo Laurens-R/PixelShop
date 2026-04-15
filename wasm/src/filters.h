@@ -15,3 +15,9 @@ void filters_convolve(
 void filters_gaussian_blur(
     uint8_t* pixels, int width, int height, int radius
 );
+
+/// Single-pass box blur applied in-place.
+/// radius controls the box half-size (kernel width = 2*radius+1).
+void filters_box_blur(
+    uint8_t* pixels, int width, int height, int radius
+);
