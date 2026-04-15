@@ -1,4 +1,4 @@
-import { useImperativeHandle } from 'react'
+import { useImperativeHandle, useRef } from 'react'
 import type React from 'react'
 import type { WebGLLayer, WebGLRenderer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
 import type { LayerState } from '@/types'
@@ -85,6 +85,9 @@ export function useCanvasHandle({
   viewportRef,
   onZoom,
 }: UseCanvasHandleParams): void {
+  const buildRenderArgsRef = useRef(buildRenderArgs)
+  buildRenderArgsRef.current = buildRenderArgs
+
   const requireRenderer = (): WebGLRenderer => {
     const renderer = rendererRef.current
     if (!renderer) throw new Error('Rasterization failed because the GPU renderer is not ready.')
@@ -94,7 +97,7 @@ export function useCanvasHandle({
   const renderFromPlan = (): void => {
     const renderer = rendererRef.current
     if (!renderer) return
-    const { plan } = buildRenderArgs()
+    const { plan } = buildRenderArgsRef.current()
     renderer.renderPlan(plan)
   }
 
@@ -133,7 +136,7 @@ export function useCanvasHandle({
 
     rasterizeComposite: (reason) => {
       const renderer = requireRenderer()
-      const { plan } = buildRenderArgs()
+      const { plan } = buildRenderArgsRef.current()
       const result = rasterizeDocument({
         plan,
         width: renderer.pixelWidth,
@@ -323,7 +326,7 @@ export function useCanvasHandle({
     readAdjustmentInputPixels: (adjustmentLayerId) => {
       const renderer = rendererRef.current
       if (!renderer) return null
-      const { plan } = buildRenderArgs()
+      const { plan } = buildRenderArgsRef.current()
       return renderer.readAdjustmentInputPlan(plan, adjustmentLayerId)
     },
 
