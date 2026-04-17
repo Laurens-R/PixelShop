@@ -1,11 +1,22 @@
 import type { FilterKey } from '@/types'
 
 export interface FilterRegistryEntry {
-  key: FilterKey
-  label: string
+  key:      FilterKey
+  label:    string
+  instant?: boolean
+  group?:   'blur' | 'sharpen' | 'noise' | 'render'
 }
 
 export const FILTER_REGISTRY: FilterRegistryEntry[] = [
-  { key: 'gaussian-blur', label: 'Gaussian Blur…' },
-  { key: 'box-blur',      label: 'Box Blur…' },
+  { key: 'gaussian-blur',  label: 'Gaussian Blur…',  group: 'blur'    },
+  { key: 'box-blur',       label: 'Box Blur…',        group: 'blur'    },
+  { key: 'radial-blur',    label: 'Radial Blur…',     group: 'blur'    },
+  { key: 'lens-blur',      label: 'Lens Blur…',       group: 'blur'    },
+  { key: 'sharpen',        label: 'Sharpen',          group: 'sharpen', instant: true },
+  { key: 'sharpen-more',   label: 'Sharpen More',     group: 'sharpen', instant: true },
+  { key: 'unsharp-mask',   label: 'Unsharp Mask…',    group: 'sharpen' },
+  { key: 'smart-sharpen',  label: 'Smart Sharpen…',   group: 'sharpen' },
+  { key: 'add-noise',      label: 'Add Noise…',       group: 'noise'   },
+  { key: 'film-grain',     label: 'Film Grain…',      group: 'noise'   },
+  { key: 'clouds',         label: 'Clouds…',          group: 'render'  },
 ]

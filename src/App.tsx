@@ -19,6 +19,13 @@ import { AboutDialog } from '@/components/dialogs/AboutDialog/AboutDialog'
 import { KeyboardShortcutsDialog } from '@/components/dialogs/KeyboardShortcutsDialog/KeyboardShortcutsDialog'
 import { GaussianBlurDialog } from '@/components/dialogs/GaussianBlurDialog/GaussianBlurDialog'
 import { BoxBlurDialog } from '@/components/dialogs/BoxBlurDialog/BoxBlurDialog'
+import { RadialBlurDialog } from '@/components/dialogs/RadialBlurDialog/RadialBlurDialog'
+import { UnsharpMaskDialog } from '@/components/dialogs/UnsharpMaskDialog/UnsharpMaskDialog'
+import { SmartSharpenDialog } from '@/components/dialogs/SmartSharpenDialog/SmartSharpenDialog'
+import { AddNoiseDialog } from '@/components/dialogs/AddNoiseDialog/AddNoiseDialog'
+import { FilmGrainDialog } from '@/components/dialogs/FilmGrainDialog/FilmGrainDialog'
+import { LensBlurDialog } from '@/components/dialogs/LensBlurDialog/LensBlurDialog'
+import { CloudsDialog } from '@/components/dialogs/CloudsDialog/CloudsDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -38,7 +45,7 @@ import styles from './App.module.scss'
 // ─── Statics ──────────────────────────────────────────────────────────────────
 
 const ADJUSTMENT_MENU_ITEMS = ADJUSTMENT_REGISTRY.map(e => ({ type: e.adjustmentType, label: e.label }))
-const FILTER_MENU_ITEMS = FILTER_REGISTRY.map(e => ({ key: e.key, label: e.label }))
+const FILTER_MENU_ITEMS = FILTER_REGISTRY.map(e => ({ key: e.key, label: e.label, instant: e.instant, group: e.group }))
 
 // ─── AppContent ───────────────────────────────────────────────────────────────
 
@@ -55,6 +62,13 @@ function AppContent(): React.JSX.Element {
   const [showShortcutsDialog,     setShowShortcutsDialog]     = useState(false)
   const [showGaussianBlurDialog,  setShowGaussianBlurDialog]  = useState(false)
   const [showBoxBlurDialog,        setShowBoxBlurDialog]        = useState(false)
+  const [showRadialBlurDialog,     setShowRadialBlurDialog]     = useState(false)
+  const [showUnsharpMaskDialog,    setShowUnsharpMaskDialog]    = useState(false)
+  const [showSmartSharpenDialog,   setShowSmartSharpenDialog]   = useState(false)
+  const [showAddNoiseDialog,       setShowAddNoiseDialog]       = useState(false)
+  const [showFilmGrainDialog,      setShowFilmGrainDialog]      = useState(false)
+  const [showLensBlurDialog,       setShowLensBlurDialog]       = useState(false)
+  const [showCloudsDialog,         setShowCloudsDialog]         = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -124,12 +138,23 @@ function AppContent(): React.JSX.Element {
   const handleOpenFilterDialog = useCallback((key: FilterKey): void => {
     if (key === 'gaussian-blur') setShowGaussianBlurDialog(true)
     if (key === 'box-blur')      setShowBoxBlurDialog(true)
+    if (key === 'radial-blur')   setShowRadialBlurDialog(true)
+    if (key === 'unsharp-mask')  setShowUnsharpMaskDialog(true)
+    if (key === 'smart-sharpen') setShowSmartSharpenDialog(true)
+    if (key === 'add-noise')     setShowAddNoiseDialog(true)
+    if (key === 'film-grain')    setShowFilmGrainDialog(true)
+    if (key === 'lens-blur')     setShowLensBlurDialog(true)
+    if (key === 'clouds')        setShowCloudsDialog(true)
   }, [])
 
   const filters = useFilters({
     layers:             state.layers,
     activeLayerId:      state.activeLayerId,
     onOpenFilterDialog: handleOpenFilterDialog,
+    canvasHandleRef,
+    canvasWidth:        state.canvas.width,
+    canvasHeight:       state.canvas.height,
+    captureHistory,
   })
 
   // ── View actions ──────────────────────────────────────────────────
@@ -189,6 +214,7 @@ function AppContent(): React.JSX.Element {
         isAdjustmentMenuEnabled={adjustments.isAdjustmentMenuEnabled}
         adjustmentMenuItems={ADJUSTMENT_MENU_ITEMS}
         onOpenFilterDialog={handleOpenFilterDialog}
+        onInstantFilter={filters.handleInstantFilter}
         isFiltersMenuEnabled={filters.isFiltersMenuEnabled}
         filterMenuItems={FILTER_MENU_ITEMS}
       />
@@ -300,6 +326,85 @@ function AppContent(): React.JSX.Element {
           captureHistory={captureHistory}
           canvasWidth={state.canvas.width}
           canvasHeight={state.canvas.height}
+        />
+      )}
+      {showRadialBlurDialog && (
+        <RadialBlurDialog
+          isOpen={showRadialBlurDialog}
+          onClose={() => setShowRadialBlurDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showUnsharpMaskDialog && (
+        <UnsharpMaskDialog
+          isOpen={showUnsharpMaskDialog}
+          onClose={() => setShowUnsharpMaskDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showSmartSharpenDialog && (
+        <SmartSharpenDialog
+          isOpen={showSmartSharpenDialog}
+          onClose={() => setShowSmartSharpenDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showAddNoiseDialog && (
+        <AddNoiseDialog
+          isOpen={showAddNoiseDialog}
+          onClose={() => setShowAddNoiseDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showFilmGrainDialog && (
+        <FilmGrainDialog
+          isOpen={showFilmGrainDialog}
+          onClose={() => setShowFilmGrainDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showLensBlurDialog && (
+        <LensBlurDialog
+          isOpen={showLensBlurDialog}
+          onClose={() => setShowLensBlurDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showCloudsDialog && (
+        <CloudsDialog
+          isOpen={showCloudsDialog}
+          onClose={() => setShowCloudsDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+          foregroundColor={[state.primaryColor.r, state.primaryColor.g, state.primaryColor.b]}
+          backgroundColor={[state.secondaryColor.r, state.secondaryColor.g, state.secondaryColor.b]}
         />
       )}
     </div>

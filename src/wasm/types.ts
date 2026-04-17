@@ -75,6 +75,52 @@ export interface PixelOpsModule {
     inputPtr: number, width: number, height: number,
     maskPtr: number
   ): number
+
+  _pixelops_radial_blur(
+    pixelsPtr: number, width: number, height: number,
+    mode: number, amount: number, centerX: number, centerY: number, quality: number
+  ): void
+
+  _pixelops_sharpen(
+    pixelsPtr: number, width: number, height: number
+  ): void
+
+  _pixelops_sharpen_more(
+    pixelsPtr: number, width: number, height: number
+  ): void
+
+  _pixelops_unsharp_mask(
+    pixelsPtr: number, width: number, height: number,
+    amount: number, radius: number, threshold: number
+  ): void
+
+  _pixelops_smart_sharpen(
+    pixelsPtr: number, width: number, height: number,
+    amount: number, radius: number, reduceNoise: number, remove: number
+  ): void
+
+  _pixelops_add_noise(
+    pixelsPtr: number, width: number, height: number,
+    amount: number, distribution: number, monochromatic: number, seed: number
+  ): void
+
+  _pixelops_film_grain(
+    pixelsPtr: number, width: number, height: number,
+    grainSize: number, intensity: number, roughness: number, seed: number
+  ): void
+
+  _pixelops_lens_blur(
+    pixelsPtr: number, width: number, height: number,
+    radius: number, bladeCount: number, bladeCurvature: number, rotation: number
+  ): void
+
+  _pixelops_clouds(
+    pixelsPtr: number, width: number, height: number,
+    scale: number, opacity: number, colorMode: number,
+    fgR: number, fgG: number, fgB: number,
+    bgR: number, bgG: number, bgB: number,
+    seed: number
+  ): void
 }
 
 /** Factory function exported by the Emscripten-generated ES module */

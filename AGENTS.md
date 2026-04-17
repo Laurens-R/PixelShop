@@ -2,7 +2,7 @@
 
 ## Overview
 
-Desktop pixel art / image editor built with Electron, React 19, TypeScript, WebGL2, and C++/WASM. Intended to be a Photoshop-grade editor for pixel art.
+Desktop image editor built with Electron, React 19, TypeScript, WebGL2, and C++/WASM. Intended to be a Photoshop-grade general-purpose image editor. Despite the name, PixelShop is **not** a pixel art tool — it is a full-featured photo and image editor. Pixel art is a supported use case, but the application targets the full breadth of raster image editing (adjustments, filters, layer compositing, curves, color grading, etc.) that you'd expect from a professional tool like Photoshop.
 
 ## Build & Dev
 

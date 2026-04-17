@@ -173,3 +173,542 @@ void filters_box_blur(
     boxBlurH(pixels, tmp.data(), width, height, radius);
     boxBlurV(tmp.data(), pixels, width, height, radius);
 }
+
+// ─── Bilinear sample helper ────────────────────────────────────────────────────
+
+static void sampleBilinear(
+    const uint8_t* src, int width, int height,
+    float sx, float sy,
+    float& outR, float& outG, float& outB, float& outA)
+{
+    sx = std::clamp(sx, 0.f, (float)(width  - 1));
+    sy = std::clamp(sy, 0.f, (float)(height - 1));
+
+    const int x0 = (int)sx,        y0 = (int)sy;
+    const int x1 = std::min(x0+1, width-1);
+    const int y1 = std::min(y0+1, height-1);
+    const float fx = sx - x0,      fy = sy - y0;
+
+    auto px = [&](int x, int y) -> const uint8_t* {
+        return src + (y * width + x) * 4;
+    };
+
+    const uint8_t* p00 = px(x0,y0); const uint8_t* p10 = px(x1,y0);
+    const uint8_t* p01 = px(x0,y1); const uint8_t* p11 = px(x1,y1);
+
+    float vals[4];
+    for (int c = 0; c < 4; ++c) {
+        float top    = p00[c] * (1-fx) + p10[c] * fx;
+        float bottom = p01[c] * (1-fx) + p11[c] * fx;
+        vals[c]      = top * (1-fy) + bottom * fy;
+    }
+    outR = vals[0]; outG = vals[1]; outB = vals[2]; outA = vals[3];
+}
+
+// ─── Radial Blur ──────────────────────────────────────────────────────────────
+
+void filters_radial_blur(
+    uint8_t* pixels, int width, int height,
+    int mode, int amount,
+    float centerX, float centerY,
+    int quality
+) {
+    if (amount <= 0 || width <= 0 || height <= 0) return;
+
+    const std::vector<uint8_t> src(pixels, pixels + (size_t)width * height * 4);
+
+    const int numSamples = (quality == 0) ? 8 : (quality == 1) ? 16 : 32;
+
+    const float cx = centerX * (float)(width  - 1);
+    const float cy = centerY * (float)(height - 1);
+
+    if (mode == 0) {
+        const float spinAngle = (float)amount * (float)M_PI / 1800.f;
+
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const float dx = (float)x - cx;
+                const float dy = (float)y - cy;
+                const float dist = std::sqrt(dx*dx + dy*dy);
+
+                const int dstIdx = (y * width + x) * 4;
+
+                if (dist < 0.5f) {
+                    pixels[dstIdx]   = src[dstIdx];
+                    pixels[dstIdx+1] = src[dstIdx+1];
+                    pixels[dstIdx+2] = src[dstIdx+2];
+                    pixels[dstIdx+3] = src[dstIdx+3];
+                    continue;
+                }
+
+                const float baseAngle = std::atan2(dy, dx);
+                float accR = 0, accG = 0, accB = 0, accA = 0;
+
+                for (int s = 0; s < numSamples; ++s) {
+                    const float t     = (numSamples > 1)
+                                          ? (float)s / (float)(numSamples - 1)
+                                          : 0.5f;
+                    const float theta = baseAngle - spinAngle * 0.5f + t * spinAngle;
+                    const float sx_   = cx + dist * std::cos(theta);
+                    const float sy_   = cy + dist * std::sin(theta);
+
+                    float r, g, b, a;
+                    sampleBilinear(src.data(), width, height, sx_, sy_, r, g, b, a);
+                    accR += r; accG += g; accB += b; accA += a;
+                }
+
+                pixels[dstIdx]   = (uint8_t)std::clamp((int)(accR / numSamples), 0, 255);
+                pixels[dstIdx+1] = (uint8_t)std::clamp((int)(accG / numSamples), 0, 255);
+                pixels[dstIdx+2] = (uint8_t)std::clamp((int)(accB / numSamples), 0, 255);
+                pixels[dstIdx+3] = (uint8_t)std::clamp((int)(accA / numSamples), 0, 255);
+            }
+        }
+
+    } else {
+        const float scale = (float)amount * 0.005f;
+
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const float dx = (float)x - cx;
+                const float dy = (float)y - cy;
+
+                const int dstIdx = (y * width + x) * 4;
+
+                if (std::abs(dx) < 0.5f && std::abs(dy) < 0.5f) {
+                    pixels[dstIdx]   = src[dstIdx];
+                    pixels[dstIdx+1] = src[dstIdx+1];
+                    pixels[dstIdx+2] = src[dstIdx+2];
+                    pixels[dstIdx+3] = src[dstIdx+3];
+                    continue;
+                }
+
+                float accR = 0, accG = 0, accB = 0, accA = 0;
+
+                for (int s = 0; s < numSamples; ++s) {
+                    const float t      = (numSamples > 1)
+                                           ? (float)s / (float)(numSamples - 1)
+                                           : 0.5f;
+                    const float factor = 1.f - t * scale;
+                    const float sx_    = cx + dx * factor;
+                    const float sy_    = cy + dy * factor;
+
+                    float r, g, b, a;
+                    sampleBilinear(src.data(), width, height, sx_, sy_, r, g, b, a);
+                    accR += r; accG += g; accB += b; accA += a;
+                }
+
+                pixels[dstIdx]   = (uint8_t)std::clamp((int)(accR / numSamples), 0, 255);
+                pixels[dstIdx+1] = (uint8_t)std::clamp((int)(accG / numSamples), 0, 255);
+                pixels[dstIdx+2] = (uint8_t)std::clamp((int)(accB / numSamples), 0, 255);
+                pixels[dstIdx+3] = (uint8_t)std::clamp((int)(accA / numSamples), 0, 255);
+            }
+        }
+    }
+}
+
+// ── filters_sharpen ───────────────────────────────────────────────────────────
+
+void filters_sharpen(uint8_t* pixels, int width, int height) {
+    const float kernel[9] = { 0,-1, 0, -1, 5,-1, 0,-1, 0 };
+    std::vector<uint8_t> dst(static_cast<size_t>(width) * height * 4);
+    filters_convolve(pixels, dst.data(), width, height, kernel, 3);
+    std::copy(dst.begin(), dst.end(), pixels);
+}
+
+// ── filters_sharpen_more ──────────────────────────────────────────────────────
+
+void filters_sharpen_more(uint8_t* pixels, int width, int height) {
+    const float kernel[9] = { -1,-1,-1, -1, 9,-1, -1,-1,-1 };
+    std::vector<uint8_t> dst(static_cast<size_t>(width) * height * 4);
+    filters_convolve(pixels, dst.data(), width, height, kernel, 3);
+    std::copy(dst.begin(), dst.end(), pixels);
+}
+
+// ── filters_unsharp_mask ──────────────────────────────────────────────────────
+
+void filters_unsharp_mask(uint8_t* pixels, int width, int height,
+                           int amount, int radius, int threshold) {
+    const int n = width * height * 4;
+    std::vector<uint8_t> original(pixels, pixels + n);
+    std::vector<uint8_t> blurred(original);
+    filters_gaussian_blur(blurred.data(), width, height, radius);
+    const float scale = amount / 100.0f;
+    for (int i = 0; i < width * height; ++i) {
+        const int p = i * 4;
+        const float dR = (float)original[p]   - (float)blurred[p];
+        const float dG = (float)original[p+1] - (float)blurred[p+1];
+        const float dB = (float)original[p+2] - (float)blurred[p+2];
+        const float lumaDiff = std::abs(0.299f * dR + 0.587f * dG + 0.114f * dB);
+        if (lumaDiff > (float)threshold) {
+            pixels[p]   = (uint8_t)std::clamp((int)std::round((float)original[p]   + scale * dR), 0, 255);
+            pixels[p+1] = (uint8_t)std::clamp((int)std::round((float)original[p+1] + scale * dG), 0, 255);
+            pixels[p+2] = (uint8_t)std::clamp((int)std::round((float)original[p+2] + scale * dB), 0, 255);
+        }
+    }
+}
+
+// ── filters_smart_sharpen ─────────────────────────────────────────────────────
+
+void filters_smart_sharpen(uint8_t* pixels, int width, int height,
+                             int amount, int radius, int reduceNoise, int remove) {
+    const int n = width * height * 4;
+    std::vector<uint8_t> original(pixels, pixels + n);
+    std::vector<uint8_t> sharpened(original);
+    const float scale = amount / 100.0f;
+
+    if (remove == 0) {
+        // Gaussian Blur mode: USM without threshold
+        std::vector<uint8_t> blurred(original);
+        filters_gaussian_blur(blurred.data(), width, height, radius);
+        for (int i = 0; i < width * height; ++i) {
+            const int p = i * 4;
+            for (int c = 0; c < 3; ++c) {
+                const float diff = (float)original[p+c] - (float)blurred[p+c];
+                sharpened[p+c] = (uint8_t)std::clamp((int)std::round((float)original[p+c] + scale * diff), 0, 255);
+            }
+            sharpened[p+3] = original[p+3];
+        }
+    } else {
+        // Lens Blur mode: weighted sharpen kernel scaled by amount
+        const float s = scale * 0.5f;
+        const float sharpenKernel[9] = {
+            -s,      -s,      -s,
+            -s,  1 + 8*s,    -s,
+            -s,      -s,      -s
+        };
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                float r=0, g=0, b=0;
+                for (int ky = -1; ky <= 1; ++ky) {
+                    for (int kx = -1; kx <= 1; ++kx) {
+                        const int sy = std::clamp(y+ky, 0, height-1);
+                        const int sx = std::clamp(x+kx, 0, width-1);
+                        const int idx = (sy*width+sx)*4;
+                        const float k = sharpenKernel[(ky+1)*3+(kx+1)];
+                        r += (float)original[idx]   * k;
+                        g += (float)original[idx+1] * k;
+                        b += (float)original[idx+2] * k;
+                    }
+                }
+                const int p = (y*width+x)*4;
+                sharpened[p]   = (uint8_t)std::clamp((int)std::round(r), 0, 255);
+                sharpened[p+1] = (uint8_t)std::clamp((int)std::round(g), 0, 255);
+                sharpened[p+2] = (uint8_t)std::clamp((int)std::round(b), 0, 255);
+                sharpened[p+3] = original[p+3];
+            }
+        }
+    }
+
+    // Reduce Noise post-processing
+    if (reduceNoise > 0) {
+        std::vector<uint8_t> smoothed(sharpened);
+        std::vector<uint8_t> smoothed2(static_cast<size_t>(width) * height * 4);
+        boxBlurH(sharpened.data(), smoothed.data(), width, height, 1);
+        boxBlurV(smoothed.data(), smoothed2.data(), width, height, 1);
+        const float blendFactor = (reduceNoise / 100.0f) * 0.5f;
+        for (int i = 0; i < width * height; ++i) {
+            const int p = i * 4;
+            for (int c = 0; c < 3; ++c) {
+                sharpened[p+c] = (uint8_t)std::clamp(
+                    (int)std::round((float)sharpened[p+c] * (1.0f - blendFactor) + (float)smoothed2[p+c] * blendFactor),
+                    0, 255
+                );
+            }
+        }
+    }
+
+    std::copy(sharpened.begin(), sharpened.end(), pixels);
+}
+
+// ─── LCG helper (Numerical Recipes) ──────────────────────────────────────────
+static inline uint32_t lcg_next(uint32_t state) {
+    return 1664525u * state + 1013904223u;
+}
+
+// ─── Add Noise ────────────────────────────────────────────────────────────────
+
+void filters_add_noise(
+    uint8_t* pixels, int width, int height,
+    int amount, int distribution, int monochromatic, uint32_t seed
+) {
+    if (amount <= 0 || width <= 0 || height <= 0) return;
+
+    const int maxDelta = amount * 127 / 100;  // no cap; pixel clamp handles overflow
+    const int range    = 2 * maxDelta + 1;    // [0, range)
+
+    uint32_t state = seed;
+    const int n    = width * height;
+
+    for (int i = 0; i < n; ++i) {
+        const int base = i * 4;
+
+        auto sample_uniform = [&]() -> int {
+            state = lcg_next(state);
+            return (int)(state % (unsigned)range) - maxDelta;
+        };
+
+        auto sample_gaussian = [&]() -> int {
+            int sum = 0;
+            for (int k = 0; k < 4; ++k) {
+                state = lcg_next(state);
+                sum += (int)(state % (unsigned)(2 * maxDelta + 1));
+            }
+            return sum / 4 - maxDelta;
+        };
+
+        if (monochromatic) {
+            const int delta = (distribution == 0) ? sample_uniform() : sample_gaussian();
+            pixels[base]     = (uint8_t)std::clamp(pixels[base]     + delta, 0, 255);
+            pixels[base + 1] = (uint8_t)std::clamp(pixels[base + 1] + delta, 0, 255);
+            pixels[base + 2] = (uint8_t)std::clamp(pixels[base + 2] + delta, 0, 255);
+        } else {
+            for (int c = 0; c < 3; ++c) {
+                const int delta = (distribution == 0) ? sample_uniform() : sample_gaussian();
+                pixels[base + c] = (uint8_t)std::clamp(pixels[base + c] + delta, 0, 255);
+            }
+        }
+        // pixels[base + 3] (alpha) is never modified.
+    }
+}
+
+// ─── Film Grain ───────────────────────────────────────────────────────────────
+
+void filters_film_grain(
+    uint8_t* pixels, int width, int height,
+    int grainSize, int intensity, int roughness, uint32_t seed
+) {
+    if (width <= 0 || height <= 0) return;
+
+    const int n = width * height;
+
+    // 1. Generate float noise field in [-1, 1] via Gaussian approx (4 uniform samples).
+    std::vector<float> noise(n);
+    uint32_t state = seed;
+    for (int i = 0; i < n; ++i) {
+        float sum = 0.f;
+        for (int k = 0; k < 4; ++k) {
+            state = lcg_next(state);
+            sum += (float)(state & 0xFFFF) / 32767.5f;
+        }
+        noise[i] = sum / 4.f - 1.f;
+    }
+
+    // 2. Optionally blur the noise field to produce coarser grain clusters.
+    const int blurRadius = (grainSize > 1) ? std::min(5, grainSize / 10) : 0;
+    if (blurRadius > 0) {
+        std::vector<uint8_t> noisePx(n * 4);
+        for (int i = 0; i < n; ++i) {
+            const uint8_t v = (uint8_t)std::clamp((int)((noise[i] + 1.f) * 127.5f), 0, 255);
+            noisePx[i * 4]     = v;
+            noisePx[i * 4 + 1] = v;
+            noisePx[i * 4 + 2] = v;
+            noisePx[i * 4 + 3] = v;
+        }
+        std::vector<uint8_t> tmp(n * 4);
+        boxBlurH(noisePx.data(), tmp.data(), width, height, blurRadius);
+        boxBlurV(tmp.data(), noisePx.data(), width, height, blurRadius);
+        for (int i = 0; i < n; ++i) {
+            noise[i] = (float)noisePx[i * 4] / 127.5f - 1.f;
+        }
+    }
+
+    // 3. Apply grain to each pixel.
+    const float intensityF = intensity / 100.f;
+    const float roughnessF = roughness / 100.f;
+
+    for (int i = 0; i < n; ++i) {
+        const int base = i * 4;
+        const float R  = pixels[base];
+        const float G  = pixels[base + 1];
+        const float B  = pixels[base + 2];
+
+        const float luma   = (0.299f * R + 0.587f * G + 0.114f * B) / 255.f;
+        const float weight = (1.f - roughnessF) * (1.f - luma) + roughnessF * 1.f;
+
+        const float grainVal = noise[i] * 127.f * weight * intensityF;
+        pixels[base]     = (uint8_t)std::clamp((int)(R + grainVal), 0, 255);
+        pixels[base + 1] = (uint8_t)std::clamp((int)(G + grainVal), 0, 255);
+        pixels[base + 2] = (uint8_t)std::clamp((int)(B + grainVal), 0, 255);
+        // Alpha unchanged.
+    }
+}
+
+// ─── Lens Blur ────────────────────────────────────────────────────────────────
+
+void filters_lens_blur(
+    uint8_t* pixels, int width, int height,
+    int radius, int bladeCount, int bladeCurvature, int rotation
+) {
+    if (radius <= 0 || width <= 0 || height <= 0) return;
+
+    const int ksize = 2 * radius + 1;
+    std::vector<float> kernel(ksize * ksize, 0.f);
+
+    const float PI          = 3.14159265358979323846f;
+    const float bladeCurvF  = bladeCurvature / 100.f;
+    const float rotRad      = rotation * PI / 180.f;
+    const float bladeAngle  = (bladeCurvature < 100)
+                                ? (2.f * PI / (float)bladeCount)
+                                : 0.f;
+    const float halfBlade   = bladeAngle / 2.f;
+    const float polyInradius = (bladeCurvature < 100)
+                                ? std::cos(PI / (float)bladeCount)
+                                : 1.f;
+
+    for (int ky = -radius; ky <= radius; ++ky) {
+        for (int kx = -radius; kx <= radius; ++kx) {
+            const float nx = (radius > 0) ? (float)kx / (float)radius : 0.f;
+            const float ny = (radius > 0) ? (float)ky / (float)radius : 0.f;
+            const float r  = std::sqrt(nx * nx + ny * ny);
+
+            if (r > 1.5f) continue;
+
+            const int idx = (ky + radius) * ksize + (kx + radius);
+
+            if (bladeCurvature >= 100) {
+                kernel[idx] = (r <= 1.f) ? 1.f : 0.f;
+            } else {
+                const float theta  = std::atan2(ny, nx) + rotRad;
+                const float sector = std::fmod(theta + 20.f * PI, bladeAngle);
+                const float polyR  = polyInradius / std::cos(sector - halfBlade);
+                const float effectiveR = polyR * (1.f - bladeCurvF) + 1.f * bladeCurvF;
+                kernel[idx] = (r <= effectiveR) ? 1.f : 0.f;
+            }
+        }
+    }
+
+    float kernelSum = 0.f;
+    for (float v : kernel) kernelSum += v;
+    if (kernelSum > 0.f) {
+        for (float& v : kernel) v /= kernelSum;
+    }
+
+    const std::vector<uint8_t> src(pixels, pixels + (size_t)width * height * 4);
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float accR = 0.f, accG = 0.f, accB = 0.f, accA = 0.f;
+
+            for (int ky = -radius; ky <= radius; ++ky) {
+                for (int kx = -radius; kx <= radius; ++kx) {
+                    const float w = kernel[(ky + radius) * ksize + (kx + radius)];
+                    if (w == 0.f) continue;
+                    float sR, sG, sB, sA;
+                    sampleBilinear(src.data(), width, height,
+                                   (float)(x + kx), (float)(y + ky),
+                                   sR, sG, sB, sA);
+                    accR += sR * w;
+                    accG += sG * w;
+                    accB += sB * w;
+                    accA += sA * w;
+                }
+            }
+
+            const int dstIdx = (y * width + x) * 4;
+            pixels[dstIdx]     = (uint8_t)std::clamp((int)accR, 0, 255);
+            pixels[dstIdx + 1] = (uint8_t)std::clamp((int)accG, 0, 255);
+            pixels[dstIdx + 2] = (uint8_t)std::clamp((int)accB, 0, 255);
+            pixels[dstIdx + 3] = (uint8_t)std::clamp((int)accA, 0, 255);
+        }
+    }
+}
+
+// ─── Clouds ───────────────────────────────────────────────────────────────────
+
+void filters_clouds(
+    uint8_t* pixels, int width, int height,
+    int scale, int opacity, int colorMode,
+    uint8_t fgR, uint8_t fgG, uint8_t fgB,
+    uint8_t bgR, uint8_t bgG, uint8_t bgB,
+    uint32_t seed
+) {
+    if (width <= 0 || height <= 0) return;
+
+    static const int GRID = 256;
+
+    // ── Permutation table from seed (Fisher-Yates) ────────────────────────
+    uint8_t perm[GRID];
+    for (int i = 0; i < GRID; ++i) perm[i] = (uint8_t)i;
+    uint32_t state = seed ^ 0xDEADBEEFu;
+    for (int i = GRID - 1; i > 0; --i) {
+        state = lcg_next(state);
+        int j = (int)(state % (uint32_t)(i + 1));
+        uint8_t tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp;
+    }
+
+    // ── 8 gradient directions for 2D Perlin ───────────────────────────────
+    static const float GX[8] = {  1.f, -1.f,  0.f,  0.f,  0.7071f, -0.7071f,  0.7071f, -0.7071f };
+    static const float GY[8] = {  0.f,  0.f,  1.f, -1.f,  0.7071f,  0.7071f, -0.7071f, -0.7071f };
+
+    auto hsample = [&](int ix, int iy) -> int {
+        return perm[((int)perm[ix & (GRID - 1)] + (iy & (GRID - 1))) & (GRID - 1)] & 7;
+    };
+
+    auto fade = [](float t) -> float {
+        return t * t * t * (t * (t * 6.f - 15.f) + 10.f);
+    };
+
+    // 2D gradient (Perlin) noise — returns approx [-0.7, 0.7]
+    auto perlin = [&](float fx, float fy) -> float {
+        const int   xi  = (int)std::floor(fx);
+        const int   yi  = (int)std::floor(fy);
+        const float rx0 = fx - (float)xi;
+        const float ry0 = fy - (float)yi;
+        const float u   = fade(rx0);
+        const float v   = fade(ry0);
+
+        const int h00 = hsample(xi,     yi    );
+        const int h10 = hsample(xi + 1, yi    );
+        const int h01 = hsample(xi,     yi + 1);
+        const int h11 = hsample(xi + 1, yi + 1);
+
+        const float d00 = GX[h00] * rx0         + GY[h00] * ry0;
+        const float d10 = GX[h10] * (rx0 - 1.f) + GY[h10] * ry0;
+        const float d01 = GX[h01] * rx0         + GY[h01] * (ry0 - 1.f);
+        const float d11 = GX[h11] * (rx0 - 1.f) + GY[h11] * (ry0 - 1.f);
+
+        const float ab = d00 + u * (d10 - d00);
+        const float cd = d01 + u * (d11 - d01);
+        return ab + v * (cd - ab);
+    };
+
+    // featureSize: pixels spanned by one base-octave cloud blob
+    // scale=100 → 1 blob fills the canvas; scale=50 → ~2 blobs; scale=25 → ~4
+    const float featureSize = std::max((float)scale / 100.f * (float)std::min(width, height), 1.f);
+    // baseFreq: grid cells advanced per pixel at the base octave.
+    // GRID cells should span featureSize pixels → each pixel advances GRID/featureSize cells.
+    const float baseFreq    = (float)GRID / featureSize;
+    const float opacityF    = (float)opacity / 100.f;
+
+    for (int py = 0; py < height; ++py) {
+        for (int px = 0; px < width; ++px) {
+            float total  = 0.f;
+            float maxAmp = 0.f;
+            float freq   = baseFreq;
+            float amp    = 1.f;
+            for (int oct = 0; oct < 6; ++oct) {
+                total  += perlin((float)px * freq, (float)py * freq) * amp;
+                maxAmp += amp;
+                amp    *= 0.5f;
+                freq   *= 2.f;
+            }
+            // fBm Perlin sum is approx ±0.5; remap to [0,1] with slight contrast boost
+            const float t = std::clamp(total / maxAmp * 1.4f + 0.5f, 0.f, 1.f);
+
+            float cloudR, cloudG, cloudB;
+            if (colorMode == 0) {
+                cloudR = cloudG = cloudB = 255.f * t;
+            } else {
+                cloudR = (float)bgR + ((float)fgR - (float)bgR) * t;
+                cloudG = (float)bgG + ((float)fgG - (float)bgG) * t;
+                cloudB = (float)bgB + ((float)fgB - (float)bgB) * t;
+            }
+
+            const int base = (py * width + px) * 4;
+            pixels[base]     = (uint8_t)std::clamp((int)(pixels[base]     + (cloudR - pixels[base])     * opacityF), 0, 255);
+            pixels[base + 1] = (uint8_t)std::clamp((int)(pixels[base + 1] + (cloudG - pixels[base + 1]) * opacityF), 0, 255);
+            pixels[base + 2] = (uint8_t)std::clamp((int)(pixels[base + 2] + (cloudB - pixels[base + 2]) * opacityF), 0, 255);
+            // Alpha unchanged.
+        }
+    }
+}

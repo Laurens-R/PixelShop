@@ -169,7 +169,18 @@ export type AdjustmentType =
   | 'selective-color'
   | 'curves'
 
-export type FilterKey = 'gaussian-blur' | 'box-blur'
+export type FilterKey =
+  | 'gaussian-blur'
+  | 'box-blur'
+  | 'radial-blur'
+  | 'sharpen'
+  | 'sharpen-more'
+  | 'unsharp-mask'
+  | 'smart-sharpen'
+  | 'add-noise'
+  | 'film-grain'
+  | 'lens-blur'
+  | 'clouds'
 
 export type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
 

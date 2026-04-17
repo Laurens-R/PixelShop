@@ -123,4 +123,89 @@ float* pixelops_curves_histogram(
     return computeCurvesHistogram(inputPtr, width, height, maskPtr);
 }
 
+// ─── Radial Blur (in-place) ───────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_radial_blur(
+    uint8_t* pixels, int width, int height,
+    int mode, int amount, float centerX, float centerY, int quality
+) {
+    filters_radial_blur(pixels, width, height, mode, amount, centerX, centerY, quality);
+}
+
+// ─── Sharpen (in-place) ───────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_sharpen(uint8_t* pixels, int width, int height) {
+    filters_sharpen(pixels, width, height);
+}
+
+// ─── Sharpen More (in-place) ──────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_sharpen_more(uint8_t* pixels, int width, int height) {
+    filters_sharpen_more(pixels, width, height);
+}
+
+// ─── Unsharp Mask (in-place) ──────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_unsharp_mask(uint8_t* pixels, int width, int height,
+                            int amount, int radius, int threshold) {
+    filters_unsharp_mask(pixels, width, height, amount, radius, threshold);
+}
+
+// ─── Smart Sharpen (in-place) ─────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_smart_sharpen(uint8_t* pixels, int width, int height,
+                              int amount, int radius, int reduceNoise, int remove) {
+    filters_smart_sharpen(pixels, width, height, amount, radius, reduceNoise, remove);
+}
+
+// ─── Add Noise (in-place) ─────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_add_noise(
+    uint8_t* pixels, int width, int height,
+    int amount, int distribution, int monochromatic, uint32_t seed
+) {
+    filters_add_noise(pixels, width, height, amount, distribution, monochromatic, seed);
+}
+
+// ─── Film Grain (in-place) ────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_film_grain(
+    uint8_t* pixels, int width, int height,
+    int grainSize, int intensity, int roughness, uint32_t seed
+) {
+    filters_film_grain(pixels, width, height, grainSize, intensity, roughness, seed);
+}
+
+// ─── Lens Blur (in-place) ─────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_lens_blur(
+    uint8_t* pixels, int width, int height,
+    int radius, int bladeCount, int bladeCurvature, int rotation
+) {
+    filters_lens_blur(pixels, width, height, radius, bladeCount, bladeCurvature, rotation);
+}
+
+// ─── Clouds (in-place) ────────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_clouds(
+    uint8_t* pixels, int width, int height,
+    int scale, int opacity, int colorMode,
+    uint8_t fgR, uint8_t fgG, uint8_t fgB,
+    uint8_t bgR, uint8_t bgG, uint8_t bgB,
+    uint32_t seed
+) {
+    filters_clouds(pixels, width, height,
+                   scale, opacity, colorMode,
+                   fgR, fgG, fgB, bgR, bgG, bgB, seed);
+}
+
 } // extern "C"

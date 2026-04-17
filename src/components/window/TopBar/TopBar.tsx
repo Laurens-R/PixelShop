@@ -39,11 +39,12 @@ interface TopBarProps {
   isAdjustmentMenuEnabled?: boolean
   adjustmentMenuItems?: Array<{ type: AdjustmentType; label: string }>
   onOpenFilterDialog?: (key: FilterKey) => void
+  onInstantFilter?:     (key: FilterKey) => void
   isFiltersMenuEnabled?: boolean
-  filterMenuItems?: Array<{ key: FilterKey; label: string }>
+  filterMenuItems?: Array<{ key: FilterKey; label: string; instant?: boolean; group?: string }>
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, onOpenFilterDialog, isFiltersMenuEnabled, filterMenuItems }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -83,11 +84,24 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
     },
     {
       label: 'Filters',
-      items: (filterMenuItems ?? []).map(item => ({
-        label:    item.label,
-        disabled: !isFiltersMenuEnabled,
-        action:   () => onOpenFilterDialog?.(item.key),
-      })),
+      items: (() => {
+        const result: MenuDef['items'] = []
+        let lastGroup: string | undefined = undefined
+        for (const item of (filterMenuItems ?? [])) {
+          if (item.group !== undefined && item.group !== lastGroup && lastGroup !== undefined) {
+            result.push({ separator: true, label: '' })
+          }
+          lastGroup = item.group
+          result.push({
+            label:    item.label,
+            disabled: !isFiltersMenuEnabled,
+            action:   () => item.instant
+              ? onInstantFilter?.(item.key)
+              : onOpenFilterDialog?.(item.key),
+          })
+        }
+        return result
+      })(),
     },
     {
       label: 'View',
@@ -118,7 +132,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
       ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, onOpenFilterDialog, isFiltersMenuEnabled, filterMenuItems])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems])
 
   return (
     <div className={styles.topBar}>
