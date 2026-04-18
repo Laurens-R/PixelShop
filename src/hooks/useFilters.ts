@@ -42,6 +42,8 @@ export interface UseFiltersReturn {
   handleOpenGaussianBlur: () => void
   handleOpenBoxBlur:      () => void
   handleOpenRadialBlur:   () => void
+  handleOpenMotionBlur:   () => void
+  handleOpenRemoveMotionBlur: () => void
   handleSharpen:          () => Promise<void>
   handleSharpenMore:      () => Promise<void>
   handleOpenUnsharpMask:  () => void
@@ -80,6 +82,16 @@ export function useFilters({
 
   const handleOpenRadialBlur = useCallback(
     () => onOpenFilterDialog('radial-blur'),
+    [onOpenFilterDialog]
+  )
+
+  const handleOpenMotionBlur = useCallback(
+    () => onOpenFilterDialog('motion-blur'),
+    [onOpenFilterDialog]
+  )
+
+  const handleOpenRemoveMotionBlur = useCallback(
+    () => onOpenFilterDialog('remove-motion-blur'),
     [onOpenFilterDialog]
   )
 
@@ -157,6 +169,8 @@ export function useFilters({
     handleOpenGaussianBlur,
     handleOpenBoxBlur,
     handleOpenRadialBlur,
+    handleOpenMotionBlur,
+    handleOpenRemoveMotionBlur,
     handleSharpen,
     handleSharpenMore,
     handleOpenUnsharpMask,

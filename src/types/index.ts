@@ -173,6 +173,8 @@ export type FilterKey =
   | 'gaussian-blur'
   | 'box-blur'
   | 'radial-blur'
+  | 'motion-blur'
+  | 'remove-motion-blur'
   | 'sharpen'
   | 'sharpen-more'
   | 'unsharp-mask'

@@ -34,6 +34,16 @@ void filters_radial_blur(
     int quality
 );
 
+/// Richardson-Lucy iterative deconvolution to reverse a linear motion blur,
+/// applied in-place. Channels R, G, B are processed independently; alpha unchanged.
+/// angleDeg: 0–360 (0 = horizontal right, increases clockwise).
+/// distance: PSF kernel length in pixels (1–999); minimum 1.
+/// noiseReduction: Tikhonov damping strength (0–100).
+void filters_remove_motion_blur(
+    uint8_t* pixels, int width, int height,
+    float angleDeg, int distance, int noiseReduction
+);
+
 /// 3×3 sharpening convolution (center=5, cardinal=-1, corners=0) applied in-place.
 void filters_sharpen(
     uint8_t* pixels, int width, int height
@@ -106,4 +116,13 @@ void filters_clouds(
     uint8_t fgR, uint8_t fgG, uint8_t fgB,
     uint8_t bgR, uint8_t bgG, uint8_t bgB,
     uint32_t seed
+);
+
+/// Motion blur applied in-place.
+/// Computes a box-average along a straight line at the given angle.
+/// angleDeg: 0–360 (0 = horizontal right, increases clockwise).
+/// distance: kernel length in samples (1–999); minimum 2 to have effect.
+void filters_motion_blur(
+    uint8_t* pixels, int width, int height,
+    float angleDeg, int distance
 );

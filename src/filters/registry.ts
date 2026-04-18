@@ -11,6 +11,8 @@ export const FILTER_REGISTRY: FilterRegistryEntry[] = [
   { key: 'gaussian-blur',  label: 'Gaussian Blur…',  group: 'blur'    },
   { key: 'box-blur',       label: 'Box Blur…',        group: 'blur'    },
   { key: 'radial-blur',    label: 'Radial Blur…',     group: 'blur'    },
+  { key: 'motion-blur',    label: 'Motion Blur…',     group: 'blur'    },
+  { key: 'remove-motion-blur', label: 'Remove Motion Blur…', group: 'blur' },
   { key: 'lens-blur',      label: 'Lens Blur…',       group: 'blur'    },
   { key: 'sharpen',        label: 'Sharpen',          group: 'sharpen', instant: true },
   { key: 'sharpen-more',   label: 'Sharpen More',     group: 'sharpen', instant: true },

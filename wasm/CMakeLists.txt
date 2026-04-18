@@ -29,7 +29,7 @@ if(EMSCRIPTEN)
     "-sMODULARIZE=1"
     "-sEXPORT_ES6=1"
     "-sEXPORT_NAME=createPixelOps"
-    "-sEXPORTED_FUNCTIONS=_malloc,_free,_pixelops_flood_fill,_pixelops_gaussian_blur,_pixelops_box_blur,_pixelops_convolve,_pixelops_resize_bilinear,_pixelops_resize_nearest,_pixelops_dither_floyd_steinberg,_pixelops_dither_bayer,_pixelops_quantize,_pixelops_curves_histogram,_pixelops_radial_blur,_pixelops_sharpen,_pixelops_sharpen_more,_pixelops_unsharp_mask,_pixelops_smart_sharpen,_pixelops_add_noise,_pixelops_film_grain,_pixelops_lens_blur,_pixelops_clouds"
+    "-sEXPORTED_FUNCTIONS=_malloc,_free,_pixelops_flood_fill,_pixelops_gaussian_blur,_pixelops_box_blur,_pixelops_convolve,_pixelops_resize_bilinear,_pixelops_resize_nearest,_pixelops_dither_floyd_steinberg,_pixelops_dither_bayer,_pixelops_quantize,_pixelops_curves_histogram,_pixelops_radial_blur,_pixelops_sharpen,_pixelops_sharpen_more,_pixelops_unsharp_mask,_pixelops_smart_sharpen,_pixelops_add_noise,_pixelops_film_grain,_pixelops_lens_blur,_pixelops_clouds,_pixelops_motion_blur,_pixelops_remove_motion_blur"
     "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32"
     "-sALLOW_MEMORY_GROWTH=1"
     "-O2"

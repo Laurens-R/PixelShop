@@ -208,4 +208,24 @@ void pixelops_clouds(
                    fgR, fgG, fgB, bgR, bgG, bgB, seed);
 }
 
+// ─── Motion Blur (in-place) ───────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_motion_blur(
+    uint8_t* pixels, int width, int height,
+    float angleDeg, int distance
+) {
+    filters_motion_blur(pixels, width, height, angleDeg, distance);
+}
+
+// ─── Remove Motion Blur (in-place) ──────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_remove_motion_blur(
+    uint8_t* pixels, int width, int height,
+    float angleDeg, int distance, int noiseReduction
+) {
+    filters_remove_motion_blur(pixels, width, height, angleDeg, distance, noiseReduction);
+}
+
 } // extern "C"

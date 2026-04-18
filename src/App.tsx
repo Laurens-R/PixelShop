@@ -20,6 +20,8 @@ import { KeyboardShortcutsDialog } from '@/components/dialogs/KeyboardShortcutsD
 import { GaussianBlurDialog } from '@/components/dialogs/GaussianBlurDialog/GaussianBlurDialog'
 import { BoxBlurDialog } from '@/components/dialogs/BoxBlurDialog/BoxBlurDialog'
 import { RadialBlurDialog } from '@/components/dialogs/RadialBlurDialog/RadialBlurDialog'
+import { MotionBlurDialog } from '@/components/dialogs/MotionBlurDialog/MotionBlurDialog'
+import { RemoveMotionBlurDialog } from '@/components/dialogs/RemoveMotionBlurDialog/RemoveMotionBlurDialog'
 import { UnsharpMaskDialog } from '@/components/dialogs/UnsharpMaskDialog/UnsharpMaskDialog'
 import { SmartSharpenDialog } from '@/components/dialogs/SmartSharpenDialog/SmartSharpenDialog'
 import { AddNoiseDialog } from '@/components/dialogs/AddNoiseDialog/AddNoiseDialog'
@@ -63,6 +65,8 @@ function AppContent(): React.JSX.Element {
   const [showGaussianBlurDialog,  setShowGaussianBlurDialog]  = useState(false)
   const [showBoxBlurDialog,        setShowBoxBlurDialog]        = useState(false)
   const [showRadialBlurDialog,     setShowRadialBlurDialog]     = useState(false)
+  const [showMotionBlurDialog,     setShowMotionBlurDialog]     = useState(false)
+  const [showRemoveMotionBlurDialog, setShowRemoveMotionBlurDialog] = useState(false)
   const [showUnsharpMaskDialog,    setShowUnsharpMaskDialog]    = useState(false)
   const [showSmartSharpenDialog,   setShowSmartSharpenDialog]   = useState(false)
   const [showAddNoiseDialog,       setShowAddNoiseDialog]       = useState(false)
@@ -139,6 +143,8 @@ function AppContent(): React.JSX.Element {
     if (key === 'gaussian-blur') setShowGaussianBlurDialog(true)
     if (key === 'box-blur')      setShowBoxBlurDialog(true)
     if (key === 'radial-blur')   setShowRadialBlurDialog(true)
+    if (key === 'motion-blur')   setShowMotionBlurDialog(true)
+    if (key === 'remove-motion-blur') setShowRemoveMotionBlurDialog(true)
     if (key === 'unsharp-mask')  setShowUnsharpMaskDialog(true)
     if (key === 'smart-sharpen') setShowSmartSharpenDialog(true)
     if (key === 'add-noise')     setShowAddNoiseDialog(true)
@@ -332,6 +338,28 @@ function AppContent(): React.JSX.Element {
         <RadialBlurDialog
           isOpen={showRadialBlurDialog}
           onClose={() => setShowRadialBlurDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showMotionBlurDialog && (
+        <MotionBlurDialog
+          isOpen={showMotionBlurDialog}
+          onClose={() => setShowMotionBlurDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showRemoveMotionBlurDialog && (
+        <RemoveMotionBlurDialog
+          isOpen={showRemoveMotionBlurDialog}
+          onClose={() => setShowRemoveMotionBlurDialog(false)}
           canvasHandleRef={canvasHandleRef}
           activeLayerId={state.activeLayerId}
           captureHistory={captureHistory}

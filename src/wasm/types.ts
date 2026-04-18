@@ -121,6 +121,16 @@ export interface PixelOpsModule {
     bgR: number, bgG: number, bgB: number,
     seed: number
   ): void
+
+  _pixelops_motion_blur(
+    pixelsPtr: number, width: number, height: number,
+    angleDeg: number, distance: number
+  ): void
+
+  _pixelops_remove_motion_blur(
+    pixelsPtr: number, width: number, height: number,
+    angleDeg: number, distance: number, noiseReduction: number
+  ): void
 }
 
 /** Factory function exported by the Emscripten-generated ES module */

@@ -712,3 +712,143 @@ void filters_clouds(
         }
     }
 }
+
+// Fast directional box average using per-ray prefix sums. O(width*height) regardless of distance.
+// Computes dst[i] = mean of `distance` source pixels centered on i along direction angleDeg.
+// src and dst must be separate arrays. Single-channel float, size = width*height.
+static void directional_box_avg(
+    const float* src, float* dst,
+    int width, int height,
+    float angleDeg, int distance
+) {
+    if (distance <= 1) {
+        std::copy(src, src + (size_t)width * height, dst);
+        return;
+    }
+
+    const float rad = angleDeg * 3.14159265358979f / 180.f;
+    float cdx = std::cos(rad), cdy = std::sin(rad);
+
+    // Symmetric kernel — flip so cdx >= 0
+    if (cdx < 0.f) { cdx = -cdx; cdy = -cdy; }
+
+    // Transpose so |cdx| >= |cdy| (primary axis = x, |slope| <= 1)
+    const bool transposed = (std::abs(cdy) > cdx);
+    float slope;
+    if (!transposed) {
+        slope = (cdx > 1e-6f) ? cdy / cdx : 0.f;
+    } else {
+        slope = (std::abs(cdy) > 1e-6f)
+              ? (cdy < 0.f ? -1.f : 1.f) * cdx / std::abs(cdy)
+              : 0.f;
+    }
+
+    const int W = transposed ? height : width;
+    const int H = transposed ? width  : height;
+
+    auto read = [&](int lx, int ly) -> float {
+        const int px = transposed ? ly : lx;
+        const int py = transposed ? lx : ly;
+        return src[py * width + px];
+    };
+    auto write = [&](int lx, int ly, float v) {
+        const int px = transposed ? ly : lx;
+        const int py = transposed ? lx : ly;
+        dst[py * width + px] = v;
+    };
+
+    const int half    = (distance - 1) / 2;
+    const int ext_len = W + distance - 1;
+    const int y_range = (int)(W * std::abs(slope)) + 2;
+    const float inv_D = 1.f / (float)distance;
+
+    std::vector<float> prefix(W + distance, 0.f);
+
+    for (int ys = -y_range; ys < H + y_range; ++ys) {
+        prefix[0] = 0.f;
+        for (int i = 0; i < ext_len; ++i) {
+            const int x_ext = i - half;
+            const int x_c   = std::clamp(x_ext, 0, W - 1);
+            const int y_ext = (int)std::round((float)ys + (float)x_ext * slope);
+            const int y_c   = std::clamp(y_ext, 0, H - 1);
+            prefix[i + 1]   = prefix[i] + read(x_c, y_c);
+        }
+        for (int x = 0; x < W; ++x) {
+            const int y = (int)std::round((float)ys + (float)x * slope);
+            if (y < 0 || y >= H) continue;
+            write(x, y, (prefix[x + distance] - prefix[x]) * inv_D);
+        }
+    }
+}
+
+void filters_motion_blur(
+    uint8_t* pixels, int width, int height,
+    float angleDeg, int distance
+) {
+    if (distance <= 0 || width <= 0 || height <= 0) return;
+    const int N = width * height;
+    std::vector<float> src_ch(N), dst_ch(N);
+    for (int c = 0; c < 4; ++c) {
+        for (int i = 0; i < N; ++i) src_ch[i] = (float)pixels[i * 4 + c];
+        directional_box_avg(src_ch.data(), dst_ch.data(), width, height, angleDeg, distance);
+        for (int i = 0; i < N; ++i)
+            pixels[i * 4 + c] = (uint8_t)std::clamp((int)dst_ch[i], 0, 255);
+    }
+}
+
+void filters_remove_motion_blur(
+    uint8_t* pixels, int width, int height,
+    float angleDeg, int distance, int noiseReduction
+) {
+    if (width <= 0 || height <= 0 || distance <= 0) return;
+    const int N = width * height;
+
+    std::vector<float> inR(N), inG(N), inB(N);
+    for (int i = 0; i < N; ++i) {
+        inR[i] = (float)pixels[i * 4 + 0];
+        inG[i] = (float)pixels[i * 4 + 1];
+        inB[i] = (float)pixels[i * 4 + 2];
+    }
+
+    const int   iterations = std::max(2, 6 - noiseReduction / 20);
+    const float blendBack  = (noiseReduction / 100.f) * 0.5f;
+
+    std::vector<float> estR = inR, estG = inG, estB = inB;
+    std::vector<float> blurR(N), blurG(N), blurB(N);
+    std::vector<float> ratR(N),  ratG(N),  ratB(N);
+    std::vector<float> corrR(N), corrG(N), corrB(N);
+
+    for (int iter = 0; iter < iterations; ++iter) {
+        // Forward: blur current estimate with motion PSF
+        directional_box_avg(estR.data(),  blurR.data(), width, height, angleDeg, distance);
+        directional_box_avg(estG.data(),  blurG.data(), width, height, angleDeg, distance);
+        directional_box_avg(estB.data(),  blurB.data(), width, height, angleDeg, distance);
+
+        // Ratio: input / blurred
+        for (int i = 0; i < N; ++i) {
+            ratR[i] = inR[i] / std::max(blurR[i], 0.001f);
+            ratG[i] = inG[i] / std::max(blurG[i], 0.001f);
+            ratB[i] = inB[i] / std::max(blurB[i], 0.001f);
+        }
+
+        // Back-projection (PSF is symmetric so same convolution)
+        directional_box_avg(ratR.data(), corrR.data(), width, height, angleDeg, distance);
+        directional_box_avg(ratG.data(), corrG.data(), width, height, angleDeg, distance);
+        directional_box_avg(ratB.data(), corrB.data(), width, height, angleDeg, distance);
+
+        // Multiplicative RL update
+        for (int i = 0; i < N; ++i) {
+            estR[i] = std::clamp(estR[i] * corrR[i], 0.f, 255.f);
+            estG[i] = std::clamp(estG[i] * corrG[i], 0.f, 255.f);
+            estB[i] = std::clamp(estB[i] * corrB[i], 0.f, 255.f);
+        }
+    }
+
+    // Blend back toward input (noiseReduction damping)
+    for (int i = 0; i < N; ++i) {
+        pixels[i * 4 + 0] = (uint8_t)std::clamp((int)(estR[i] * (1.f - blendBack) + inR[i] * blendBack), 0, 255);
+        pixels[i * 4 + 1] = (uint8_t)std::clamp((int)(estG[i] * (1.f - blendBack) + inG[i] * blendBack), 0, 255);
+        pixels[i * 4 + 2] = (uint8_t)std::clamp((int)(estB[i] * (1.f - blendBack) + inB[i] * blendBack), 0, 255);
+        // alpha unchanged
+    }
+}

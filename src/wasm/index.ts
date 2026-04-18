@@ -371,3 +371,25 @@ export async function clouds(
       fgR, fgG, fgB, bgR, bgG, bgB, seed)
   )
 }
+
+/** Motion Blur (in-place). Box-average along a straight directional line.
+ *  angleDeg: 0–360 (0 = right, increases clockwise). distance: 2–999 (samples). */
+export async function motionBlur(
+  pixels: Uint8Array, width: number, height: number,
+  angleDeg: number, distance: number
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  return withInPlaceBuffer(m, pixels, ptr =>
+    m._pixelops_motion_blur(ptr, width, height, angleDeg, distance)
+  )
+}
+
+export async function removeMotionBlur(
+  pixels: Uint8Array, width: number, height: number,
+  angleDeg: number, distance: number, noiseReduction: number
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  return withInPlaceBuffer(m, pixels, ptr =>
+    m._pixelops_remove_motion_blur(ptr, width, height, angleDeg, distance, noiseReduction)
+  )
+}
