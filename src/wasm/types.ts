@@ -68,21 +68,6 @@ export interface PixelOpsModule {
     maskPtr: number
   ): number
 
-  _pixelops_smart_sharpen(
-    pixelsPtr: number, width: number, height: number,
-    amount: number, radius: number, reduceNoise: number, remove: number
-  ): void
-
-  _pixelops_add_noise(
-    pixelsPtr: number, width: number, height: number,
-    amount: number, distribution: number, monochromatic: number, seed: number
-  ): void
-
-  _pixelops_film_grain(
-    pixelsPtr: number, width: number, height: number,
-    grainSize: number, intensity: number, roughness: number, seed: number
-  ): void
-
   _pixelops_clouds(
     pixelsPtr: number, width: number, height: number,
     scale: number, opacity: number, colorMode: number,

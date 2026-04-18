@@ -428,3 +428,260 @@ fn cs_unsharp_combine(@builtin(global_invocation_id) id: vec3u) {
   textureStore(dstTex, vec2i(id.xy), outColor);
 }
 `
+
+// ─── Smart Sharpen ───────────────────────────────────────────────────────────
+
+export const FILTER_SMART_SHARPEN_GAUSS_COMBINE_COMPUTE = /* wgsl */ `
+struct SmartSharpenGaussParams {
+  amount : u32,
+  _pad0  : u32,
+  _pad1  : u32,
+  _pad2  : u32,
+}
+
+@group(0) @binding(0) var srcTex     : texture_2d<f32>;
+@group(0) @binding(1) var blurredTex : texture_2d<f32>;
+@group(0) @binding(2) var dstTex     : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(3) var<uniform> params : SmartSharpenGaussParams;
+
+@compute @workgroup_size(8, 8)
+fn cs_smart_sharpen_gauss(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let orig    = textureLoad(srcTex,     vec2i(id.xy), 0);
+  let blurred = textureLoad(blurredTex, vec2i(id.xy), 0);
+  let scale   = f32(params.amount) / 100.0;
+
+  let diff = orig.rgb - blurred.rgb;
+  let outRGB = clamp(orig.rgb + scale * diff, vec3f(0.0), vec3f(1.0));
+
+  textureStore(dstTex, vec2i(id.xy), vec4f(outRGB, orig.a));
+}
+`
+
+export const FILTER_SMART_SHARPEN_LENS_COMPUTE = /* wgsl */ `
+struct SmartSharpenLensParams {
+  amount : u32,
+  _pad0  : u32,
+  _pad1  : u32,
+  _pad2  : u32,
+}
+
+@group(0) @binding(0) var srcTex : texture_2d<f32>;
+@group(0) @binding(1) var dstTex : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> params : SmartSharpenLensParams;
+
+@compute @workgroup_size(8, 8)
+fn cs_smart_sharpen_lens(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let s = (f32(params.amount) / 100.0) * 0.5;
+
+  // kernel: [-s,-s,-s, -s, 1+8*s, -s, -s,-s,-s]
+  var colorSum = vec3f(0.0);
+  for (var ky = -1; ky <= 1; ky++) {
+    for (var kx = -1; kx <= 1; kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      let samp = textureLoad(srcTex, vec2i(sx, sy), 0).rgb;
+      let isCenter = select(0.0, 1.0, kx == 0 && ky == 0);
+      let k = isCenter * (1.0 + 8.0 * s) + (1.0 - isCenter) * (-s);
+      colorSum += samp * k;
+    }
+  }
+
+  let orig = textureLoad(srcTex, vec2i(id.xy), 0);
+  textureStore(dstTex, vec2i(id.xy), vec4f(clamp(colorSum, vec3f(0.0), vec3f(1.0)), orig.a));
+}
+`
+
+export const FILTER_SMART_SHARPEN_BLEND_COMPUTE = /* wgsl */ `
+struct SmartSharpenBlendParams {
+  reduceNoise : u32,  // 0–100 (%)
+  _pad0       : u32,
+  _pad1       : u32,
+  _pad2       : u32,
+}
+
+@group(0) @binding(0) var sharpenedTex : texture_2d<f32>;
+@group(0) @binding(1) var smoothedTex  : texture_2d<f32>;
+@group(0) @binding(2) var dstTex       : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(3) var<uniform> params : SmartSharpenBlendParams;
+
+@compute @workgroup_size(8, 8)
+fn cs_smart_sharpen_blend(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(sharpenedTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let sharpened = textureLoad(sharpenedTex, vec2i(id.xy), 0);
+  let smoothed  = textureLoad(smoothedTex,  vec2i(id.xy), 0);
+
+  let blendFactor = (f32(params.reduceNoise) / 100.0) * 0.5;
+  let outRGB = clamp(
+    sharpened.rgb * (1.0 - blendFactor) + smoothed.rgb * blendFactor,
+    vec3f(0.0), vec3f(1.0)
+  );
+
+  textureStore(dstTex, vec2i(id.xy), vec4f(outRGB, sharpened.a));
+}
+`
+
+// ─── Add Noise ────────────────────────────────────────────────────────────────
+
+export const FILTER_ADD_NOISE_COMPUTE = /* wgsl */ `
+struct AddNoiseParams {
+  amount        : u32,  // 1–400 (%)
+  distribution  : u32,  // 0=uniform, 1=gaussian
+  monochromatic : u32,  // 0|1
+  seed          : u32,
+}
+
+@group(0) @binding(0) var srcTex : texture_2d<f32>;
+@group(0) @binding(1) var dstTex : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> params : AddNoiseParams;
+
+fn lcg_next(s: u32) -> u32 {
+  return 1664525u * s + 1013904223u;
+}
+
+fn pcg_hash(v: u32) -> u32 {
+  let word = v * 747796405u + 2891336453u;
+  return ((word >> ((word >> 28u) + 4u)) ^ word) * 277803737u;
+}
+
+fn pixel_rng_seed(seed: u32, idx: u32) -> u32 {
+  return pcg_hash(seed ^ pcg_hash(idx));
+}
+
+fn sample_uniform(state: ptr<function, u32>, range: u32, maxDelta: u32) -> i32 {
+  *state = lcg_next(*state);
+  return i32(*state % range) - i32(maxDelta);
+}
+
+fn sample_gaussian(state: ptr<function, u32>, range: u32, maxDelta: u32) -> i32 {
+  var sum: i32 = 0;
+  for (var k = 0u; k < 4u; k++) {
+    *state = lcg_next(*state);
+    sum += i32(*state % range);
+  }
+  return sum / 4 - i32(maxDelta);
+}
+
+@compute @workgroup_size(8, 8)
+fn cs_add_noise(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let maxDelta = params.amount * 127u / 100u;
+  if (maxDelta == 0u) {
+    let orig = textureLoad(srcTex, vec2i(id.xy), 0);
+    textureStore(dstTex, vec2i(id.xy), orig);
+    return;
+  }
+  let range = 2u * maxDelta + 1u;
+  let idx   = id.y * dims.x + id.x;
+  var state = pixel_rng_seed(params.seed, idx);
+
+  let orig = textureLoad(srcTex, vec2i(id.xy), 0);
+
+  var dR: i32; var dG: i32; var dB: i32;
+
+  if (params.monochromatic != 0u) {
+    let d = select(
+      sample_gaussian(&state, range, maxDelta),
+      sample_uniform(&state, range, maxDelta),
+      params.distribution == 0u
+    );
+    dR = d; dG = d; dB = d;
+  } else {
+    dR = select(sample_gaussian(&state, range, maxDelta), sample_uniform(&state, range, maxDelta), params.distribution == 0u);
+    dG = select(sample_gaussian(&state, range, maxDelta), sample_uniform(&state, range, maxDelta), params.distribution == 0u);
+    dB = select(sample_gaussian(&state, range, maxDelta), sample_uniform(&state, range, maxDelta), params.distribution == 0u);
+  }
+
+  let outR = clamp(orig.r + f32(dR) / 255.0, 0.0, 1.0);
+  let outG = clamp(orig.g + f32(dG) / 255.0, 0.0, 1.0);
+  let outB = clamp(orig.b + f32(dB) / 255.0, 0.0, 1.0);
+
+  textureStore(dstTex, vec2i(id.xy), vec4f(outR, outG, outB, orig.a));
+}
+`
+
+// ─── Film Grain ───────────────────────────────────────────────────────────────
+
+export const FILTER_FILM_GRAIN_NOISE_COMPUTE = /* wgsl */ `
+struct FilmGrainNoiseParams {
+  seed  : u32,
+  _pad0 : u32,
+  _pad1 : u32,
+  _pad2 : u32,
+}
+
+@group(0) @binding(0) var noiseTex : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(1) var<uniform> params : FilmGrainNoiseParams;
+
+fn lcg_next(s: u32) -> u32 {
+  return 1664525u * s + 1013904223u;
+}
+
+fn pcg_hash(v: u32) -> u32 {
+  let word = v * 747796405u + 2891336453u;
+  return ((word >> ((word >> 28u) + 4u)) ^ word) * 277803737u;
+}
+
+@compute @workgroup_size(8, 8)
+fn cs_film_grain_noise(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(noiseTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let idx   = id.y * dims.x + id.x;
+  var state = pcg_hash(params.seed ^ pcg_hash(idx));
+
+  var sum = 0.0;
+  for (var k = 0u; k < 4u; k++) {
+    state = lcg_next(state);
+    sum += f32(state >> 16u) / 32767.5;
+  }
+  let noise    = sum / 4.0 - 1.0;                   // [-1, 1]
+  let encoded  = clamp((noise + 1.0) * 0.5, 0.0, 1.0);  // [0, 1]
+
+  textureStore(noiseTex, vec2i(id.xy), vec4f(encoded, encoded, encoded, encoded));
+}
+`
+
+export const FILTER_FILM_GRAIN_COMBINE_COMPUTE = /* wgsl */ `
+struct FilmGrainCombineParams {
+  intensity : u32,  // 1–200 (%)
+  roughness : u32,  // 0–100
+  _pad0     : u32,
+  _pad1     : u32,
+}
+
+@group(0) @binding(0) var srcTex   : texture_2d<f32>;
+@group(0) @binding(1) var noiseTex : texture_2d<f32>;
+@group(0) @binding(2) var dstTex   : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(3) var<uniform> params : FilmGrainCombineParams;
+
+@compute @workgroup_size(8, 8)
+fn cs_film_grain_combine(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let orig       = textureLoad(srcTex,   vec2i(id.xy), 0);
+  let noiseTexel = textureLoad(noiseTex, vec2i(id.xy), 0);
+
+  let noiseVal   = noiseTexel.r * 2.0 - 1.0;    // decode [0,1] → [-1,1]
+  let intensityF = f32(params.intensity) / 100.0;
+  let roughnessF = f32(params.roughness) / 100.0;
+
+  let luma   = 0.299 * orig.r + 0.587 * orig.g + 0.114 * orig.b;
+  let weight = (1.0 - roughnessF) * (1.0 - luma) + roughnessF * 1.0;
+
+  let grainVal = noiseVal * (127.0 / 255.0) * weight * intensityF;
+
+  let outRGB = clamp(orig.rgb + grainVal, vec3f(0.0), vec3f(1.0));
+  textureStore(dstTex, vec2i(id.xy), vec4f(outRGB, orig.a));
+}
+`

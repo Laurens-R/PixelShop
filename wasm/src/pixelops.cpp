@@ -105,33 +105,6 @@ float* pixelops_curves_histogram(
     return computeCurvesHistogram(inputPtr, width, height, maskPtr);
 }
 
-// ─── Smart Sharpen (in-place) ─────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_smart_sharpen(uint8_t* pixels, int width, int height,
-                              int amount, int radius, int reduceNoise, int remove) {
-    filters_smart_sharpen(pixels, width, height, amount, radius, reduceNoise, remove);
-}
-
-// ─── Add Noise (in-place) ─────────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_add_noise(
-    uint8_t* pixels, int width, int height,
-    int amount, int distribution, int monochromatic, uint32_t seed
-) {
-    filters_add_noise(pixels, width, height, amount, distribution, monochromatic, seed);
-}
-
-// ─── Film Grain (in-place) ────────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_film_grain(
-    uint8_t* pixels, int width, int height,
-    int grainSize, int intensity, int roughness, uint32_t seed
-) {
-    filters_film_grain(pixels, width, height, grainSize, intensity, roughness, seed);
-}
 
 // ─── Clouds (in-place) ────────────────────────────────────────────────────────
 

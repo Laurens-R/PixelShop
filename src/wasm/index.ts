@@ -237,42 +237,6 @@ export async function computeHistogramRGBA(
   }
 }
 
-/** Smart Sharpen (in-place).
- *  amount: 1–500 (%), radius: 1–64 (px), reduceNoise: 0–100 (%), remove: 0=Gaussian, 1=Lens. */
-export async function smartSharpen(
-  pixels: Uint8Array, width: number, height: number,
-  amount: number, radius: number, reduceNoise: number, remove: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_smart_sharpen(ptr, width, height, amount, radius, reduceNoise, remove)
-  )
-}
-
-/** Add Noise (in-place).
- *  amount: 1–400 (%). distribution: 0=Uniform, 1=Gaussian approx. monochromatic: 0|1. seed: LCG seed. */
-export async function addNoise(
-  pixels: Uint8Array, width: number, height: number,
-  amount: number, distribution: number, monochromatic: number, seed: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_add_noise(ptr, width, height, amount, distribution, monochromatic, seed)
-  )
-}
-
-/** Film Grain (in-place).
- *  grainSize: 1–100. intensity: 1–200 (%). roughness: 0–100. seed: LCG seed. */
-export async function filmGrain(
-  pixels: Uint8Array, width: number, height: number,
-  grainSize: number, intensity: number, roughness: number, seed: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_film_grain(ptr, width, height, grainSize, intensity, roughness, seed)
-  )
-}
-
 /** Clouds (in-place). Fractional value noise composited over existing pixels.
  *  scale: 1–200. opacity: 1–100 (%). colorMode: 0=grayscale, 1=fg/bg color.
  *  fgR/G/B, bgR/G/B: foreground and background colors. seed: 0–9999. */
