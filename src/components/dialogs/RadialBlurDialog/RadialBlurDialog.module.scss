@@ -1,62 +1,6 @@
 @use '@/styles/variables' as vars;
 @use '@/styles/mixins' as m;
 
-.panel {
-  position: fixed;
-  top: 80px;
-  right: 280px;
-  width: 284px;
-  background: #2d2d2d;
-  border: 1px solid #191919;
-  border-radius: vars.$radius-md;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.4);
-  z-index: 300;
-  display: flex;
-  flex-direction: column;
-  user-select: none;
-}
-
-.header {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 6px 0 8px;
-  background: #262626;
-  border-bottom: 1px solid vars.$color-border;
-  border-radius: vars.$radius-md vars.$radius-md 0 0;
-  flex-shrink: 0;
-}
-
-.headerIcon {
-  flex-shrink: 0;
-  color: #0699fb;
-  display: flex;
-  align-items: center;
-}
-
-.title {
-  flex: 1;
-  font-size: vars.$font-size-sm;
-  font-weight: 600;
-  color: vars.$color-text;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.closeBtn {
-  @include m.icon-button(18px);
-  color: vars.$color-text-muted;
-  border-radius: vars.$radius-sm;
-  flex-shrink: 0;
-  &:hover {
-    background: rgba(192, 64, 64, 0.2);
-    color: #e07070;
-  }
-}
-
 .body {
   padding: 10px 10px 8px;
   display: flex;

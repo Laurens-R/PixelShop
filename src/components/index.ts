@@ -13,6 +13,7 @@ export { SelectiveColorPanel } from './panels/SelectiveColorPanel/SelectiveColor
 export { ColorGradingPanel } from './panels/ColorGradingPanel/ColorGradingPanel'
 export { ColorWheelWidget } from './widgets/ColorWheelWidget/ColorWheelWidget'
 export { SliderInput } from './widgets/SliderInput/SliderInput'
+export { ToolWindow } from './widgets/ToolWindow/ToolWindow'
 export { ColorSwatch } from './widgets/ColorSwatch/ColorSwatch'
 export type { ColorSwatchProps } from './widgets/ColorSwatch/ColorSwatch'
 export { EmbedColorPicker } from './widgets/EmbedColorPicker/EmbedColorPicker'

@@ -724,22 +724,29 @@ fn cs_color_grading(@builtin(global_invocation_id) id: vec3u) {
   rgb += offRGB;
   rgb = clamp(rgb, vec3f(0.0), vec3f(1.0));
 
-  // Stage 3: Contrast
-  rgb = clamp((rgb - params.pivot) * params.contrast + params.pivot, vec3f(0.0), vec3f(1.0));
+  // Stage 3: Contrast (luma-based to preserve hue/saturation)
+  // Apply contrast as a luminance scale around the pivot point, then ratio-scale
+  // RGB channels to match — prevents per-channel clipping from shifting hue.
+  let lumC = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+  let lumCNew = clamp((lumC - params.pivot) * params.contrast + params.pivot, 0.0, 1.0);
+  if (lumC > 0.0001) { rgb = clamp(rgb * (lumCNew / lumC), vec3f(0.0), vec3f(1.0)); }
 
-  // Stage 4: Mid/Detail
-  let lum1  = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
-  let wMid1 = 4.0 * lum1 * (1.0 - lum1);
-  let delta = (params.midDetail / 100.0) * (lum1 - 0.5) * wMid1;
-  rgb = clamp(rgb + delta, vec3f(0.0), vec3f(1.0));
+  // Stage 4: Mid/Detail (luma-based to preserve hue)
+  let lum1     = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+  let wMid1    = 4.0 * lum1 * (1.0 - lum1);
+  let lum1New  = clamp(lum1 + (params.midDetail / 100.0) * (lum1 - 0.5) * wMid1, 0.0, 1.0);
+  if (lum1 > 0.0001) { rgb = clamp(rgb * (lum1New / lum1), vec3f(0.0), vec3f(1.0)); }
+  else { rgb = vec3f(lum1New); }
 
-  // Stage 5: Shadows / Highlights
-  let lum2 = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
-  let wSh  = 1.0 - smoothstep(0.0, 0.5, lum2);
-  let wHl  = smoothstep(0.5, 1.0, lum2);
-  let dsh  = (params.shadows    / 100.0) * 0.5 * wSh;
-  let dhl  = (params.highlights / 100.0) * 0.5 * wHl;
-  rgb = clamp(rgb + dsh + dhl, vec3f(0.0), vec3f(1.0));
+  // Stage 5: Shadows / Highlights (luma-based to preserve hue)
+  // Compute target luminance from the additive delta, then ratio-scale RGB channels
+  // to reach it — prevents per-channel clipping from shifting hue into pure primaries.
+  let lum2    = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
+  let wSh     = 1.0 - smoothstep(0.0, 0.5, lum2);
+  let wHl     = smoothstep(0.5, 1.0, lum2);
+  let lum2New = clamp(lum2 + (params.shadows / 100.0) * 0.5 * wSh + (params.highlights / 100.0) * 0.5 * wHl, 0.0, 1.0);
+  if (lum2 > 0.0001) { rgb = clamp(rgb * (lum2New / lum2), vec3f(0.0), vec3f(1.0)); }
+  else { rgb = vec3f(lum2New); }
 
   // Stage 6-7: Saturation + Hue
   var hsl = rgb2hsl(rgb);

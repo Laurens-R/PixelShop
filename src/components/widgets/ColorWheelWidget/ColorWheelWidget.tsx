@@ -67,12 +67,13 @@ function drawWheel(canvas: HTMLCanvasElement, value: ColorGradingWheelParams): v
   ctx.stroke()
   ctx.restore()
 
-  // Puck — convert r/g/b to x/y via iso-luminant hue/chroma
-  // Inverse of the mapping used during drag: reconstruct hue + chroma from r,g,b
+  // Puck — convert r/g/b to x/y, exact inverse of the drag mapping.
+  // From: r=cos(h)·c, g=cos(h-2π/3)·c, b=cos(h+2π/3)·c
+  //   px = normX = cos(h)·c = (r - 0.5g - 0.5b) / 1.5
+  //   py = normY = sin(h)·c = (g - b) / sqrt(3)
   const { r, g, b } = value
-  // Use a color-wheel mapping: project onto 2D plane of an equilateral RGB triangle
-  const px = (r - 0.5 * g - 0.5 * b) / Math.sqrt(1.5)
-  const py = -(Math.sqrt(3) / 2) * (g - b)
+  const px = (r - 0.5 * g - 0.5 * b) / 1.5
+  const py = (g - b) / Math.sqrt(3)
   const chroma = Math.min(Math.hypot(px, py), 1)
   const puckX = CENTER + px * DISK_RADIUS
   const puckY = CENTER + py * DISK_RADIUS

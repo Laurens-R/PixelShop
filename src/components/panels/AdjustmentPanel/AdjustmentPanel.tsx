@@ -12,6 +12,7 @@ import { InvertPanel } from '../InvertPanel/InvertPanel'
 import { SelectiveColorPanel } from '../SelectiveColorPanel/SelectiveColorPanel'
 import { CurvesPanel } from '../CurvesPanel/CurvesPanel'
 import { ColorGradingPanel } from '../ColorGradingPanel/ColorGradingPanel'
+import { ToolWindow } from '@/components'
 import styles from './AdjustmentPanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -37,14 +38,6 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'color-grading':       return 'Color Grading'
   }
 }
-
-const CloseIcon = (): React.JSX.Element => (
-  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"
-    strokeLinecap="round" width="10" height="10" aria-hidden="true">
-    <line x1="1" y1="1" x2="11" y2="11" />
-    <line x1="11" y1="1" x2="1" y2="11" />
-  </svg>
-)
 
 const BrightnessContrastHeaderIcon = (): React.JSX.Element => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" aria-hidden="true">
@@ -164,21 +157,17 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
   const parentLayer = layers.find(l => l.id === adjLayer.parentId)
   const parentLayerName = parentLayer?.name ?? 'Layer'
 
+  const panelWidth = adjLayer.adjustmentType === 'curves' ? 306
+    : adjLayer.adjustmentType === 'color-grading' ? 504
+    : 236
+
   return (
-    <div className={[
-      styles.panel,
-      adjLayer.adjustmentType === 'curves' ? styles.panelWide : '',
-      adjLayer.adjustmentType === 'color-grading' ? styles.panelColorGrading : '',
-    ].join(' ')} role="dialog" aria-label={adjustmentTitle(adjLayer)}>
-      <div className={styles.header}>
-        <span className={styles.headerIcon}>
-          <AdjPanelIcon type={adjLayer.adjustmentType} />
-        </span>
-        <span className={styles.title}>{adjustmentTitle(adjLayer)}</span>
-        <button className={styles.closeBtn} onClick={onClose} aria-label="Close panel" title="Close">
-          <CloseIcon />
-        </button>
-      </div>
+    <ToolWindow
+      title={adjustmentTitle(adjLayer)}
+      icon={<AdjPanelIcon type={adjLayer.adjustmentType} />}
+      onClose={onClose}
+      width={panelWidth}
+    >
       <div className={styles.body}>
         {adjLayer.adjustmentType === 'brightness-contrast' && (
           <BrightnessContrastPanel layer={adjLayer as BrightnessContrastAdjustmentLayer} parentLayerName={parentLayerName} />
@@ -218,6 +207,6 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
           />
         )}
       </div>
-    </div>
+    </ToolWindow>
   )
 }

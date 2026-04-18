@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { gaussianBlur } from '@/wasm'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
+import { ToolWindow } from '@/components'
 import styles from './GaussianBlurDialog.module.scss'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -39,14 +40,6 @@ function applySelectionComposite(
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
-
-const CloseIcon = (): React.JSX.Element => (
-  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"
-    strokeLinecap="round" width="10" height="10" aria-hidden="true">
-    <line x1="1" y1="1" x2="11" y2="11" />
-    <line x1="11" y1="1" x2="1" y2="11" />
-  </svg>
-)
 
 const BlurIcon = (): React.JSX.Element => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
@@ -201,16 +194,7 @@ export function GaussianBlurDialog({
   if (!isOpen) return null
 
   return (
-    <div className={styles.panel} role="dialog" aria-label="Gaussian Blur">
-      <div className={styles.header}>
-        <span className={styles.headerIcon}>
-          <BlurIcon />
-        </span>
-        <span className={styles.title}>Gaussian Blur</span>
-        <button className={styles.closeBtn} onClick={handleCancel} aria-label="Close" title="Close">
-          <CloseIcon />
-        </button>
-      </div>
+    <ToolWindow title="Gaussian Blur" icon={<BlurIcon />} onClose={handleCancel} width={284}>
       <div className={styles.body}>
         <div className={styles.row}>
           <label className={styles.label}>Radius</label>
@@ -252,6 +236,6 @@ export function GaussianBlurDialog({
         <button className={styles.btnCancel} onClick={handleCancel}>Cancel</button>
         <button className={styles.btnApply} onClick={() => { void handleApply() }} disabled={isBusy}>Apply</button>
       </div>
-    </div>
+    </ToolWindow>
   )
 }
