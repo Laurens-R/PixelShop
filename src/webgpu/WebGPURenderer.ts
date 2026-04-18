@@ -1,6 +1,7 @@
 import {
   createGpuTexture,
   uploadTextureData,
+  uploadTexturePatch,
   uploadR8TextureData,
   createUniformBuffer,
   writeUniformBuffer,
@@ -45,6 +46,8 @@ export interface GpuLayer {
   opacity: number
   visible: boolean
   blendMode: string
+  /** Accumulated dirty region in layer-local texel coords. Expanded by tools; consumed + reset by flushLayer. */
+  dirtyRect: { lx: number; ly: number; rx: number; ry: number } | null
 }
 
 const BLEND_MODE_INDEX: Record<string, number> = {
@@ -104,7 +107,6 @@ export class WebGPURenderer {
   private readonly compositePipeline: GPURenderPipeline  // renders to rgba8unorm internal textures
   private readonly checkerPipeline: GPURenderPipeline    // renders to screen (canvasFormat)
   private readonly blitPipeline: GPURenderPipeline       // renders to screen (canvasFormat)
-  private readonly fboBlitPipeline: GPURenderPipeline    // renders to rgba8unorm internal textures
 
   // Compute pipelines
   private readonly bcPipeline: GPUComputePipeline
@@ -120,6 +122,12 @@ export class WebGPURenderer {
 
   // Shared vertex/tex-coord buffers
   private readonly texCoordBuffer: GPUBuffer
+
+  // Pre-allocated per-frame reusable buffers and bind groups (avoids alloc/destroy on the render hot path)
+  private readonly canvasQuadVertBuf: GPUBuffer
+  private readonly frameUniformBuf: GPUBuffer    // [w, h, 0, 0] — shared by blit and composite-resolution
+  private readonly checkerUniformBuf: GPUBuffer
+  private checkerBindGroup!: GPUBindGroup
 
   // Ping-pong textures
   private pingTex: GPUTexture
@@ -195,6 +203,20 @@ export class WebGPURenderer {
     // Shared vertex buffers
     this.texCoordBuffer = createVertexBuffer(device, QUAD_UVS)
 
+    // Pre-allocate static per-frame buffers
+    this.canvasQuadVertBuf = createVertexBuffer(device, QUAD_POSITIONS(pixelWidth, pixelHeight))
+    this.frameUniformBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, this.frameUniformBuf, new Float32Array([pixelWidth, pixelHeight, 0, 0]))
+    const cuData = new DataView(new ArrayBuffer(64))
+    cuData.setFloat32( 0, 8.0,         true)  // tileSize
+    cuData.setFloat32(16, 0.549,       true); cuData.setFloat32(20, 0.549, true); cuData.setFloat32(24, 0.549, true)  // colorA
+    cuData.setFloat32(28, 0.0,         true)  // _pad0
+    cuData.setFloat32(32, 0.392,       true); cuData.setFloat32(36, 0.392, true); cuData.setFloat32(40, 0.392, true)  // colorB
+    cuData.setFloat32(44, 0.0,         true)  // _pad1
+    cuData.setFloat32(48, pixelWidth,  true); cuData.setFloat32(52, pixelHeight, true)  // resolution
+    this.checkerUniformBuf = createUniformBuffer(device, 64)
+    writeUniformBuffer(device, this.checkerUniformBuf, cuData.buffer)
+
     // Ping-pong textures
     const texUsage =
       GPUTextureUsage.TEXTURE_BINDING |
@@ -211,7 +233,10 @@ export class WebGPURenderer {
     this.compositePipeline = this.createCompositePipeline('rgba8unorm')
     this.checkerPipeline   = this.createCheckerPipeline(canvasFormat)
     this.blitPipeline      = this.createBlitPipeline(canvasFormat)
-    this.fboBlitPipeline   = this.createFboBlitPipeline('rgba8unorm')
+    this.checkerBindGroup  = device.createBindGroup({
+      layout: this.checkerPipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.checkerUniformBuf } }],
+    })
 
     // Compute pipelines
     this.bcPipeline       = this.createComputePipeline(BC_COMPUTE,        'cs_brightness_contrast')
@@ -286,27 +311,6 @@ export class WebGPURenderer {
     })
   }
 
-  private createFboBlitPipeline(format: GPUTextureFormat): GPURenderPipeline {
-    const module = this.device.createShaderModule({ code: BLIT_SHADER })
-    return this.device.createRenderPipeline({
-      layout: 'auto',
-      vertex: {
-        module,
-        entryPoint: 'vs_blit',
-        buffers: [
-          { arrayStride: 8, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x2' }] },
-          { arrayStride: 8, attributes: [{ shaderLocation: 1, offset: 0, format: 'float32x2' }] },
-        ],
-      },
-      fragment: {
-        module,
-        entryPoint: 'fs_blit',
-        targets: [{ format }],
-      },
-      primitive: { topology: 'triangle-list' },
-    })
-  }
-
   private createBlitPipeline(format: GPUTextureFormat): GPURenderPipeline {
     const module = this.device.createShaderModule({ code: BLIT_SHADER })
     return this.device.createRenderPipeline({
@@ -350,12 +354,18 @@ export class WebGPURenderer {
   ): GpuLayer {
     const data = new Uint8Array(lw * lh * 4)
     const texture = createGpuTexture(this.device, lw, lh, data)
-    return { id, name, texture, data, layerWidth: lw, layerHeight: lh, offsetX: ox, offsetY: oy, opacity: 1, visible: true, blendMode: 'normal' }
+    return { id, name, texture, data, layerWidth: lw, layerHeight: lh, offsetX: ox, offsetY: oy, opacity: 1, visible: true, blendMode: 'normal', dirtyRect: null }
   }
 
   flushLayer(layer: GpuLayer): void {
     if (this.deferFlush) return
-    uploadTextureData(this.device, layer.texture, layer.layerWidth, layer.layerHeight, layer.data)
+    if (layer.dirtyRect) {
+      const { lx, ly, rx, ry } = layer.dirtyRect
+      layer.dirtyRect = null
+      uploadTexturePatch(this.device, layer.texture, layer.layerWidth, lx, ly, rx - lx, ry - ly, layer.data)
+    } else {
+      uploadTextureData(this.device, layer.texture, layer.layerWidth, layer.layerHeight, layer.data)
+    }
   }
 
   destroyLayer(layer: GpuLayer): void {
@@ -412,6 +422,7 @@ export class WebGPURenderer {
     layer.layerHeight = newH
     layer.offsetX    = newX
     layer.offsetY    = newY
+    layer.dirtyRect  = null  // texture is fully up-to-date after grow
     return true
   }
 
@@ -618,34 +629,7 @@ export class WebGPURenderer {
   }
 
   private encodeCheckerboard(encoder: GPUCommandEncoder, view: GPUTextureView): void {
-    const { device, pixelWidth: w, pixelHeight: h } = this
-
-    // WGSL CheckerUniforms layout (64 bytes):
-    //   offset  0: tileSize   : f32
-    //   offset 16: colorA     : vec3f  (align 16)
-    //   offset 28: _pad0      : f32
-    //   offset 32: colorB     : vec3f  (align 16)
-    //   offset 44: _pad1      : f32
-    //   offset 48: resolution : vec2f  (align 8)
-    //   offset 56: _pad2      : vec2f
-    //   total: 64 bytes
-    const uniformBuf = createUniformBuffer(device, 64)
-    const uniformView = new DataView(new ArrayBuffer(64))
-    uniformView.setFloat32( 0, 8.0, true)    // tileSize
-    uniformView.setFloat32(16, 0.549, true); uniformView.setFloat32(20, 0.549, true); uniformView.setFloat32(24, 0.549, true) // colorA
-    uniformView.setFloat32(28, 0.0, true)    // _pad0
-    uniformView.setFloat32(32, 0.392, true); uniformView.setFloat32(36, 0.392, true); uniformView.setFloat32(40, 0.392, true) // colorB
-    uniformView.setFloat32(44, 0.0, true)    // _pad1
-    uniformView.setFloat32(48, w, true);     uniformView.setFloat32(52, h, true)      // resolution
-    writeUniformBuffer(device, uniformBuf, uniformView.buffer)
-
-    const posBuffer = createVertexBuffer(device, QUAD_POSITIONS(w, h))
-
-    const bindGroup = device.createBindGroup({
-      layout: this.checkerPipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: uniformBuf } }],
-    })
-
+    // Uses pre-allocated checkerUniformBuf + checkerBindGroup (static, never change)
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
         view,
@@ -655,30 +639,21 @@ export class WebGPURenderer {
       }],
     })
     pass.setPipeline(this.checkerPipeline)
-    pass.setBindGroup(0, bindGroup)
-    pass.setVertexBuffer(0, posBuffer)
+    pass.setBindGroup(0, this.checkerBindGroup)
+    pass.setVertexBuffer(0, this.canvasQuadVertBuf)
     pass.setVertexBuffer(1, this.texCoordBuffer)
     pass.draw(6)
     pass.end()
-
-    this.pendingDestroyBuffers.push(uniformBuf, posBuffer)
   }
 
   private encodeBlitToView(encoder: GPUCommandEncoder, srcTex: GPUTexture, view: GPUTextureView): void {
-    const { device, pixelWidth: w, pixelHeight: h } = this
-
-    const uniformData = new Float32Array([w, h, 0.0, 0.0])
-    const uniformBuf = createUniformBuffer(device, uniformData.byteLength)
-    writeUniformBuffer(device, uniformBuf, uniformData)
-
-    const posBuffer = createVertexBuffer(device, QUAD_POSITIONS(w, h))
-
-    const bindGroup = device.createBindGroup({
+    // Uses pre-allocated frameUniformBuf + canvasQuadVertBuf
+    const bindGroup = this.device.createBindGroup({
       layout: this.blitPipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: this.sampler },
         { binding: 1, resource: srcTex.createView() },
-        { binding: 2, resource: { buffer: uniformBuf } },
+        { binding: 2, resource: { buffer: this.frameUniformBuf } },
       ],
     })
 
@@ -691,48 +666,10 @@ export class WebGPURenderer {
     })
     pass.setPipeline(this.blitPipeline)
     pass.setBindGroup(0, bindGroup)
-    pass.setVertexBuffer(0, posBuffer)
+    pass.setVertexBuffer(0, this.canvasQuadVertBuf)
     pass.setVertexBuffer(1, this.texCoordBuffer)
     pass.draw(6)
     pass.end()
-
-    this.pendingDestroyBuffers.push(uniformBuf, posBuffer)
-  }
-
-  private encodeBlitTexToTex(encoder: GPUCommandEncoder, srcTex: GPUTexture, dstTex: GPUTexture): void {
-    const { device, pixelWidth: w, pixelHeight: h } = this
-
-    const uniformData = new Float32Array([w, h, 0.0, 0.0])
-    const uniformBuf = createUniformBuffer(device, uniformData.byteLength)
-    writeUniformBuffer(device, uniformBuf, uniformData)
-
-    const posBuffer = createVertexBuffer(device, QUAD_POSITIONS(w, h))
-
-    const bindGroup = device.createBindGroup({
-      layout: this.fboBlitPipeline.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: this.sampler },
-        { binding: 1, resource: srcTex.createView() },
-        { binding: 2, resource: { buffer: uniformBuf } },
-      ],
-    })
-
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [{
-        view: dstTex.createView(),
-        loadOp: 'clear',
-        clearValue: { r: 0, g: 0, b: 0, a: 0 },
-        storeOp: 'store',
-      }],
-    })
-    pass.setPipeline(this.fboBlitPipeline)
-    pass.setBindGroup(0, bindGroup)
-    pass.setVertexBuffer(0, posBuffer)
-    pass.setVertexBuffer(1, this.texCoordBuffer)
-    pass.draw(6)
-    pass.end()
-
-    this.pendingDestroyBuffers.push(uniformBuf, posBuffer)
   }
 
   private encodeCompositeLayer(
@@ -748,8 +685,12 @@ export class WebGPURenderer {
     const lw = layer.layerWidth
     const lh = layer.layerHeight
 
-    // Step 1: FBO-blit src → dst to fill pixels outside layer rect
-    this.encodeBlitTexToTex(encoder, srcTex, dstTex)
+    // Step 1: copy src → dst (GPU DMA — no shader, far cheaper than a render pass at 4K)
+    encoder.copyTextureToTexture(
+      { texture: srcTex },
+      { texture: dstTex },
+      { width: w, height: h },
+    )
 
     // Step 2: Composite the layer's texture over its sub-rect
     // WGSL CompositeUniforms layout (64 bytes):
@@ -772,10 +713,7 @@ export class WebGPURenderer {
     unifView.setUint32 (32, maskLayer ? 1 : 0, true)
     // _pad at offset 48: left as zero
 
-    const resUnifBuf = createUniformBuffer(device, 16)
-    const resData = new Float32Array([w, h, 0, 0])
     writeUniformBuffer(device, unifBuf, unifView.buffer)
-    writeUniformBuffer(device, resUnifBuf, resData)
 
     const dummyMaskTex = maskLayer?.texture ?? srcTex // use any fallback if no mask
 
@@ -787,7 +725,7 @@ export class WebGPURenderer {
         { binding: 2, resource: srcTex.createView() },
         { binding: 3, resource: dummyMaskTex.createView() },
         { binding: 4, resource: { buffer: unifBuf } },
-        { binding: 5, resource: { buffer: resUnifBuf } },
+        { binding: 5, resource: { buffer: this.frameUniformBuf } },
       ],
     })
 
@@ -818,7 +756,7 @@ export class WebGPURenderer {
     pass.draw(6)
     pass.end()
 
-    this.pendingDestroyBuffers.push(unifBuf, resUnifBuf, posBuffer)
+    this.pendingDestroyBuffers.push(unifBuf, posBuffer)
   }
 
   private encodeCompositeTexture(
@@ -841,6 +779,7 @@ export class WebGPURenderer {
       opacity,
       visible: true,
       blendMode,
+      dirtyRect: null,
     }
     this.encodeCompositeLayer(encoder, pseudoLayer, srcTex, dstTex)
   }

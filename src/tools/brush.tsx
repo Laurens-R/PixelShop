@@ -77,6 +77,22 @@ function createBrushHandler(): ToolHandler {
       brushOptions.motionBlur / 100,
       touched ?? undefined, sel,
     )
+
+    // Expand the accumulated dirty rect so flushLayer only uploads the touched area.
+    // Coordinates are layer-local (origin at layer.offsetX, layer.offsetY).
+    const lx = Math.max(0, Math.floor(Math.min(p0x, cpx, p1x) - layer.offsetX) - padR)
+    const ly = Math.max(0, Math.floor(Math.min(p0y, cpy, p1y) - layer.offsetY) - padR)
+    const rx = Math.min(layer.layerWidth,  Math.ceil(Math.max(p0x, cpx, p1x) - layer.offsetX) + padR + 1)
+    const ry = Math.min(layer.layerHeight, Math.ceil(Math.max(p0y, cpy, p1y) - layer.offsetY) + padR + 1)
+    if (layer.dirtyRect === null) {
+      layer.dirtyRect = { lx, ly, rx, ry }
+    } else {
+      layer.dirtyRect.lx = Math.min(layer.dirtyRect.lx, lx)
+      layer.dirtyRect.ly = Math.min(layer.dirtyRect.ly, ly)
+      layer.dirtyRect.rx = Math.max(layer.dirtyRect.rx, rx)
+      layer.dirtyRect.ry = Math.max(layer.dirtyRect.ry, ry)
+    }
+
     renderer.flushLayer(layer)
     render(layers)
   }

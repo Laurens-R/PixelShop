@@ -39,6 +39,27 @@ export function uploadTextureData(
   )
 }
 
+/**
+ * Upload only a sub-rectangle of `data` into `texture`.
+ * `x`, `y`, `w`, `h` are in layer-local texel coordinates.
+ * `fullWidth` is the full row stride of `data` (the layer's actual width).
+ */
+export function uploadTexturePatch(
+  device: GPUDevice,
+  texture: GPUTexture,
+  fullWidth: number,
+  x: number, y: number, w: number, h: number,
+  data: Uint8Array,
+): void {
+  if (w <= 0 || h <= 0) return
+  device.queue.writeTexture(
+    { texture, origin: { x, y } },
+    data as Uint8Array<ArrayBuffer>,
+    { offset: (y * fullWidth + x) * 4, bytesPerRow: fullWidth * 4 },
+    { width: w, height: h },
+  )
+}
+
 export function uploadR8TextureData(
   device: GPUDevice,
   texture: GPUTexture,
