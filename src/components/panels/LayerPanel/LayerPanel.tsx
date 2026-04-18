@@ -90,6 +90,7 @@ interface LayerPanelProps {
   onMergeVisible: () => void
   onMergeDown: () => void
   onFlattenImage: () => void
+  onRasterizeLayer: (layerId: string) => void
   onOpenAdjustmentPanel?: (layerId: string) => void
 }
 
@@ -100,6 +101,7 @@ export function LayerPanel({
   onMergeVisible,
   onMergeDown,
   onFlattenImage,
+  onRasterizeLayer,
   onOpenAdjustmentPanel,
 }: LayerPanelProps): React.JSX.Element {
   const { state, dispatch } = useAppContext()
@@ -195,6 +197,14 @@ export function LayerPanel({
   const canDelete = layers.length > 1
   const isChildLayer = (l: LayerState): boolean =>
     'type' in l && (l.type === 'mask' || l.type === 'adjustment')
+
+  // Rasterize is available for: text layers, shape layers, or pixel layers that have adjustment children
+  const canRasterize = !!activeLayerId && !!activeLayer && !isChildLayer(activeLayer) && (
+    ('type' in activeLayer && (activeLayer.type === 'text' || activeLayer.type === 'shape')) ||
+    (!('type' in activeLayer) && layers.some(
+      l => 'type' in l && l.type === 'adjustment' && (l as { parentId: string }).parentId === activeLayerId
+    ))
+  )
 
   const displayLayers = layers
     .filter(l => !isChildLayer(l))
@@ -398,6 +408,13 @@ export function LayerPanel({
               onMouseDown={() => { closeContextMenu(); if (activeLayerId) onAddMaskLayer(activeLayerId) }}
             >
               Add Layer Mask
+            </button>
+            <button
+              className={styles.menuItem}
+              disabled={!canRasterize}
+              onMouseDown={() => { closeContextMenu(); if (activeLayerId) onRasterizeLayer(activeLayerId) }}
+            >
+              Rasterize Layer
             </button>
             <button
               className={styles.menuItem}

@@ -498,18 +498,18 @@ export class WebGPURenderer {
     const encoder = device.createCommandEncoder()
     const finalTex = this.encodePlanToComposite(encoder, plan)
 
-    const byteSize = w * h * 4
-    const readbuf = createReadbackBuffer(device, byteSize)
+    const alignedBpr = Math.ceil(w * 4 / 256) * 256
+    const readbuf = createReadbackBuffer(device, alignedBpr * h)
     encoder.copyTextureToBuffer(
       { texture: finalTex },
-      { buffer: readbuf, bytesPerRow: w * 4, rowsPerImage: h },
+      { buffer: readbuf, bytesPerRow: alignedBpr, rowsPerImage: h },
       { width: w, height: h },
     )
     device.queue.submit([encoder.finish()])
     this.flushPendingDestroys()
 
     await readbuf.mapAsync(GPUMapMode.READ)
-    const result = new Uint8Array(readbuf.getMappedRange()).slice()
+    const result = this.unpackRows(new Uint8Array(readbuf.getMappedRange()), w, h, alignedBpr)
     readbuf.unmap()
     readbuf.destroy()
     return result
@@ -547,24 +547,35 @@ export class WebGPURenderer {
       ;[srcTex, dstTex] = [dstTex, srcTex]
     }
 
-    const byteSize = w * h * 4
-    const readbuf = createReadbackBuffer(device, byteSize)
+    const alignedBpr = Math.ceil(w * 4 / 256) * 256
+    const readbuf = createReadbackBuffer(device, alignedBpr * h)
     encoder.copyTextureToBuffer(
       { texture: srcTex },
-      { buffer: readbuf, bytesPerRow: w * 4, rowsPerImage: h },
+      { buffer: readbuf, bytesPerRow: alignedBpr, rowsPerImage: h },
       { width: w, height: h },
     )
     device.queue.submit([encoder.finish()])
     this.flushPendingDestroys()
 
     await readbuf.mapAsync(GPUMapMode.READ)
-    const result = new Uint8Array(readbuf.getMappedRange()).slice()
+    const result = this.unpackRows(new Uint8Array(readbuf.getMappedRange()), w, h, alignedBpr)
     readbuf.unmap()
     readbuf.destroy()
     return result
   }
 
   // ─── Plan execution ─────────────────────────────────────────────────────────
+
+  /** Remove per-row GPU alignment padding and return a tightly-packed RGBA buffer. */
+  private unpackRows(src: Uint8Array, w: number, h: number, alignedBpr: number): Uint8Array {
+    const packedBpr = w * 4
+    if (alignedBpr === packedBpr) return src.slice()
+    const out = new Uint8Array(packedBpr * h)
+    for (let row = 0; row < h; row++) {
+      out.set(src.subarray(row * alignedBpr, row * alignedBpr + packedBpr), row * packedBpr)
+    }
+    return out
+  }
 
   private encodePlanToComposite(
     encoder: GPUCommandEncoder,

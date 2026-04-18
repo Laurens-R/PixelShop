@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { Dispatch, MutableRefObject } from 'react'
-import type { AppState, LayerState } from '@/types'
+import type { AppState, LayerState, PixelLayerState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { showOperationError } from '@/utils/userFeedback'
@@ -23,6 +23,7 @@ export interface UseLayersReturn {
   handleDuplicateLayer:   () => void
   handleDeleteActiveLayer: () => void
   handleFlattenImage:     () => void
+  handleRasterizeLayer:   (layerId: string) => void
 }
 
 function isPixelRootLayer(layer: LayerState): boolean {
@@ -216,8 +217,57 @@ export function useLayers({
     }
   }, [canvasHandleRef, stateRef, captureHistory, dispatch])
 
+  const handleRasterizeLayer = useCallback(async (layerId: string): Promise<void> => {
+    try {
+      const handle = canvasHandleRef.current
+      const layers = stateRef.current.layers
+      if (!handle) return
+
+      const layer = layers.find(l => l.id === layerId)
+      if (!layer) return
+      if ('type' in layer && (layer.type === 'mask' || layer.type === 'adjustment')) return
+
+      // Collect the root layer + all its child mask/adjustment layers
+      const childLayers = layers.filter(
+        l => 'type' in l && (l.type === 'mask' || l.type === 'adjustment') &&
+          (l as { parentId: string }).parentId === layerId
+      )
+      const targetLayers: LayerState[] = [layer, ...childLayers]
+
+      const result = await handle.rasterizeLayers(targetLayers, 'merge')
+      captureHistory('Rasterize Layer')
+
+      const newId = `layer-${Date.now()}`
+      const childIds = new Set(childLayers.map(l => l.id))
+
+      // Preserve opacity + blend mode from the source layer (pixel/text/shape all have these)
+      const src = layer as PixelLayerState
+      const newPixelLayer: PixelLayerState = {
+        id: newId,
+        name: src.name,
+        visible: src.visible,
+        opacity: src.opacity,
+        locked: src.locked,
+        blendMode: src.blendMode,
+      }
+
+      handle.prepareNewLayer(newId, src.name, result.data)
+
+      const newLayers = layers
+        .map(l => (l.id === layerId ? newPixelLayer : l))
+        .filter(l => !childIds.has(l.id))
+
+      dispatch({ type: 'REORDER_LAYERS', payload: newLayers })
+      dispatch({ type: 'SET_ACTIVE_LAYER', payload: newId })
+    } catch (error) {
+      console.error('[useLayers] Rasterize layer failed:', error)
+      showOperationError('Rasterize layer failed.', error)
+    }
+  }, [canvasHandleRef, stateRef, captureHistory, dispatch])
+
   return {
     handleMergeSelected, handleMergeDown, handleMergeVisible,
-    handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer, handleFlattenImage,
+    handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer,
+    handleFlattenImage, handleRasterizeLayer,
   }
 }

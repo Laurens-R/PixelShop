@@ -109,7 +109,8 @@ function AppContent(): React.JSX.Element {
   // ── Layer operations ──────────────────────────────────────────────
   const {
     handleMergeSelected, handleMergeDown, handleMergeVisible,
-    handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer, handleFlattenImage,
+    handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer,
+    handleFlattenImage, handleRasterizeLayer,
   } = useLayers({ canvasHandleRef, stateRef, captureHistory, dispatch, pendingLayerLabelRef })
 
   // ── Canvas transforms ─────────────────────────────────────────────
@@ -264,6 +265,7 @@ function AppContent(): React.JSX.Element {
           onMergeVisible={handleMergeVisible}
           onMergeDown={handleMergeDown}
           onFlattenImage={handleFlattenImage}
+          onRasterizeLayer={handleRasterizeLayer}
           onOpenAdjustmentPanel={adjustments.handleOpenAdjustmentPanel}
         />
       </div>
