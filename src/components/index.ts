@@ -10,6 +10,8 @@ export { BlackAndWhitePanel } from './panels/BlackAndWhitePanel/BlackAndWhitePan
 export { ColorTemperaturePanel } from './panels/ColorTemperaturePanel/ColorTemperaturePanel'
 export { InvertPanel } from './panels/InvertPanel/InvertPanel'
 export { SelectiveColorPanel } from './panels/SelectiveColorPanel/SelectiveColorPanel'
+export { ColorGradingPanel } from './panels/ColorGradingPanel/ColorGradingPanel'
+export { ColorWheelWidget } from './widgets/ColorWheelWidget/ColorWheelWidget'
 export { SliderInput } from './widgets/SliderInput/SliderInput'
 export { ColorSwatch } from './widgets/ColorSwatch/ColorSwatch'
 export type { ColorSwatchProps } from './widgets/ColorSwatch/ColorSwatch'

@@ -709,3 +709,132 @@ export const CURVES_FRAG = /* glsl */ `#version 300 es
     fragColor = mix(src, result, mask);
   }
 ` as const
+
+// ─── Fragment shader – color grading post-process pass ────────────────────────
+
+export const CG_FRAG = /* glsl */ `#version 300 es
+  precision highp float;
+
+  uniform sampler2D u_src;
+  uniform vec4  u_lift;
+  uniform vec4  u_gamma;
+  uniform vec4  u_gain;
+  uniform vec4  u_offset;
+  uniform float u_temp;
+  uniform float u_tint;
+  uniform float u_contrast;
+  uniform float u_pivot;
+  uniform float u_midDetail;
+  uniform float u_colorBoost;
+  uniform float u_shadows;
+  uniform float u_highlights;
+  uniform float u_saturation;
+  uniform float u_hue;
+  uniform float u_lumMix;
+  uniform sampler2D u_selMask;
+  uniform bool u_hasSelMask;
+
+  in  vec2 v_texCoord;
+  out vec4 fragColor;
+
+  vec3 rgb2hsl(vec3 c) {
+    float maxC  = max(c.r, max(c.g, c.b));
+    float minC  = min(c.r, min(c.g, c.b));
+    float delta = maxC - minC;
+    float L = (maxC + minC) * 0.5;
+    float S = 0.0;
+    float H = 0.0;
+    if (delta > 0.00001) {
+      S = delta / (1.0 - abs(2.0 * L - 1.0));
+      if (maxC == c.r)      H = mod((c.g - c.b) / delta, 6.0) / 6.0;
+      else if (maxC == c.g) H = ((c.b - c.r) / delta + 2.0)   / 6.0;
+      else                  H = ((c.r - c.g) / delta + 4.0)   / 6.0;
+    }
+    return vec3(H, S, L);
+  }
+
+  vec3 hsl2rgb(vec3 hsl) {
+    float H = hsl.x, S = hsl.y, L = hsl.z;
+    float C = (1.0 - abs(2.0 * L - 1.0)) * S;
+    float X = C * (1.0 - abs(mod(H * 6.0, 2.0) - 1.0));
+    float m = L - C * 0.5;
+    vec3 rgb;
+    float h6 = H * 6.0;
+    if      (h6 < 1.0) rgb = vec3(C, X, 0.0);
+    else if (h6 < 2.0) rgb = vec3(X, C, 0.0);
+    else if (h6 < 3.0) rgb = vec3(0.0, C, X);
+    else if (h6 < 4.0) rgb = vec3(0.0, X, C);
+    else if (h6 < 5.0) rgb = vec3(X, 0.0, C);
+    else               rgb = vec3(C, 0.0, X);
+    return clamp(rgb + m, 0.0, 1.0);
+  }
+
+  void main() {
+    vec4 src = texture(u_src, v_texCoord);
+    if (src.a < 0.0001) { fragColor = src; return; }
+
+    vec3 rgb = src.rgb;
+
+    // Stage 1: Temp / Tint
+    rgb.r += ((u_temp - 6500.0) / 5500.0) * 0.1;
+    rgb.g -= (u_tint / 100.0) * 0.05;
+    rgb.b -= ((u_temp - 6500.0) / 5500.0) * 0.1;
+    rgb = clamp(rgb, 0.0, 1.0);
+
+    // Stage 2: Wheels
+    float origLum    = dot(src.rgb, vec3(0.2126, 0.7152, 0.0722));
+    float wShadow    = 1.0 - origLum;
+    float wMid       = 4.0 * origLum * (1.0 - origLum);
+    float wHighlight = origLum;
+
+    rgb += vec3(u_lift.x + u_lift.w, u_lift.y + u_lift.w, u_lift.z + u_lift.w) * wShadow;
+    rgb = clamp(rgb, 0.0, 1.0);
+
+    rgb += vec3(u_gamma.x + u_gamma.w, u_gamma.y + u_gamma.w, u_gamma.z + u_gamma.w) * wMid;
+    rgb = clamp(rgb, 0.0, 1.0);
+
+    rgb += vec3(u_gain.x + u_gain.w, u_gain.y + u_gain.w, u_gain.z + u_gain.w) * wHighlight;
+    rgb = clamp(rgb, 0.0, 1.0);
+
+    rgb += vec3(u_offset.x + u_offset.w, u_offset.y + u_offset.w, u_offset.z + u_offset.w);
+    rgb = clamp(rgb, 0.0, 1.0);
+
+    // Stage 3: Contrast
+    rgb = clamp((rgb - u_pivot) * u_contrast + u_pivot, 0.0, 1.0);
+
+    // Stage 4: Mid/Detail
+    float lum1  = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    float wMid1 = 4.0 * lum1 * (1.0 - lum1);
+    float delta = (u_midDetail / 100.0) * (lum1 - 0.5) * wMid1;
+    rgb = clamp(rgb + delta, 0.0, 1.0);
+
+    // Stage 5: Shadows / Highlights
+    float lum2 = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    float wSh  = 1.0 - smoothstep(0.0, 0.5, lum2);
+    float wHl  = smoothstep(0.5, 1.0, lum2);
+    float dsh  = (u_shadows    / 100.0) * 0.5 * wSh;
+    float dhl  = (u_highlights / 100.0) * 0.5 * wHl;
+    rgb = clamp(rgb + dsh + dhl, 0.0, 1.0);
+
+    // Stages 6-7: Saturation + Hue in HSL space
+    vec3 hsl = rgb2hsl(rgb);
+    hsl.y = clamp(hsl.y * (u_saturation / 50.0), 0.0, 1.0);
+    hsl.x = fract(hsl.x + (u_hue - 50.0) * 3.6 / 360.0);
+    rgb = hsl2rgb(hsl);
+
+    // Stage 8: Color Boost (vibrance)
+    vec3 hsl2  = rgb2hsl(rgb);
+    float boost = (u_colorBoost / 100.0) * (1.0 - hsl2.y);
+    hsl2.y = clamp(hsl2.y + boost, 0.0, 1.0);
+    rgb = hsl2rgb(hsl2);
+
+    // Stage 9: Lum Mix
+    float corrLum     = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+    vec3 lumPreserved = (corrLum > 0.0001) ? rgb * (origLum / corrLum) : rgb;
+    rgb = clamp(mix(rgb, lumPreserved, u_lumMix / 100.0), 0.0, 1.0);
+
+    // Stage 10: Selection mask blend
+    float mask = u_hasSelMask ? texture(u_selMask, v_texCoord).r : 1.0;
+    fragColor  = vec4(mix(src.rgb, rgb, mask), src.a);
+  }
+` as const

@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
@@ -11,6 +11,7 @@ import { ColorTemperaturePanel } from '../ColorTemperaturePanel/ColorTemperature
 import { InvertPanel } from '../InvertPanel/InvertPanel'
 import { SelectiveColorPanel } from '../SelectiveColorPanel/SelectiveColorPanel'
 import { CurvesPanel } from '../CurvesPanel/CurvesPanel'
+import { ColorGradingPanel } from '../ColorGradingPanel/ColorGradingPanel'
 import styles from './AdjustmentPanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'color-invert':        return 'Invert'
     case 'selective-color':     return 'Selective Color'
     case 'curves':              return 'Curves'
+    case 'color-grading':       return 'Color Grading'
   }
 }
 
@@ -115,6 +117,15 @@ const CurvesHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const ColorGradingHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+    <circle cx="3" cy="6" r="1.8" />
+    <circle cx="9" cy="6" r="1.8" />
+    <circle cx="6" cy="3" r="1.8" />
+    <circle cx="6" cy="9" r="1.8" />
+  </svg>
+)
+
 function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }): React.JSX.Element {
   if (type === 'brightness-contrast') return <BrightnessContrastHeaderIcon />
   if (type === 'hue-saturation') return <HueSaturationHeaderIcon />
@@ -124,6 +135,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'color-invert') return <ColorInvertHeaderIcon />
   if (type === 'selective-color') return <SelectiveColorHeaderIcon />
   if (type === 'curves') return <CurvesHeaderIcon />
+  if (type === 'color-grading') return <ColorGradingHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
@@ -153,7 +165,11 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
   const parentLayerName = parentLayer?.name ?? 'Layer'
 
   return (
-    <div className={[styles.panel, adjLayer.adjustmentType === 'curves' ? styles.panelWide : ''].join(' ')} role="dialog" aria-label={adjustmentTitle(adjLayer)}>
+    <div className={[
+      styles.panel,
+      adjLayer.adjustmentType === 'curves' ? styles.panelWide : '',
+      adjLayer.adjustmentType === 'color-grading' ? styles.panelColorGrading : '',
+    ].join(' ')} role="dialog" aria-label={adjustmentTitle(adjLayer)}>
       <div className={styles.header}>
         <span className={styles.headerIcon}>
           <AdjPanelIcon type={adjLayer.adjustmentType} />
@@ -193,6 +209,12 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
             layer={adjLayer as CurvesAdjustmentLayer}
             parentLayerName={parentLayerName}
             canvasHandleRef={canvasHandleRef}
+          />
+        )}
+        {adjLayer.adjustmentType === 'color-grading' && (
+          <ColorGradingPanel
+            layer={adjLayer as ColorGradingAdjustmentLayer}
+            parentLayerName={parentLayerName}
           />
         )}
       </div>

@@ -6,7 +6,7 @@ import {
   createStaticBuffer,
   fillRectBuffer
 } from './utils'
-import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG, CB_FRAG, BW_FRAG, TEMP_FRAG, INVERT_FRAG, SEL_COLOR_FRAG, CURVES_FRAG } from './shaders'
+import { IMAGE_VERT, IMAGE_FRAG, CHECKER_VERT, CHECKER_FRAG, BLIT_VERT, BLIT_FRAG, FBO_BLIT_VERT, BC_VERT, BC_FRAG, HS_FRAG, VIB_FRAG, CB_FRAG, BW_FRAG, TEMP_FRAG, INVERT_FRAG, SEL_COLOR_FRAG, CURVES_FRAG, CG_FRAG } from './shaders'
 import type { AdjustmentParamsMap } from '@/types'
 import type { CurvesLuts } from '@/adjustments/curves'
 
@@ -16,6 +16,7 @@ type ColorBalancePassParams  = AdjustmentParamsMap['color-balance']
 type BlackAndWhitePassParams = AdjustmentParamsMap['black-and-white']
 type SelectiveColorPassParams = AdjustmentParamsMap['selective-color']
 type CurvesPassParams = AdjustmentParamsMap['curves']
+type ColorGradingPassParams = AdjustmentParamsMap['color-grading']
 
 export interface WebGLLayer {
   id: string
@@ -51,6 +52,7 @@ export type AdjustmentRenderOp =
   | { kind: 'color-invert'; layerId: string; visible: boolean; selMaskLayer?: WebGLLayer }
   | { kind: 'selective-color'; layerId: string; params: SelectiveColorPassParams; visible: boolean; selMaskLayer?: WebGLLayer }
   | { kind: 'curves'; layerId: string; params: CurvesPassParams; luts: CurvesLuts; visible: boolean; selMaskLayer?: WebGLLayer }
+  | { kind: 'color-grading'; layerId: string; params: ColorGradingPassParams; visible: boolean; selMaskLayer?: WebGLLayer }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: WebGLLayer; mask?: WebGLLayer }
@@ -80,6 +82,7 @@ export class WebGLRenderer {
   private readonly invertProgram: WebGLProgram
   private readonly selColorProgram: WebGLProgram
   private readonly curvesProgram: WebGLProgram
+  private readonly cgProgram: WebGLProgram
   private readonly posBuffer: WebGLBuffer
   private readonly texCoordBuffer: WebGLBuffer
   // Two framebuffers for ping-pong compositing
@@ -179,6 +182,11 @@ export class WebGLRenderer {
       gl,
       compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
       compileShader(gl, gl.FRAGMENT_SHADER, CURVES_FRAG)
+    )
+    this.cgProgram = linkProgram(
+      gl,
+      compileShader(gl, gl.VERTEX_SHADER, BC_VERT),
+      compileShader(gl, gl.FRAGMENT_SHADER, CG_FRAG)
     )
 
     const posBuffer = gl.createBuffer()
@@ -464,6 +472,10 @@ export class WebGLRenderer {
     }
     if (entry.kind === 'curves') {
       this.applyCurvesPass(srcTex, dstFb, entry.layerId, entry.luts, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'color-grading') {
+      this.applyColorGradingPass(srcTex, dstFb, entry.params, entry.selMaskLayer)
       return
     }
     const _exhaustive: never = entry
@@ -1206,6 +1218,62 @@ export class WebGLRenderer {
     return pixels
   }
 
+  applyColorGradingPass(
+    srcTex:        WebGLTexture,
+    dstFb:         WebGLFramebuffer,
+    params:        ColorGradingPassParams,
+    selMaskLayer?: WebGLLayer
+  ): void {
+    const { gl, pixelWidth: w, pixelHeight: h } = this
+    const prog = this.cgProgram
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, dstFb)
+    gl.viewport(0, 0, w, h)
+    gl.clearColor(0, 0, 0, 0)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+
+    gl.useProgram(prog)
+    gl.uniform2f(gl.getUniformLocation(prog, 'u_resolution'), w, h)
+
+    const { lift, gamma, gain, offset } = params
+    gl.uniform4f(gl.getUniformLocation(prog, 'u_lift'),   lift.r,   lift.g,   lift.b,   lift.master)
+    gl.uniform4f(gl.getUniformLocation(prog, 'u_gamma'),  gamma.r,  gamma.g,  gamma.b,  gamma.master)
+    gl.uniform4f(gl.getUniformLocation(prog, 'u_gain'),   gain.r,   gain.g,   gain.b,   gain.master)
+    gl.uniform4f(gl.getUniformLocation(prog, 'u_offset'), offset.r, offset.g, offset.b, offset.master)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_temp'),       params.temp)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_tint'),       params.tint)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_contrast'),   params.contrast)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_pivot'),      params.pivot)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_midDetail'),  params.midDetail)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_colorBoost'), params.colorBoost)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_shadows'),    params.shadows)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_highlights'), params.highlights)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_saturation'), params.saturation)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_hue'),        params.hue)
+    gl.uniform1f(gl.getUniformLocation(prog, 'u_lumMix'),     params.lumMix)
+
+    const posLoc = gl.getAttribLocation(prog, 'a_position')
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer)
+    fillRectBuffer(gl, 0, 0, w, h)
+    gl.enableVertexAttribArray(posLoc)
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
+
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, srcTex)
+    gl.uniform1i(gl.getUniformLocation(prog, 'u_src'), 0)
+
+    if (selMaskLayer) {
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, selMaskLayer.texture)
+      gl.uniform1i(gl.getUniformLocation(prog, 'u_selMask'), 1)
+      gl.uniform1i(gl.getUniformLocation(prog, 'u_hasSelMask'), 1)
+    } else {
+      gl.uniform1i(gl.getUniformLocation(prog, 'u_hasSelMask'), 0)
+    }
+
+    gl.drawArrays(gl.TRIANGLES, 0, 6)
+  }
+
   // ─── Lifecycle ─────────────────────────────────────────────────────────────
 
   resize(_canvasWidth: number, _canvasHeight: number): void {}
@@ -1224,6 +1292,7 @@ export class WebGLRenderer {
     gl.deleteProgram(this.invertProgram)
     gl.deleteProgram(this.selColorProgram)
     gl.deleteProgram(this.curvesProgram)
+    gl.deleteProgram(this.cgProgram)
     gl.deleteBuffer(this.posBuffer)
     gl.deleteBuffer(this.texCoordBuffer)
     gl.deleteFramebuffer(this.fb0)

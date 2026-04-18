@@ -93,6 +93,15 @@ export function buildAdjustmentEntry(
       selMaskLayer: mask,
     }
   }
+  if (ls.adjustmentType === 'color-grading') {
+    return {
+      kind: 'color-grading',
+      layerId: ls.id,
+      params: ls.params,
+      visible: ls.visible,
+      selMaskLayer: mask,
+    }
+  }
   const _exhaustive: never = ls
   return _exhaustive
 }

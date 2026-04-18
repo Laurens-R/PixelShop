@@ -168,6 +168,7 @@ export type AdjustmentType =
   | 'color-invert'
   | 'selective-color'
   | 'curves'
+  | 'color-grading'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -259,6 +260,30 @@ export interface AdjustmentParamsMap {
       presetRef: CurvesPresetRef | null
     }
   }
+  'color-grading': {
+    lift:   ColorGradingWheelParams
+    gamma:  ColorGradingWheelParams
+    gain:   ColorGradingWheelParams
+    offset: ColorGradingWheelParams
+    temp:      number
+    tint:      number
+    contrast:  number
+    pivot:     number
+    midDetail: number
+    colorBoost:  number
+    shadows:     number
+    highlights:  number
+    saturation:  number
+    hue:         number
+    lumMix:      number
+  }
+}
+
+export interface ColorGradingWheelParams {
+  r:      number
+  g:      number
+  b:      number
+  master: number
 }
 
 interface AdjustmentLayerBase {
@@ -338,6 +363,14 @@ export interface CurvesAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface ColorGradingAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-grading'
+  params: AdjustmentParamsMap['color-grading']
+  /** True when a selection was active at creation time; baked mask pixels live
+   *  in Canvas adjustmentMaskMap, not in React state. */
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -348,6 +381,7 @@ export type AdjustmentLayerState =
   | ColorInvertAdjustmentLayer
   | SelectiveColorAdjustmentLayer
   | CurvesAdjustmentLayer
+  | ColorGradingAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 
