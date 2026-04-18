@@ -35,24 +35,6 @@ void pixelops_flood_fill(
                fillR, fillG, fillB, fillA, tolerance);
 }
 
-// ─── Gaussian Blur (in-place) ─────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_gaussian_blur(
-    uint8_t* pixels, int width, int height, int radius
-) {
-    filters_gaussian_blur(pixels, width, height, radius);
-}
-
-// ─── Box Blur (in-place) ──────────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_box_blur(
-    uint8_t* pixels, int width, int height, int radius
-) {
-    filters_box_blur(pixels, width, height, radius);
-}
-
 // ─── Generic Convolution (src → dst) ─────────────────────────────────────────
 
 EMSCRIPTEN_KEEPALIVE
@@ -123,38 +105,6 @@ float* pixelops_curves_histogram(
     return computeCurvesHistogram(inputPtr, width, height, maskPtr);
 }
 
-// ─── Radial Blur (in-place) ───────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_radial_blur(
-    uint8_t* pixels, int width, int height,
-    int mode, int amount, float centerX, float centerY, int quality
-) {
-    filters_radial_blur(pixels, width, height, mode, amount, centerX, centerY, quality);
-}
-
-// ─── Sharpen (in-place) ───────────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_sharpen(uint8_t* pixels, int width, int height) {
-    filters_sharpen(pixels, width, height);
-}
-
-// ─── Sharpen More (in-place) ──────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_sharpen_more(uint8_t* pixels, int width, int height) {
-    filters_sharpen_more(pixels, width, height);
-}
-
-// ─── Unsharp Mask (in-place) ──────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_unsharp_mask(uint8_t* pixels, int width, int height,
-                            int amount, int radius, int threshold) {
-    filters_unsharp_mask(pixels, width, height, amount, radius, threshold);
-}
-
 // ─── Smart Sharpen (in-place) ─────────────────────────────────────────────────
 
 EMSCRIPTEN_KEEPALIVE
@@ -183,16 +133,6 @@ void pixelops_film_grain(
     filters_film_grain(pixels, width, height, grainSize, intensity, roughness, seed);
 }
 
-// ─── Lens Blur (in-place) ─────────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_lens_blur(
-    uint8_t* pixels, int width, int height,
-    int radius, int bladeCount, int bladeCurvature, int rotation
-) {
-    filters_lens_blur(pixels, width, height, radius, bladeCount, bladeCurvature, rotation);
-}
-
 // ─── Clouds (in-place) ────────────────────────────────────────────────────────
 
 EMSCRIPTEN_KEEPALIVE
@@ -208,15 +148,6 @@ void pixelops_clouds(
                    fgR, fgG, fgB, bgR, bgG, bgB, seed);
 }
 
-// ─── Motion Blur (in-place) ───────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_motion_blur(
-    uint8_t* pixels, int width, int height,
-    float angleDeg, int distance
-) {
-    filters_motion_blur(pixels, width, height, angleDeg, distance);
-}
 
 // ─── Remove Motion Blur (in-place) ──────────────────────────────────────────
 

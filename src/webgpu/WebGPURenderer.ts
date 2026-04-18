@@ -23,6 +23,7 @@ import {
   CURVES_COMPUTE,
   CG_COMPUTE,
 } from './shaders'
+import { initFilterCompute } from './filterCompute'
 import type { AdjustmentParamsMap } from '@/types'
 import type { CurvesLuts } from '@/adjustments/curves'
 
@@ -249,6 +250,8 @@ export class WebGPURenderer {
     this.selColorPipeline = this.createComputePipeline(SEL_COLOR_COMPUTE, 'cs_selective_color')
     this.curvesPipeline   = this.createComputePipeline(CURVES_COMPUTE,    'cs_curves')
     this.cgPipeline       = this.createComputePipeline(CG_COMPUTE,        'cs_color_grading')
+
+    initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
   }
 
   // ─── Pipeline factories ─────────────────────────────────────────────────────

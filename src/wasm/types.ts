@@ -24,14 +24,6 @@ export interface PixelOpsModule {
     tolerance: number
   ): void
 
-  _pixelops_gaussian_blur(
-    pixelsPtr: number, width: number, height: number, radius: number
-  ): void
-
-  _pixelops_box_blur(
-    pixelsPtr: number, width: number, height: number, radius: number
-  ): void
-
   _pixelops_convolve(
     srcPtr: number, dstPtr: number,
     width: number, height: number,
@@ -76,24 +68,6 @@ export interface PixelOpsModule {
     maskPtr: number
   ): number
 
-  _pixelops_radial_blur(
-    pixelsPtr: number, width: number, height: number,
-    mode: number, amount: number, centerX: number, centerY: number, quality: number
-  ): void
-
-  _pixelops_sharpen(
-    pixelsPtr: number, width: number, height: number
-  ): void
-
-  _pixelops_sharpen_more(
-    pixelsPtr: number, width: number, height: number
-  ): void
-
-  _pixelops_unsharp_mask(
-    pixelsPtr: number, width: number, height: number,
-    amount: number, radius: number, threshold: number
-  ): void
-
   _pixelops_smart_sharpen(
     pixelsPtr: number, width: number, height: number,
     amount: number, radius: number, reduceNoise: number, remove: number
@@ -109,22 +83,12 @@ export interface PixelOpsModule {
     grainSize: number, intensity: number, roughness: number, seed: number
   ): void
 
-  _pixelops_lens_blur(
-    pixelsPtr: number, width: number, height: number,
-    radius: number, bladeCount: number, bladeCurvature: number, rotation: number
-  ): void
-
   _pixelops_clouds(
     pixelsPtr: number, width: number, height: number,
     scale: number, opacity: number, colorMode: number,
     fgR: number, fgG: number, fgB: number,
     bgR: number, bgG: number, bgB: number,
     seed: number
-  ): void
-
-  _pixelops_motion_blur(
-    pixelsPtr: number, width: number, height: number,
-    angleDeg: number, distance: number
   ): void
 
   _pixelops_remove_motion_blur(

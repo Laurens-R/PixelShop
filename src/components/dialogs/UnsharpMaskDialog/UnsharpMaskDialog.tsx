@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { unsharpMask } from '@/wasm'
+import { unsharpMask } from '@/webgpu/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
 import { ToolWindow } from '@/components'

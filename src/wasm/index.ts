@@ -8,7 +8,7 @@
  * This generates src/wasm/generated/pixelops.js and pixelops.wasm.
  *
  * Usage:
- *   import { getPixelOps, floodFill, gaussianBlur } from '@/wasm'
+ *   import { getPixelOps, floodFill } from '@/wasm'
  *   const wasmReady = getPixelOps() // call once; subsequent calls return cache
  */
 
@@ -99,43 +99,6 @@ export async function floodFill(
   const m = await getPixelOps()
   return withInPlaceBuffer(m, pixels, ptr =>
     m._pixelops_flood_fill(ptr, width, height, x, y, r, g, b, a, tolerance)
-  )
-}
-
-/** Separable Gaussian blur (in-place). radius controls kernel half-width. */
-export async function gaussianBlur(
-  pixels: Uint8Array, width: number, height: number, radius: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_gaussian_blur(ptr, width, height, radius)
-  )
-}
-
-/** Single-pass box blur (in-place). radius controls the box half-width. */
-export async function boxBlur(
-  pixels: Uint8Array, width: number, height: number, radius: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_box_blur(ptr, width, height, radius)
-  )
-}
-
-/** Radial blur (in-place).
- *  mode: 0 = Spin, 1 = Zoom.
- *  amount: 1–100.
- *  centerX/centerY: 0.0–1.0 relative to canvas dimensions.
- *  quality: 0 = Draft (8 samples), 1 = Good (16 samples), 2 = Best (32 samples). */
-export async function radialBlur(
-  pixels: Uint8Array, width: number, height: number,
-  mode: number, amount: number,
-  centerX: number, centerY: number,
-  quality: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_radial_blur(ptr, width, height, mode, amount, centerX, centerY, quality)
   )
 }
 
@@ -274,38 +237,6 @@ export async function computeHistogramRGBA(
   }
 }
 
-/** Sharpen (in-place) — standard 3×3 sharpen kernel (center=5, cardinal=-1). */
-export async function sharpen(
-  pixels: Uint8Array, width: number, height: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_sharpen(ptr, width, height)
-  )
-}
-
-/** Sharpen More (in-place) — stronger 3×3 sharpen kernel (center=9, all neighbors=-1). */
-export async function sharpenMore(
-  pixels: Uint8Array, width: number, height: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_sharpen_more(ptr, width, height)
-  )
-}
-
-/** Unsharp Mask (in-place).
- *  amount: 1–500 (%), radius: 1–64 (px), threshold: 0–255 (levels). */
-export async function unsharpMask(
-  pixels: Uint8Array, width: number, height: number,
-  amount: number, radius: number, threshold: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_unsharp_mask(ptr, width, height, amount, radius, threshold)
-  )
-}
-
 /** Smart Sharpen (in-place).
  *  amount: 1–500 (%), radius: 1–64 (px), reduceNoise: 0–100 (%), remove: 0=Gaussian, 1=Lens. */
 export async function smartSharpen(
@@ -342,18 +273,6 @@ export async function filmGrain(
   )
 }
 
-/** Lens Blur (in-place). Polygonal aperture convolution.
- *  radius: 1–100 (px). bladeCount: 3–8. bladeCurvature: 0–100. rotation: 0–360 (°). */
-export async function lensBlur(
-  pixels: Uint8Array, width: number, height: number,
-  radius: number, bladeCount: number, bladeCurvature: number, rotation: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_lens_blur(ptr, width, height, radius, bladeCount, bladeCurvature, rotation)
-  )
-}
-
 /** Clouds (in-place). Fractional value noise composited over existing pixels.
  *  scale: 1–200. opacity: 1–100 (%). colorMode: 0=grayscale, 1=fg/bg color.
  *  fgR/G/B, bgR/G/B: foreground and background colors. seed: 0–9999. */
@@ -369,18 +288,6 @@ export async function clouds(
     m._pixelops_clouds(ptr, width, height,
       scale, opacity, colorMode,
       fgR, fgG, fgB, bgR, bgG, bgB, seed)
-  )
-}
-
-/** Motion Blur (in-place). Box-average along a straight directional line.
- *  angleDeg: 0–360 (0 = right, increases clockwise). distance: 2–999 (samples). */
-export async function motionBlur(
-  pixels: Uint8Array, width: number, height: number,
-  angleDeg: number, distance: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_motion_blur(ptr, width, height, angleDeg, distance)
   )
 }
 

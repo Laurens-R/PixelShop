@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import type { FilterKey, LayerState } from '@/types'
 import { isPixelLayer } from '@/types'
-import { sharpen, sharpenMore } from '@/wasm'
+import { sharpen, sharpenMore } from '@/webgpu/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
 
