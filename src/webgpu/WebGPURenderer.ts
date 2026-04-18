@@ -373,6 +373,12 @@ export class WebGPURenderer {
   }
 
   growLayerToFit(layer: GpuLayer, canvasX: number, canvasY: number, extraRadius = 0): boolean {
+    // Never grow the layer beyond canvas bounds — pointer may be outside the canvas.
+    if (
+      canvasX + extraRadius < 0 || canvasX - extraRadius >= this.pixelWidth ||
+      canvasY + extraRadius < 0 || canvasY - extraRadius >= this.pixelHeight
+    ) return false
+
     const lx = canvasX - layer.offsetX - extraRadius
     const ly = canvasY - layer.offsetY - extraRadius
     const rx = canvasX - layer.offsetX + extraRadius

@@ -632,8 +632,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       if (ctx) toolHandlerRef.current.onHover?.(pos, ctx)
     },
     onLeave: () => {
-      cursorStore.hide()
-      if (brushCursorRef.current) brushCursorRef.current.style.display = 'none'
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onLeave?.(ctx)
     },

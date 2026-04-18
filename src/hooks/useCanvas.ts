@@ -45,6 +45,20 @@ export function useCanvas({
   const isDrawing = useRef(false)
 
   const toCanvasPos = useCallback(
+    (e: React.PointerEvent<HTMLCanvasElement>): CanvasPointerPosition | null => {
+      const rect = e.currentTarget.getBoundingClientRect()
+      const scaleX = e.currentTarget.width / rect.width
+      const scaleY = e.currentTarget.height / rect.height
+      const x = Math.floor((e.clientX - rect.left) * scaleX)
+      const y = Math.floor((e.clientY - rect.top) * scaleY)
+      if (x < 0 || y < 0 || x >= e.currentTarget.width || y >= e.currentTarget.height) return null
+      return { x, y, pressure: e.pressure, shiftKey: e.shiftKey, altKey: e.altKey, timeStamp: e.timeStamp }
+    },
+    []
+  )
+
+  /** Converts pointer position to canvas coords without bounds checking — used during active strokes. */
+  const toRawPos = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>): CanvasPointerPosition => {
       const rect = e.currentTarget.getBoundingClientRect()
       const scaleX = e.currentTarget.width / rect.width
@@ -52,10 +66,7 @@ export function useCanvas({
       return {
         x: Math.floor((e.clientX - rect.left) * scaleX),
         y: Math.floor((e.clientY - rect.top) * scaleY),
-        pressure: e.pressure,
-        shiftKey: e.shiftKey,
-        altKey: e.altKey,
-        timeStamp: e.timeStamp,
+        pressure: e.pressure, shiftKey: e.shiftKey, altKey: e.altKey, timeStamp: e.timeStamp,
       }
     },
     []
@@ -66,9 +77,11 @@ export function useCanvas({
       // Only respond to primary button / pen tip (button 0).
       // Wacom barrel buttons and eraser end fire button 2/5 — ignore them here.
       if (e.button !== 0) return
+      const pos = toCanvasPos(e)
+      if (!pos) return
       e.currentTarget.setPointerCapture(e.pointerId)
       isDrawing.current = true
-      onPointerDown?.(toCanvasPos(e))
+      onPointerDown?.(pos)
     },
     [toCanvasPos, onPointerDown]
   )
@@ -79,7 +92,7 @@ export function useCanvas({
       // e.buttons bit 0 = primary button / pen tip is currently pressed.
       if (isDrawing.current && !(e.buttons & 1)) {
         isDrawing.current = false
-        onPointerUp?.(toCanvasPos(e))
+        onPointerUp?.(toRawPos(e))
         return
       }
 
@@ -98,7 +111,7 @@ export function useCanvas({
         for (const ce of coalesced) {
           const pos: CanvasPointerPosition = {
             x: Math.floor((ce.clientX - rect.left) * sx),
-            y: Math.floor((ce.clientY - rect.top) * sy),
+            y: Math.floor((ce.clientY - rect.top)  * sy),
             // Use primary event pressure for all coalesced samples — per-coalesced pressure
             // fluctuates at the hardware polling rate and causes visible size/opacity jitter.
             pressure: e.pressure,
@@ -122,8 +135,8 @@ export function useCanvas({
         }
       } else {
         const pos = toCanvasPos(e)
-        onHover?.(pos)
-        if (isDrawing.current) onPointerMove?.(pos)
+        onHover?.(toRawPos(e))
+        if (isDrawing.current) onPointerMove?.(toRawPos(e))
       }
     },
     [toCanvasPos, onPointerMove, onPointerMoveBatch, onPointerUp, onHover]
@@ -135,9 +148,9 @@ export function useCanvas({
       if (e.button !== 0) return
       if (!isDrawing.current) return
       isDrawing.current = false
-      onPointerUp?.(toCanvasPos(e))
+      onPointerUp?.(toRawPos(e))
     },
-    [toCanvasPos, onPointerUp]
+    [toRawPos, onPointerUp]
   )
 
   const handlePointerLeave = useCallback(
@@ -145,9 +158,9 @@ export function useCanvas({
       onLeave?.()
       if (!isDrawing.current) return
       isDrawing.current = false
-      onPointerUp?.(toCanvasPos(e))
+      onPointerUp?.(toRawPos(e))
     },
-    [toCanvasPos, onPointerUp, onLeave]
+    [toRawPos, onPointerUp, onLeave]
   )
 
   return { isDrawing, handlePointerDown, handlePointerMove, handlePointerUp, handlePointerLeave }
