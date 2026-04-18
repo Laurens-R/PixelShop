@@ -810,7 +810,7 @@ void filters_remove_motion_blur(
         inB[i] = (float)pixels[i * 4 + 2];
     }
 
-    const int   iterations = std::max(2, 6 - noiseReduction / 20);
+    const int   iterations = std::max(2, 3 - noiseReduction / 50);
     const float blendBack  = (noiseReduction / 100.f) * 0.5f;
 
     std::vector<float> estR = inR, estG = inG, estB = inB;
