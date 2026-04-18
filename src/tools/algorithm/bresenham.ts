@@ -1,4 +1,4 @@
-import type { WebGLRenderer, WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { WebGPURenderer, GpuLayer } from '@/webgpu/WebGPURenderer'
 
 /**
  * Bresenham's line algorithm — plots every integer pixel between (x0,y0) and
@@ -27,8 +27,8 @@ export function bresenham(
 /** Convenience: draw a filled line segment on a layer and flush.
  * Coordinates are CANVAS-SPACE; translates to layer-local internally. */
 export function drawLine(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number,
   y0: number,
   x1: number,
@@ -59,8 +59,8 @@ export function drawLine(
 type SelMask = { mask: Uint8Array; width: number }
 
 function blendPixelOver(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   canvasX: number,
   canvasY: number,
   r: number,
@@ -112,8 +112,8 @@ function blendPixelOver(
  * are skipped entirely. Behaves like the AA capsule path but without feathering.
  */
 function stampCircle(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   cx: number,
   cy: number,
   size: number,
@@ -144,8 +144,8 @@ function stampCircle(
  * stamp artifacts.
  */
 function drawAAThickSegment(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   size: number,
@@ -193,8 +193,8 @@ function drawAAThickSegment(
  * a circular stamp with soft edge coverage.
  */
 export function drawThickLine(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number,
   y0: number,
   x1: number,
@@ -288,8 +288,8 @@ function wuLine(
  * within a single stroke.
  */
 export function drawAALine(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   r: number, g: number, b: number, a: number,
@@ -304,8 +304,8 @@ export function drawAALine(
 /** Convenience: erase a filled line segment on a layer and flush.
  * Coordinates are CANVAS-SPACE; translates to layer-local internally. */
 export function eraseLine(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number,
   y0: number,
   x1: number,
@@ -332,8 +332,8 @@ export function eraseLine(
  * never over-erased within a single stroke.
  */
 function erasePixelOp(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   canvasX: number,
   canvasY: number,
   secR: number,
@@ -378,8 +378,8 @@ function erasePixelOp(
 }
 
 function eraseStampCircle(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   cx: number,
   cy: number,
   size: number,
@@ -404,8 +404,8 @@ function eraseStampCircle(
 }
 
 function eraseAASegment(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   size: number,
@@ -452,8 +452,8 @@ function eraseAASegment(
  * antiAlias: use capsule SDF / Wu line for soft edges.
  */
 export function eraseThickLine(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number,
   y0: number,
   x1: number,
@@ -522,8 +522,8 @@ function toneWeight(luminance: number, range: DodgeBurnRange): number {
  *               visible luminance rings at segment junctions.
  */
 function dodgeBurnPixelOp(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   canvasX: number,
   canvasY: number,
   exposure: number,
@@ -581,8 +581,8 @@ function dodgeBurnPixelOp(
 }
 
 function dodgeBurnStampCircle(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   cx: number, cy: number,
   size: number,
   exposure: number,
@@ -603,8 +603,8 @@ function dodgeBurnStampCircle(
 }
 
 function dodgeBurnAASegment(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   size: number,
@@ -651,8 +651,8 @@ function dodgeBurnAASegment(
  * at the highest coverage reached — producing seamless, artifact-free strokes.
  */
 export function dodgeBurnThickLine(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   size: number,
@@ -706,8 +706,8 @@ function shapeDistance(dx: number, dy: number, shape: BrushShape): number {
  * opacity: 0–100 tool opacity (multiplied together with per-pixel coverage).
  */
 export function stampAirbrush(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   cx: number,
   cy: number,
   size: number,
@@ -770,8 +770,8 @@ export function stampAirbrush(
  * antiAlias: adds a 0.5 px sub-pixel feather at the outer boundary.
  */
 export function drawAirbrushCapsule(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   size: number,
@@ -845,8 +845,8 @@ export function drawAirbrushCapsule(
  * spacing ≈ size * 0.2 keeps the stroke continuous without over-blending.
  */
 export function drawAirbrushSegment(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   x0: number, y0: number,
   x1: number, y1: number,
   size: number,
@@ -885,8 +885,8 @@ export function drawAirbrushSegment(
  * The touched map prevents double-painting in capsule overlaps.
  */
 export function walkQuadBezier(
-  renderer: WebGLRenderer,
-  layer: WebGLLayer,
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
   p0x: number, p0y: number,
   cpx: number, cpy: number,
   p1x: number, p1y: number,

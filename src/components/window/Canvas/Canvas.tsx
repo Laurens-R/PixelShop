@@ -1,9 +1,9 @@
 import React, { forwardRef, useEffect, useRef, useState } from 'react'
-import { useWebGL } from '@/hooks/useWebGL'
+import { useWebGPU } from '@/hooks/useWebGPU'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
-import type { WebGLLayer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
+import type { GpuLayer, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
 import type { TextLayerState, ShapeLayerState, PixelLayerState, MaskLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
@@ -46,14 +46,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   ref
 ) {
   const { state, dispatch } = useAppContext()
-  const { canvasElRef } = useCanvasContext()
-  const { canvasRef, rendererRef } = useWebGL({
+  const { canvasElRef, thumbnailCanvasRef } = useCanvasContext()
+  const { canvasRef, rendererRef, rendererVersion } = useWebGPU({
     pixelWidth: width,
     pixelHeight: height
   })
 
-  const glLayersRef = useRef<Map<string, WebGLLayer>>(new Map())
-  const adjustmentMaskMap = useRef<Map<string, WebGLLayer>>(new Map())
+  const glLayersRef = useRef<Map<string, GpuLayer>>(new Map())
+  const adjustmentMaskMap = useRef<Map<string, GpuLayer>>(new Map())
   const toolHandlerRef = useRef<ToolHandler>(TOOL_REGISTRY[state.activeTool].createHandler())
   const hasInitializedRef = useRef(false)
   // Track isActive in a ref so async init can read the current value
@@ -84,7 +84,37 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   // When a pixel-modifying tool starts on a text/shape layer, this holds the
   // newly-created pixel layer so buildCtx can target it before React re-renders.
-  const newPixelLayerRef = useRef<WebGLLayer | null>(null)
+  const newPixelLayerRef = useRef<GpuLayer | null>(null)
+
+  // ── Thumbnail mirror canvas ────────────────────────────────────
+  // A plain 2D canvas kept in sync with the WebGPU output so Navigator (and any
+  // other panel) can read pixel content without touching the WebGPU canvas directly
+  // (which can cause GPU-process crashes in Electron when cross-context read is attempted).
+  useEffect(() => {
+    const mirror = document.createElement('canvas')
+    mirror.width = width
+    mirror.height = height
+    thumbnailCanvasRef.current = mirror
+    return () => { thumbnailCanvasRef.current = null }
+  }, [width, height, thumbnailCanvasRef])
+
+  // doRender: wrapper around renderPlan that also asynchronously refreshes the mirror canvas.
+  const doRender = (): void => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+    renderer.renderPlan(buildRenderPlan())
+    // Async mirror update — createImageBitmap is the spec-correct way to snapshot a WebGPU canvas.
+    const gpuCanvas = canvasRef.current
+    const mirror = thumbnailCanvasRef.current
+    if (gpuCanvas && mirror) {
+      createImageBitmap(gpuCanvas).then(bitmap => {
+        const ctx = mirror.getContext('2d')
+        ctx?.clearRect(0, 0, mirror.width, mirror.height)
+        ctx?.drawImage(bitmap, 0, 0)
+        bitmap.close()
+      }).catch(() => { /* not yet presented */ })
+    }
+  }
 
   // ── Expose handle for save / export / clipboard ────────────────
   useCanvasHandle({
@@ -232,7 +262,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         glLayersRef.current.set(ls.id, layer)
       }
       if (isStale()) return
-      rendererRef.current?.renderPlan(buildRenderPlan())
+      doRender()
       if (!isStale() && isActiveRef.current) {
         onReadyRef.current?.()
       }
@@ -244,7 +274,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       hasInitializedRef.current = false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rendererRef.current])
+  }, [rendererVersion])
 
   // Sync WebGL layers whenever AppState layer list changes
   useEffect(() => {
@@ -337,7 +367,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
     }
 
-    renderer.renderPlan(buildRenderPlan())
+    doRender()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.layers, isActive, editingLayerId])
 
@@ -346,14 +376,14 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const unsubscribe = adjustmentPreviewStore.subscribe(() => {
       const renderer = rendererRef.current
       if (!renderer) return
-      renderer.renderPlan(buildRenderPlan())
+      doRender()
     })
     return unsubscribe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive])
 
-  function buildMaskMap(): Map<string, WebGLLayer> {
-    const maskMap = new Map<string, WebGLLayer>()
+  function buildMaskMap(): Map<string, GpuLayer> {
+    const maskMap = new Map<string, GpuLayer>()
     for (const ls of state.layers) {
       if ('type' in ls && ls.type === 'mask' && ls.visible) {
         const gl = glLayersRef.current.get(ls.id)
@@ -363,13 +393,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     return maskMap
   }
 
-  function buildOrderedGLLayers(): WebGLLayer[] {
+  function buildOrderedGLLayers(): GpuLayer[] {
     const map = glLayersRef.current
     // Exclude mask and adjustment layers — mask applied via buildMaskMap, adjustments via renderPlan
     const layers = state.layers
       .filter((ls) => !('type' in ls && (ls.type === 'mask' || ls.type === 'adjustment')))
       .map((ls) => map.get(ls.id))
-      .filter((l): l is WebGLLayer => !!l)
+      .filter((l): l is GpuLayer => !!l)
     // Include any pending new pixel layer before state re-renders with it
     const pending = newPixelLayerRef.current
     if (pending && !layers.some(l => l === pending)) layers.push(pending)
@@ -461,9 +491,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       secondaryColor: isMaskLayer ? toGray(state.secondaryColor) : state.secondaryColor,
       selectionMask: selectionStore.mask,
       render: () => {
-        const activeRenderer = rendererRef.current
-        if (!activeRenderer) return
-        activeRenderer.renderPlan(buildRenderPlan())
+        doRender()
       },
       growLayerToFit: (canvasX: number, canvasY: number, extraRadius = 0): void => {
         // Mask layers are always full-canvas sized — never grow them.
@@ -488,7 +516,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         rasterizeTextToLayer(ls, gl)
         renderer.flushLayer(gl)
         glLayersRef.current.set(ls.id, gl)
-        renderer.renderPlan(buildRenderPlan())
+        doRender()
         dispatch({ type: 'ADD_TEXT_LAYER', payload: ls })
         setEditingLayerId(ls.id)
       },
@@ -507,7 +535,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         if (!gl) return
         rasterizeTextToLayer({ ...ls, x, y }, gl)
         renderer.flushLayer(gl)
-        renderer.renderPlan(buildRenderPlan())
+        doRender()
       },
       addShapeLayer: (ls) => {
         const cw = renderer.pixelWidth
@@ -516,7 +544,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         rasterizeShapeToLayer(ls, gl, cw, ch)
         renderer.flushLayer(gl)
         glLayersRef.current.set(ls.id, gl)
-        renderer.renderPlan(buildRenderPlan())
+        doRender()
         dispatch({ type: 'ADD_SHAPE_LAYER', payload: ls })
       },
       updateShapeLayer: (ls) => {
@@ -529,7 +557,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         const ch = renderer.pixelHeight
         rasterizeShapeToLayer(ls, gl, cw, ch)
         renderer.flushLayer(gl)
-        renderer.renderPlan(buildRenderPlan())
+        doRender()
       },
       shapeLayers: state.layers.filter(
         (l): l is ShapeLayerState => 'type' in l && l.type === 'shape'

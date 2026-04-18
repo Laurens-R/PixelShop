@@ -1,4 +1,4 @@
-import type { RenderPlanEntry, WebGLRenderer } from '@/webgl/WebGLRenderer'
+import type { RenderPlanEntry, WebGPURenderer } from '@/webgpu/WebGPURenderer'
 
 export type RasterBackend = 'gpu'
 export type RasterReason = 'flatten' | 'export' | 'sample' | 'merge'
@@ -8,7 +8,7 @@ export interface RasterizeDocumentRequest {
   width: number
   height: number
   reason: RasterReason
-  renderer?: WebGLRenderer | null
+  renderer?: WebGPURenderer | null
 }
 
 export interface RasterizeDocumentResult {

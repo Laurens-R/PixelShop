@@ -24,7 +24,7 @@ export function useExportOps({
     try {
       const handle = canvasHandleRef.current
       if (!handle) throw new Error('Canvas renderer is not ready yet. Please try export again.')
-      const flat = handle.rasterizeLayers(stateRef.current.layers, 'export')
+      const flat = await handle.rasterizeLayers(stateRef.current.layers, 'export')
       const { data, width, height } = flat
       let dataUrl: string
       if      (settings.format === 'png')  dataUrl = exportPng(data, width, height)

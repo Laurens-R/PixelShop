@@ -1,16 +1,16 @@
 import type React from 'react'
-import type { WebGLRenderer, WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { WebGPURenderer, GpuLayer } from '@/webgpu/WebGPURenderer'
 import type { RGBAColor, TextLayerState, ShapeLayerState } from '@/types'
 
 // ─── Runtime context passed to tool handlers on each pointer event ────────────
 
 export interface ToolContext {
-  renderer: WebGLRenderer
-  layer: WebGLLayer
-  layers: WebGLLayer[]
+  renderer: WebGPURenderer
+  layer: GpuLayer
+  layers: GpuLayer[]
   primaryColor: RGBAColor
   secondaryColor: RGBAColor
-  render: (layers: WebGLLayer[]) => void
+  render: (layers?: GpuLayer[]) => void
   /**
    * Grow the active layer's buffer if the given canvas-space point (with
    * optional extra radius) would fall outside it. Call before writing pixels

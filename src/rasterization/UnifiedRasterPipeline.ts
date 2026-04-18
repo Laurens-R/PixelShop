@@ -4,6 +4,6 @@ import {
   type RasterizeDocumentResult,
 } from './types'
 
-export function rasterizeDocument(request: RasterizeDocumentRequest): RasterizeDocumentResult {
+export async function rasterizeDocument(request: RasterizeDocumentRequest): Promise<RasterizeDocumentResult> {
   return rasterizeWithGpu(request)
 }

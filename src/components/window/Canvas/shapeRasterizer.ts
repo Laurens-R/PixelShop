@@ -1,5 +1,5 @@
 import type { ShapeLayerState } from '@/types'
-import type { WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { GpuLayer } from '@/webgpu/WebGPURenderer'
 
 // ─── Shared offscreen canvas ──────────────────────────────────────────────────
 
@@ -96,7 +96,7 @@ export function buildShapePath(
  */
 export function rasterizeShapeToLayer(
   ls: ShapeLayerState,
-  glLayer: WebGLLayer,
+  glLayer: GpuLayer,
   canvasWidth: number,
   canvasHeight: number,
 ): void {

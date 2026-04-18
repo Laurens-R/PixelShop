@@ -4,13 +4,13 @@ import {
   type RasterizeDocumentResult,
 } from './types'
 
-export function rasterizeWithGpu(request: RasterizeDocumentRequest): RasterizeDocumentResult {
+export async function rasterizeWithGpu(request: RasterizeDocumentRequest): Promise<RasterizeDocumentResult> {
   const renderer = request.renderer
   if (!renderer) {
     throw new RasterizationUnavailableError('GPU rasterization is unavailable because no renderer is bound.')
   }
 
-  const data = renderer.readFlattenedPlan(request.plan)
+  const data = await renderer.readFlattenedPlan(request.plan)
 
   return {
     data,

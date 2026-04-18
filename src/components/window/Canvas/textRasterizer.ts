@@ -1,5 +1,5 @@
 import type { TextLayerState } from '@/types'
-import type { WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { GpuLayer } from '@/webgpu/WebGPURenderer'
 
 /** Break a single paragraph into lines that fit within maxWidth canvas pixels. */
 function wrapLine(ctx2d: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
@@ -25,7 +25,7 @@ function wrapLine(ctx2d: CanvasRenderingContext2D, text: string, maxWidth: numbe
  * The layer must already be canvas-sized (offsetX=0, offsetY=0).
  * Call renderer.flushLayer() after this to upload to GPU.
  */
-export function rasterizeTextToLayer(ls: TextLayerState, gl: WebGLLayer): void {
+export function rasterizeTextToLayer(ls: TextLayerState, gl: GpuLayer): void {
   const w = gl.layerWidth
   const h = gl.layerHeight
   gl.data.fill(0) // clear existing pixels

@@ -12,12 +12,12 @@ export const wandOptions = { tolerance: 32, contiguous: true }
 
 function createMagicWandHandler(): ToolHandler {
   return {
-    onPointerDown({ x, y, shiftKey, altKey }: ToolPointerPos, ctx: ToolContext) {
+    async onPointerDown({ x, y, shiftKey, altKey }: ToolPointerPos, ctx: ToolContext) {
       const mode: SelectionMode = altKey ? 'subtract' : shiftKey ? 'add' : 'set'
       // Sample the flattened composite so the wand operates on what the user
       // actually sees — not just the raw (possibly transparent) active layer.
       // This makes tolerance meaningful even in multi-layer documents.
-      const flatData = ctx.renderer.readFlattenedPixels(ctx.layers)
+      const flatData = await ctx.renderer.readFlattenedPixels(ctx.layers)
       selectionStore.floodFillSelect(
         x, y,
         flatData,

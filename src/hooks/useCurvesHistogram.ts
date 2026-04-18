@@ -91,44 +91,51 @@ export function useCurvesHistogram({
       return
     }
 
-    const sourcePixels = handle.readAdjustmentInputPixels(adjustmentLayerId)
-    if (!sourcePixels || sourcePixels.length !== width * height * 4) {
-      setResult(null)
-      setStatus('unavailable')
-      setMessage('Histogram unavailable for this layer source.')
-      return
-    }
-
-    const maskRgba = handle.getAdjustmentMaskPixels(adjustmentLayerId)
-    const mask = extractMaskChannel(maskRgba)
-    const sourceRevision = buildSourceRevision(adjustmentLayerId, sourcePixels, maskRgba, sourceRevisionHint)
-    const cacheKey = `${adjustmentLayerId}:${sourceRevision}`
-    const cached = cacheRef.current.get(cacheKey)
-    if (cached) {
-      setResult(cached)
-      setStatus('ready')
-      setMessage(null)
-      return
-    }
-
+    let cancelled = false
     const token = ++requestTokenRef.current
     setStatus('loading')
     setMessage('Computing histogram...')
 
-    void computeHistogramRGBA(sourcePixels, width, height, mask)
-      .then((hist) => {
-        if (token !== requestTokenRef.current) return
-        cacheRef.current.set(cacheKey, hist)
-        setResult(hist)
+    const load = async (): Promise<void> => {
+      const sourcePixels = await handle.readAdjustmentInputPixels(adjustmentLayerId)
+      if (cancelled) return
+      if (!sourcePixels || sourcePixels.length !== width * height * 4) {
+        setResult(null)
+        setStatus('unavailable')
+        setMessage('Histogram unavailable for this layer source.')
+        return
+      }
+
+      const maskRgba = handle.getAdjustmentMaskPixels(adjustmentLayerId)
+      const mask = extractMaskChannel(maskRgba)
+      const sourceRevision = buildSourceRevision(adjustmentLayerId, sourcePixels, maskRgba, sourceRevisionHint)
+      const cacheKey = `${adjustmentLayerId}:${sourceRevision}`
+      const cached = cacheRef.current.get(cacheKey)
+      if (cached) {
+        setResult(cached)
         setStatus('ready')
         setMessage(null)
-      })
-      .catch((error: unknown) => {
-        if (token !== requestTokenRef.current) return
-        setResult(null)
-        setStatus('error')
-        setMessage(error instanceof Error ? error.message : 'Failed to compute histogram.')
-      })
+        return
+      }
+
+      void computeHistogramRGBA(sourcePixels, width, height, mask)
+        .then((hist) => {
+          if (token !== requestTokenRef.current) return
+          cacheRef.current.set(cacheKey, hist)
+          setResult(hist)
+          setStatus('ready')
+          setMessage(null)
+        })
+        .catch((error: unknown) => {
+          if (token !== requestTokenRef.current) return
+          setResult(null)
+          setStatus('error')
+          setMessage(error instanceof Error ? error.message : 'Failed to compute histogram.')
+        })
+    }
+
+    void load()
+    return () => { cancelled = true }
   }, [canvasHandleRef, adjustmentLayerId, showHistogram, width, height, sourceRevisionHint])
 
   const histogram = useMemo((): Float32Array | null => {

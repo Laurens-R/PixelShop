@@ -1,6 +1,5 @@
 import React from 'react'
-import type { WebGLLayer } from '@/webgl/WebGLRenderer'
-import type { WebGLRenderer } from '@/webgl/WebGLRenderer'
+import type { GpuLayer, WebGPURenderer } from '@/webgpu/WebGPURenderer'
 import type { RGBAColor } from '@/types'
 import type { ToolDefinition, ToolHandler, ToolOptionsStyles, ToolContext, ToolPointerPos } from './types'
 
@@ -13,8 +12,8 @@ export const eyedropperOptions = {
 // ─── Composited pixel sampling ────────────────────────────────────────────────
 
 function sampleCompositedPixel(
-  layers: WebGLLayer[],
-  renderer: WebGLRenderer,
+  layers: GpuLayer[],
+  renderer: WebGPURenderer,
   cx: number,
   cy: number,
 ): [number, number, number, number] {
@@ -40,8 +39,8 @@ function sampleCompositedPixel(
 }
 
 function sampleArea(
-  layers: WebGLLayer[],
-  renderer: WebGLRenderer,
+  layers: GpuLayer[],
+  renderer: WebGPURenderer,
   cx: number,
   cy: number,
   sampleSize: 1 | 3 | 5,

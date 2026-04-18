@@ -1,11 +1,11 @@
 import type { AdjustmentLayerState, LayerState, MaskLayerState } from '@/types'
 import { isPixelLayer } from '@/types'
 import { buildCurvesLuts } from '@/adjustments/curves'
-import type { WebGLLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/webgl/WebGLRenderer'
+import type { GpuLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
 
 export function buildAdjustmentEntry(
   ls: AdjustmentLayerState,
-  mask: WebGLLayer | undefined
+  mask: GpuLayer | undefined
 ): AdjustmentRenderOp | null {
   if (ls.adjustmentType === 'brightness-contrast') {
     return {
@@ -108,9 +108,9 @@ export function buildAdjustmentEntry(
 
 export function buildRenderPlan(
   layers: readonly LayerState[],
-  glLayers: Map<string, WebGLLayer>,
-  maskMap: Map<string, WebGLLayer>,
-  adjustmentMaskMap: Map<string, WebGLLayer>,
+  glLayers: Map<string, GpuLayer>,
+  maskMap: Map<string, GpuLayer>,
+  adjustmentMaskMap: Map<string, GpuLayer>,
   bypassedAdjustmentIds: ReadonlySet<string>
 ): RenderPlanEntry[] {
   const plan: RenderPlanEntry[] = []
@@ -130,7 +130,8 @@ export function buildRenderPlan(
     if (!baseLayer) continue
 
     if (!isPixelLayer(ls)) {
-      plan.push({ kind: 'layer', layer: baseLayer, mask: maskMap.get(ls.id) })
+      const id = (ls as { id: string }).id
+      plan.push({ kind: 'layer', layer: baseLayer, mask: maskMap.get(id) })
       continue
     }
 

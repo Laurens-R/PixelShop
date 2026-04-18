@@ -9,7 +9,7 @@ const THUMB_W = 214
 
 export function Navigator(): React.JSX.Element {
   const { state, dispatch } = useAppContext()
-  const { canvasElRef } = useCanvasContext()
+  const { canvasElRef, thumbnailCanvasRef } = useCanvasContext()
   const thumbRef = useRef<HTMLCanvasElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const [zoomInput, setZoomInput] = useState(String(Math.round(state.canvas.zoom * 100)))
@@ -20,7 +20,7 @@ export function Navigator(): React.JSX.Element {
 
   // ─── Draw thumbnail + viewport rect (runs every frame) ─────────
   const drawThumb = useCallback(() => {
-    const src = canvasElRef.current
+    const src = thumbnailCanvasRef.current  // safe 2D mirror — never the WebGPU canvas
     const dst = thumbRef.current
     if (!src || !dst) return
     const ctx = dst.getContext('2d')
@@ -29,9 +29,9 @@ export function Navigator(): React.JSX.Element {
     try {
       ctx.drawImage(src, 0, 0, THUMB_W, thumbH)
     } catch {
-      // canvas may not be ready yet
+      // mirror not yet updated
     }
-  }, [canvasElRef, thumbH])
+  }, [thumbnailCanvasRef, thumbH])
 
   // ─── Viewport rect via bounding-rect intersection ────────────────
   const getViewportRect = useCallback((): React.CSSProperties => {

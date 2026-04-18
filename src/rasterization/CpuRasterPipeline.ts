@@ -1,4 +1,4 @@
-import type { AdjustmentRenderOp, WebGLLayer } from '@/webgl/WebGLRenderer'
+import type { AdjustmentRenderOp, GpuLayer } from '@/webgpu/WebGPURenderer'
 import {
   RasterizationExecutionError,
   type RasterizeDocumentRequest,
@@ -35,7 +35,7 @@ export class CpuRasterPipeline {
       if (entry.kind === 'adjustment-group') {
         if (!entry.baseLayer.visible || entry.baseLayer.opacity <= 0) continue
         const scoped = new Uint8Array(width * height * 4)
-        const baseAsSource: WebGLLayer = {
+        const baseAsSource: GpuLayer = {
           ...entry.baseLayer,
           opacity: 1,
           blendMode: 'normal',
@@ -97,10 +97,10 @@ export class CpuRasterPipeline {
 
   private compositeLayerOnto(
     destination: Uint8Array,
-    layer: WebGLLayer,
+    layer: GpuLayer,
     width: number,
     height: number,
-    maskLayer?: WebGLLayer,
+    maskLayer?: GpuLayer,
   ): void {
     const src = layer.data
 

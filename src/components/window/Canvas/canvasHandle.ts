@@ -1,6 +1,6 @@
 import { useImperativeHandle, useRef } from 'react'
 import type React from 'react'
-import type { WebGLLayer, WebGLRenderer, RenderPlanEntry } from '@/webgl/WebGLRenderer'
+import type { GpuLayer, WebGPURenderer, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
 import type { LayerState } from '@/types'
 import { buildRenderPlan as buildCanvasRenderPlan } from './canvasPlan'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
@@ -19,9 +19,9 @@ export interface CanvasHandle {
    * pixel data together with the image dimensions.
    * Returns null when the renderer is not yet initialised.
    */
-  rasterizeComposite: (reason: RasterReason) => { data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }
+  rasterizeComposite: (reason: RasterReason) => Promise<{ data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }>
   /** Rasterize a provided subset of layer state using the same plan builder logic as canvas rendering. */
-  rasterizeLayers: (layers: readonly LayerState[], reason: RasterReason) => { data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }
+  rasterizeLayers: (layers: readonly LayerState[], reason: RasterReason) => Promise<{ data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }>
   /** Return a copy of a layer's raw RGBA pixel data IN CANVAS-SIZE buffer (pixels outside layer bounds are transparent). */
   getLayerPixels: (layerId: string) => Uint8Array | null
   /**
@@ -44,7 +44,7 @@ export interface CanvasHandle {
   /** Restore baked selection masks for adjustment layers and re-render. */
   restoreAllAdjustmentMasks: (masks: Map<string, Uint8Array>) => void
   /** Return full-canvas RGBA pixels that feed into the target adjustment layer. */
-  readAdjustmentInputPixels: (adjustmentLayerId: string) => Uint8Array | null
+  readAdjustmentInputPixels: (adjustmentLayerId: string) => Promise<Uint8Array | null>
   /** Return a copy of a baked adjustment selection mask by adjustment layer ID. */
   getAdjustmentMaskPixels: (adjustmentLayerId: string) => Uint8Array | null
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
@@ -67,12 +67,12 @@ export interface CanvasHandle {
 
 interface UseCanvasHandleParams {
   ref: React.ForwardedRef<CanvasHandle>
-  rendererRef: { readonly current: WebGLRenderer | null }
-  glLayersRef: { readonly current: Map<string, WebGLLayer> }
-  adjustmentMaskMap: { readonly current: Map<string, WebGLLayer> }
+  rendererRef: { readonly current: WebGPURenderer | null }
+  glLayersRef: { readonly current: Map<string, GpuLayer> }
+  adjustmentMaskMap: { readonly current: Map<string, GpuLayer> }
   layersStateRef: { readonly current: readonly LayerState[] }
   /** Returns the correctly-filtered layers + mask map + full render plan. */
-  buildRenderArgs: () => { layers: WebGLLayer[]; maskMap: Map<string, WebGLLayer>; plan: RenderPlanEntry[] }
+  buildRenderArgs: () => { layers: GpuLayer[]; maskMap: Map<string, GpuLayer>; plan: RenderPlanEntry[] }
   width: number
   height: number
   viewportRef: React.RefObject<HTMLDivElement | null>
@@ -94,7 +94,7 @@ export function useCanvasHandle({
   const buildRenderArgsRef = useRef(buildRenderArgs)
   buildRenderArgsRef.current = buildRenderArgs
 
-  const requireRenderer = (): WebGLRenderer => {
+  const requireRenderer = (): WebGPURenderer => {
     const renderer = rendererRef.current
     if (!renderer) throw new Error('Rasterization failed because the GPU renderer is not ready.')
     return renderer
@@ -108,7 +108,7 @@ export function useCanvasHandle({
   }
 
   const rebuildPlanForLayers = (layers: readonly LayerState[]): RenderPlanEntry[] => {
-    const maskMap = new Map<string, WebGLLayer>()
+    const maskMap = new Map<string, GpuLayer>()
     for (const layer of layers) {
       if ('type' in layer && layer.type === 'mask' && layer.visible) {
         const gl = glLayersRef.current.get(layer.id)
@@ -140,10 +140,10 @@ export function useCanvasHandle({
       return encodePng(renderer.readLayerPixels(maskLayer), renderer.pixelWidth, renderer.pixelHeight)
     },
 
-    rasterizeComposite: (reason) => {
+    rasterizeComposite: async (reason) => {
       const renderer = requireRenderer()
       const { plan } = buildRenderArgsRef.current()
-      const result = rasterizeDocument({
+      const result = await rasterizeDocument({
         plan,
         width: renderer.pixelWidth,
         height: renderer.pixelHeight,
@@ -161,10 +161,10 @@ export function useCanvasHandle({
       }
     },
 
-    rasterizeLayers: (layers, reason) => {
+    rasterizeLayers: async (layers, reason) => {
       const renderer = requireRenderer()
       const plan = rebuildPlanForLayers(layers)
-      const result = rasterizeDocument({
+      const result = await rasterizeDocument({
         plan,
         width: renderer.pixelWidth,
         height: renderer.pixelHeight,
@@ -329,7 +329,7 @@ export function useCanvasHandle({
       renderFromPlan()
     },
 
-    readAdjustmentInputPixels: (adjustmentLayerId) => {
+    readAdjustmentInputPixels: async (adjustmentLayerId) => {
       const renderer = rendererRef.current
       if (!renderer) return null
       const { plan } = buildRenderArgsRef.current()

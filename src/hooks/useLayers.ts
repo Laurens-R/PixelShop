@@ -56,7 +56,7 @@ export function useLayers({
   pendingLayerLabelRef,
 }: UseLayersOptions): UseLayersReturn {
 
-  const handleMergeSelected = useCallback((ids: string[]): void => {
+  const handleMergeSelected = useCallback(async (ids: string[]): Promise<void> => {
     try {
       const handle = canvasHandleRef.current
       if (ids.length < 2 || !handle) return
@@ -68,7 +68,7 @@ export function useLayers({
       const rootIds = new Set(selectedRoots.map(l => l.id))
       const mergeIds = expandMergeLayerIds(layers, rootIds)
       const mergeLayers = layers.filter(l => mergeIds.has(l.id))
-      const merged = handle.rasterizeLayers(mergeLayers, 'merge').data
+      const merged = (await handle.rasterizeLayers(mergeLayers, 'merge')).data
       captureHistory('Merge Layers')
 
       const topIdx = layers.findLastIndex(l => rootIds.has(l.id))
@@ -90,7 +90,7 @@ export function useLayers({
     }
   }, [canvasHandleRef, stateRef, captureHistory, dispatch])
 
-  const handleMergeDown = useCallback((): void => {
+  const handleMergeDown = useCallback(async (): Promise<void> => {
     try {
       const layers = stateRef.current.layers
       const activeLayerId = stateRef.current.activeLayerId
@@ -108,7 +108,7 @@ export function useLayers({
       const rootIds = new Set(mergeRoots.map(l => l.id))
       const mergeIds = expandMergeLayerIds(layers, rootIds)
       const mergeLayers = layers.filter(l => mergeIds.has(l.id))
-      const merged = handle.rasterizeLayers(mergeLayers, 'merge').data
+      const merged = (await handle.rasterizeLayers(mergeLayers, 'merge')).data
       captureHistory('Merge Down')
 
       const newId = `layer-${Date.now()}`
@@ -135,7 +135,7 @@ export function useLayers({
     }
   }, [canvasHandleRef, stateRef, captureHistory, dispatch])
 
-  const handleMergeVisible = useCallback((): void => {
+  const handleMergeVisible = useCallback(async (): Promise<void> => {
     try {
       const layers = stateRef.current.layers
       const handle = canvasHandleRef.current
@@ -147,7 +147,7 @@ export function useLayers({
       const rootIds = new Set(visibleRoots.map(l => l.id))
       const mergeIds = expandMergeLayerIds(layers, rootIds)
       const mergeLayers = layers.filter(l => mergeIds.has(l.id))
-      const merged = handle.rasterizeLayers(mergeLayers, 'merge').data
+      const merged = (await handle.rasterizeLayers(mergeLayers, 'merge')).data
       captureHistory('Merge Visible')
 
       const topIdx = layers.findLastIndex(l => rootIds.has(l.id))
@@ -196,14 +196,14 @@ export function useLayers({
     if (id) dispatch({ type: 'REMOVE_LAYER', payload: id })
   }, [dispatch, stateRef])
 
-  const handleFlattenImage = useCallback((): void => {
+  const handleFlattenImage = useCallback(async (): Promise<void> => {
     const layers    = stateRef.current.layers
     const pxLayers  = layers.filter(l => !('type' in l && l.type === 'mask'))
     if (pxLayers.length < 2) return
     try {
       const handle = canvasHandleRef.current
       if (!handle) throw new Error('Canvas renderer is not ready yet. Please try flattening again.')
-      const flat = handle.rasterizeComposite('flatten')
+      const flat = await handle.rasterizeComposite('flatten')
       captureHistory('Flatten Image')
       const merged = flat.data
       const newId  = `layer-${Date.now()}`
