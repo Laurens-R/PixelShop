@@ -488,13 +488,10 @@ fn cs_color_temperature(@builtin(global_invocation_id) id: vec3u) {
 export const INVERT_COMPUTE = /* wgsl */ `
 ${MASK_FLAGS_STRUCT}
 
-struct InvertParams { _pad : vec4f }
-
 @group(0) @binding(0) var srcTex   : texture_2d<f32>;
 @group(0) @binding(1) var dstTex   : texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(2) var<uniform> params    : InvertParams;
-@group(0) @binding(3) var selMask  : texture_2d<f32>;
-@group(0) @binding(4) var<uniform> maskFlags : MaskFlags;
+@group(0) @binding(2) var selMask  : texture_2d<f32>;
+@group(0) @binding(3) var<uniform> maskFlags : MaskFlags;
 
 @compute @workgroup_size(8, 8)
 fn cs_color_invert(@builtin(global_invocation_id) id: vec3u) {
@@ -522,7 +519,6 @@ struct SelectiveColorParams {
   yellow   : array<vec4f, 3>,
   black    : array<vec4f, 3>,
   relative : u32,
-  _pad     : vec3u,
 }
 
 fn scGetF32(arr: array<vec4f, 3>, i: u32) -> f32 {
@@ -617,18 +613,15 @@ fn cs_selective_color(@builtin(global_invocation_id) id: vec3u) {
 export const CURVES_COMPUTE = /* wgsl */ `
 ${MASK_FLAGS_STRUCT}
 
-struct CurvesMeta { _pad : vec4f }
-
 @group(0) @binding(0) var srcTex    : texture_2d<f32>;
 @group(0) @binding(1) var dstTex    : texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(2) var<uniform> params     : CurvesMeta;
-@group(0) @binding(3) var selMask   : texture_2d<f32>;
-@group(0) @binding(4) var<uniform> maskFlags  : MaskFlags;
-@group(0) @binding(5) var lutSampler : sampler;
-@group(0) @binding(6) var rgbLut    : texture_2d<f32>;
-@group(0) @binding(7) var redLut    : texture_2d<f32>;
-@group(0) @binding(8) var greenLut  : texture_2d<f32>;
-@group(0) @binding(9) var blueLut   : texture_2d<f32>;
+@group(0) @binding(2) var selMask   : texture_2d<f32>;
+@group(0) @binding(3) var<uniform> maskFlags  : MaskFlags;
+@group(0) @binding(4) var lutSampler : sampler;
+@group(0) @binding(5) var rgbLut    : texture_2d<f32>;
+@group(0) @binding(6) var redLut    : texture_2d<f32>;
+@group(0) @binding(7) var greenLut  : texture_2d<f32>;
+@group(0) @binding(8) var blueLut   : texture_2d<f32>;
 
 fn sampleLut(lut: texture_2d<f32>, channelValue: f32) -> f32 {
   return textureSampleLevel(lut, lutSampler, vec2f(clamp(channelValue, 0.0, 1.0), 0.5), 0.0).r;

@@ -906,8 +906,7 @@ export class WebGPURenderer {
       return
     }
     if (entry.kind === 'color-invert') {
-      const params = new Float32Array([0, 0, 0, 0])
-      this.encodeComputePass(encoder, this.invertPipeline, srcTex, dstTex, params, entry.selMaskLayer)
+      this.encodeInvertPass(encoder, srcTex, dstTex, entry.selMaskLayer)
       return
     }
     if (entry.kind === 'selective-color') {
@@ -975,6 +974,39 @@ export class WebGPURenderer {
     pass.end()
 
     this.pendingDestroyBuffers.push(paramsBuf, maskFlagsBuf)
+  }
+
+  private encodeInvertPass(
+    encoder: GPUCommandEncoder,
+    srcTex: GPUTexture,
+    dstTex: GPUTexture,
+    selMaskLayer?: GpuLayer,
+  ): void {
+    const { device, pixelWidth: w, pixelHeight: h } = this
+
+    const maskFlagsData = new Uint32Array(8); maskFlagsData[0] = selMaskLayer ? 1 : 0
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, maskFlagsBuf, maskFlagsData)
+
+    const dummyMask = selMaskLayer?.texture ?? srcTex
+
+    const bindGroup = device.createBindGroup({
+      layout: this.invertPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: dstTex.createView() },
+        { binding: 2, resource: dummyMask.createView() },
+        { binding: 3, resource: { buffer: maskFlagsBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.invertPipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    this.pendingDestroyBuffers.push(maskFlagsBuf)
   }
 
   private encodeSelectiveColorPass(
@@ -1093,9 +1125,6 @@ export class WebGPURenderer {
     const { device, pixelWidth: w, pixelHeight: h } = this
     const textures = this.ensureCurvesLutTextures(layerId, luts)
 
-    const metaBuf = createUniformBuffer(device, 16)
-    writeUniformBuffer(device, metaBuf, new Float32Array([0, 0, 0, 0]))
-
     const maskFlagsData = new Uint32Array(8); maskFlagsData[0] = selMaskLayer ? 1 : 0
     const maskFlagsBuf = createUniformBuffer(device, 32)
     writeUniformBuffer(device, maskFlagsBuf, maskFlagsData)
@@ -1107,14 +1136,13 @@ export class WebGPURenderer {
       entries: [
         { binding: 0, resource: srcTex.createView() },
         { binding: 1, resource: dstTex.createView() },
-        { binding: 2, resource: { buffer: metaBuf } },
-        { binding: 3, resource: dummyMask.createView() },
-        { binding: 4, resource: { buffer: maskFlagsBuf } },
-        { binding: 5, resource: this.lutSampler },
-        { binding: 6, resource: textures.rgb.createView() },
-        { binding: 7, resource: textures.red.createView() },
-        { binding: 8, resource: textures.green.createView() },
-        { binding: 9, resource: textures.blue.createView() },
+        { binding: 2, resource: dummyMask.createView() },
+        { binding: 3, resource: { buffer: maskFlagsBuf } },
+        { binding: 4, resource: this.lutSampler },
+        { binding: 5, resource: textures.rgb.createView() },
+        { binding: 6, resource: textures.red.createView() },
+        { binding: 7, resource: textures.green.createView() },
+        { binding: 8, resource: textures.blue.createView() },
       ],
     })
 
@@ -1124,7 +1152,7 @@ export class WebGPURenderer {
     pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
     pass.end()
 
-    this.pendingDestroyBuffers.push(metaBuf, maskFlagsBuf)
+    this.pendingDestroyBuffers.push(maskFlagsBuf)
   }
 
   private encodeColorGradingPass(
