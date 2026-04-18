@@ -1,5 +1,5 @@
 import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer } from './utils'
-import { FILTER_GAUSSIAN_H_COMPUTE, FILTER_GAUSSIAN_V_COMPUTE, FILTER_BOX_H_COMPUTE, FILTER_BOX_V_COMPUTE, FILTER_RADIAL_BLUR_COMPUTE, FILTER_MOTION_BLUR_COMPUTE, FILTER_LENS_BLUR_COMPUTE, FILTER_SHARPEN_COMPUTE, FILTER_SHARPEN_MORE_COMPUTE, FILTER_UNSHARP_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_GAUSS_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_LENS_COMPUTE, FILTER_SMART_SHARPEN_BLEND_COMPUTE, FILTER_ADD_NOISE_COMPUTE, FILTER_FILM_GRAIN_NOISE_COMPUTE, FILTER_FILM_GRAIN_COMBINE_COMPUTE } from './filterShaders'
+import { FILTER_GAUSSIAN_H_COMPUTE, FILTER_GAUSSIAN_V_COMPUTE, FILTER_BOX_H_COMPUTE, FILTER_BOX_V_COMPUTE, FILTER_RADIAL_BLUR_COMPUTE, FILTER_MOTION_BLUR_COMPUTE, FILTER_LENS_BLUR_COMPUTE, FILTER_SHARPEN_COMPUTE, FILTER_SHARPEN_MORE_COMPUTE, FILTER_UNSHARP_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_GAUSS_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_LENS_COMPUTE, FILTER_SMART_SHARPEN_BLEND_COMPUTE, FILTER_ADD_NOISE_COMPUTE, FILTER_FILM_GRAIN_NOISE_COMPUTE, FILTER_FILM_GRAIN_COMBINE_COMPUTE, FILTER_CLOUDS_COMPUTE } from './filterShaders'
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,7 @@ class FilterComputeEngine {
   private readonly addNoisePipeline: GPUComputePipeline
   private readonly filmGrainNoisePipeline: GPUComputePipeline
   private readonly filmGrainCombinePipeline: GPUComputePipeline
+  private readonly cloudsPipeline: GPUComputePipeline
   private readonly intermediate0: GPUTexture
   private cachedKernelKey: string = ''
   private cachedKernelBuf: GPUBuffer | null = null
@@ -55,6 +56,7 @@ class FilterComputeEngine {
     this.addNoisePipeline = this.createPipeline(FILTER_ADD_NOISE_COMPUTE, 'cs_add_noise')
     this.filmGrainNoisePipeline   = this.createPipeline(FILTER_FILM_GRAIN_NOISE_COMPUTE, 'cs_film_grain_noise')
     this.filmGrainCombinePipeline = this.createPipeline(FILTER_FILM_GRAIN_COMBINE_COMPUTE, 'cs_film_grain_combine')
+    this.cloudsPipeline = this.createPipeline(FILTER_CLOUDS_COMPUTE, 'cs_clouds')
   }
 
   static create(device: GPUDevice, width: number, height: number): FilterComputeEngine {
@@ -1213,6 +1215,102 @@ class FilterComputeEngine {
 
     return result
   }
+
+  async clouds(
+    pixels: Uint8Array,
+    width: number,
+    height: number,
+    scale: number,
+    opacity: number,
+    colorMode: number,
+    fgR: number, fgG: number, fgB: number,
+    bgR: number, bgG: number, bgB: number,
+    seed: number,
+  ): Promise<Uint8Array> {
+    const { device } = this
+    const w = width, h = height
+
+    // Build permutation table (Fisher-Yates, LCG matching C++)
+    const perm = new Uint32Array(256)
+    for (let i = 0; i < 256; i++) perm[i] = i
+    let state = (seed ^ 0xDEADBEEF) >>> 0
+    const lcg = (s: number) => (((1664525 * s) >>> 0) + 1013904223) >>> 0
+    for (let i = 255; i > 0; i--) {
+      state = lcg(state)
+      const j = state % (i + 1)
+      const tmp = perm[i]; perm[i] = perm[j]; perm[j] = tmp
+    }
+
+    const permBuf = device.createBuffer({
+      size: 256 * 4,  // 256 × u32
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    })
+    device.queue.writeBuffer(permBuf, 0, perm)
+
+    const srcTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    })
+    device.queue.writeTexture(
+      { texture: srcTex },
+      pixels as Uint8Array<ArrayBuffer>,
+      { bytesPerRow: w * 4, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    const outTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+    })
+
+    // Pack params: 8 × u32 = 32 bytes
+    const fgColor = (fgR | (fgG << 8) | (fgB << 16)) >>> 0
+    const bgColor = (bgR | (bgG << 8) | (bgB << 16)) >>> 0
+    const paramsData = new Uint32Array([scale, opacity, colorMode, fgColor, bgColor, w, h, 0])
+    const paramsBuf  = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, paramsBuf, paramsData)
+
+    const encoder = device.createCommandEncoder()
+    const bindGroup = device.createBindGroup({
+      layout: this.cloudsPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: outTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+        { binding: 3, resource: { buffer: permBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.cloudsPipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    const alignedBpr = Math.ceil(w * 4 / 256) * 256
+    const readbuf    = createReadbackBuffer(device, alignedBpr * h)
+    encoder.copyTextureToBuffer(
+      { texture: outTex },
+      { buffer: readbuf, bytesPerRow: alignedBpr, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    device.queue.submit([encoder.finish()])
+
+    await readbuf.mapAsync(GPUMapMode.READ)
+    const result = unpackRows(new Uint8Array(readbuf.getMappedRange()), w, h, alignedBpr)
+    readbuf.unmap()
+
+    srcTex.destroy()
+    outTex.destroy()
+    paramsBuf.destroy()
+    permBuf.destroy()
+    readbuf.destroy()
+
+    return result
+  }
 }
 
 function unpackRows(src: Uint8Array, w: number, h: number, alignedBpr: number): Uint8Array {
@@ -1348,4 +1446,18 @@ export async function filmGrain(
   seed: number,
 ): Promise<Uint8Array> {
   return _engine!.filmGrain(pixels, width, height, grainSize, intensity, roughness, seed)
+}
+
+export async function clouds(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  scale: number,
+  opacity: number,
+  colorMode: number,
+  fgR: number, fgG: number, fgB: number,
+  bgR: number, bgG: number, bgB: number,
+  seed: number,
+): Promise<Uint8Array> {
+  return _engine!.clouds(pixels, width, height, scale, opacity, colorMode, fgR, fgG, fgB, bgR, bgG, bgB, seed)
 }

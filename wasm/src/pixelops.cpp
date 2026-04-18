@@ -106,22 +106,6 @@ float* pixelops_curves_histogram(
 }
 
 
-// ─── Clouds (in-place) ────────────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_clouds(
-    uint8_t* pixels, int width, int height,
-    int scale, int opacity, int colorMode,
-    uint8_t fgR, uint8_t fgG, uint8_t fgB,
-    uint8_t bgR, uint8_t bgG, uint8_t bgB,
-    uint32_t seed
-) {
-    filters_clouds(pixels, width, height,
-                   scale, opacity, colorMode,
-                   fgR, fgG, fgB, bgR, bgG, bgB, seed);
-}
-
-
 // ─── Remove Motion Blur (in-place) ──────────────────────────────────────────
 
 EMSCRIPTEN_KEEPALIVE

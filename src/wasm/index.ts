@@ -237,24 +237,6 @@ export async function computeHistogramRGBA(
   }
 }
 
-/** Clouds (in-place). Fractional value noise composited over existing pixels.
- *  scale: 1–200. opacity: 1–100 (%). colorMode: 0=grayscale, 1=fg/bg color.
- *  fgR/G/B, bgR/G/B: foreground and background colors. seed: 0–9999. */
-export async function clouds(
-  pixels: Uint8Array, width: number, height: number,
-  scale: number, opacity: number, colorMode: number,
-  fgR: number, fgG: number, fgB: number,
-  bgR: number, bgG: number, bgB: number,
-  seed: number
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  return withInPlaceBuffer(m, pixels, ptr =>
-    m._pixelops_clouds(ptr, width, height,
-      scale, opacity, colorMode,
-      fgR, fgG, fgB, bgR, bgG, bgB, seed)
-  )
-}
-
 export async function removeMotionBlur(
   pixels: Uint8Array, width: number, height: number,
   angleDeg: number, distance: number, noiseReduction: number

@@ -68,15 +68,7 @@ export interface PixelOpsModule {
     maskPtr: number
   ): number
 
-  _pixelops_clouds(
-    pixelsPtr: number, width: number, height: number,
-    scale: number, opacity: number, colorMode: number,
-    fgR: number, fgG: number, fgB: number,
-    bgR: number, bgG: number, bgB: number,
-    seed: number
-  ): void
-
-  _pixelops_remove_motion_blur(
+_pixelops_remove_motion_blur(
     pixelsPtr: number, width: number, height: number,
     angleDeg: number, distance: number, noiseReduction: number
   ): void
