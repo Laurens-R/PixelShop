@@ -487,6 +487,8 @@ function AppContent(): React.JSX.Element {
       {showLensFlareDialog && (
         <LensFlareDialog
           isOpen={showLensFlareDialog}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
           onApply={(pixels, w, h) => {
             filters.handleApplyLensFlare(pixels, w, h)
             setShowLensFlareDialog(false)

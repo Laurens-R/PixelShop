@@ -8,8 +8,8 @@ struct LensFlareParams {
   lensType      : u32,
   ringOpacity   : u32,
   streakStrength: u32,
-  _pad0         : u32,
-  _pad1         : u32,
+  streakWidth   : u32,
+  streakRotation: u32,
 }
 
 @group(0) @binding(0) var dstTex : texture_storage_2d<rgba8unorm, write>;
@@ -39,7 +39,7 @@ fn radial_streaks(dx: f32, dy: f32, dist: f32, diag: f32,
   return clamp(angShape * radShape, 0.0, 1.0);
 }
 
-fn flare_zoom(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, h: f32, ringO: f32, streakS: f32) -> vec4f {
+fn flare_zoom(rdx: f32, rdy: f32, odx: f32, ody: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, h: f32, ringO: f32, streakS: f32, streakWF: f32) -> vec4f {
   var col = vec4f(0.0);
   let rawAxX  = w * 0.5 - cx;
   let rawAxY  = h * 0.5 - cy;
@@ -52,10 +52,10 @@ fn flare_zoom(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, 
   col += vec4f(1.0, 0.68, 0.20, midBloom) * midBloom * 0.90;
   let innerCore = gauss1(dist, 0.025 * diag);
   col += vec4f(1.0, 0.92, 0.80, innerCore) * innerCore * 1.5;
-  let sv = radial_streaks(dx, dy, dist, diag, 4u, 0.040, 0.35);
+  let sv = radial_streaks(rdx, rdy, dist, diag, 4u, 0.080 * streakWF, 0.35);
   col += vec4f(1.0, 0.88, 0.60, sv) * sv * streakS;
-  let g1x  = dx - axX * 1.45 * axisLen;
-  let g1y  = dy - axY * 1.45 * axisLen;
+  let g1x  = odx - axX * 1.45 * axisLen;
+  let g1y  = ody - axY * 1.45 * axisLen;
   let g1d  = sqrt(g1x * g1x + g1y * g1y);
   let g1v  = gauss1(g1d - 0.24 * diag, 0.018 * diag) + gauss1(g1d, 0.12 * diag) * 0.35;
   col += vec4f(1.0, 0.32, 0.04, g1v) * g1v * 0.75 * ringO;
@@ -64,43 +64,43 @@ fn flare_zoom(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, 
   var arcAlp = array<f32,  3>(0.55, 0.42, 0.28);
   var arcCol = array<vec3f, 3>(vec3f(0.90,0.34,0.05), vec3f(0.72,0.24,0.03), vec3f(0.50,0.14,0.02));
   for (var i = 0u; i < 3u; i++) {
-    let ex = dx - axX * arcT[i] * axisLen;
-    let ey = dy - axY * arcT[i] * axisLen;
+    let ex = odx - axX * arcT[i] * axisLen;
+    let ey = ody - axY * arcT[i] * axisLen;
     let rv = gauss1(sqrt(ex*ex+ey*ey) - arcRad[i]*diag, 0.010*diag);
     col += vec4f(arcCol[i]*rv, rv) * arcAlp[i] * ringO;
   }
   return col;
 }
 
-fn flare_prime35(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, ringO: f32, streakS: f32) -> vec4f {
+fn flare_prime35(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, ringO: f32, streakS: f32, streakWF: f32) -> vec4f {
   var col = vec4f(0.0);
   let core = gauss1(dist, 0.02 * diag);
   col += vec4f(vec3f(core), core);
-  let sv = radial_streaks(dx, dy, dist, diag, 8u, 0.022, 0.40);
+  let sv = radial_streaks(dx, dy, dist, diag, 8u, 0.088 * streakWF, 0.40);
   col += vec4f(0.80, 0.92, 1.0, sv) * sv * streakS;
   let halo = gauss1(dist, 0.06 * diag);
   col += vec4f(0.85, 0.90, 1.0, halo) * halo * ringO;
   return col;
 }
 
-fn flare_prime105(dx: f32, dy: f32, dist: f32, diag: f32, ringO: f32, streakS: f32) -> vec4f {
+fn flare_prime105(dx: f32, dy: f32, dist: f32, diag: f32, ringO: f32, streakS: f32, streakWF: f32) -> vec4f {
   var col = vec4f(0.0);
   let bloom = gauss1(dist, 0.20 * diag);
   col += vec4f(1.0, 0.72, 0.30, bloom) * bloom;
   let core = gauss1(dist, 0.03 * diag);
   col += vec4f(1.0, 0.90, 0.75, core) * core;
-  let sv = radial_streaks(dx, dy, dist, diag, 3u, 0.10, 0.22);
+  let sv = radial_streaks(dx, dy, dist, diag, 3u, 0.1333 * streakWF, 0.22);
   col += vec4f(1.0, 0.85, 0.55, sv) * sv * 0.6 * streakS;
   let rngV = gauss1(dist - 0.28*diag, 0.035*diag) * 0.45;
   col += vec4f(1.0, 0.60, 0.15, rngV) * rngV * ringO;
   return col;
 }
 
-fn flare_movie_prime(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, h: f32, ringO: f32, streakS: f32) -> vec4f {
+fn flare_movie_prime(rdx: f32, rdy: f32, odx: f32, ody: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, h: f32, ringO: f32, streakS: f32, streakWF: f32) -> vec4f {
   var col = vec4f(0.0);
   let bloom = gauss1(dist, 0.05 * diag);
   col += vec4f(0.88, 0.92, 1.0, bloom) * bloom;
-  let sv = radial_streaks(dx, dy, dist, diag, 6u, 0.028, 0.38);
+  let sv = radial_streaks(rdx, rdy, dist, diag, 6u, 0.0933 * streakWF, 0.38);
   col += vec4f(0.90, 0.95, 1.0, sv) * sv * streakS;
   col += ring(dist, 0.18*diag, 0.010*diag, vec3f(0.85,0.90,1.0)) * ringO;
   let rawAxX  = 0.5*w - cx;
@@ -112,28 +112,28 @@ fn flare_movie_prime(dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, w
   var artR = array<f32, 7>(0.030,0.018,0.022,0.010,0.015,0.008,0.012);
   var artC = array<vec3f,7>(vec3f(0.75,0.80,1.0),vec3f(0.88,0.88,1.0),vec3f(0.70,0.85,1.0),vec3f(0.80,0.82,0.98),vec3f(0.65,0.78,1.0),vec3f(0.85,0.90,1.0),vec3f(0.72,0.80,0.95));
   for (var i = 0u; i < 7u; i++) {
-    let ex = dx - axX*artT[i]*diag;
-    let ey = dy - axY*artT[i]*diag;
+    let ex = odx - axX*artT[i]*diag;
+    let ey = ody - axY*artT[i]*diag;
     col += disc(sqrt(ex*ex+ey*ey), artR[i]*diag, artC[i]) * ringO;
   }
   return col;
 }
 
-fn flare_anamorphic(px: f32, py: f32, dx: f32, dy: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, h: f32, ringO: f32, streakS: f32) -> vec4f {
+fn flare_anamorphic(rdx: f32, rdy: f32, odx: f32, ody: f32, dist: f32, cx: f32, cy: f32, diag: f32, w: f32, h: f32, ringO: f32, streakS: f32, streakWF: f32) -> vec4f {
   var col = vec4f(0.0);
-  let sigmaY  = max(0.006*diag, 4.0);
-  let streakV = exp(-(dy*dy)/(sigmaY*sigmaY)) * streakS;
+  let sigmaY  = max(0.006*diag, 4.0) * (streakWF / 0.20);
+  let streakV = exp(-(rdy*rdy)/(sigmaY*sigmaY)) * streakS;
   col += vec4f(0.25, 0.60, 1.00, streakV) * streakV;
-  let wideV = exp(-(dy*dy)/((sigmaY*1.8)*(sigmaY*1.8))) * streakS;
+  let wideV = exp(-(rdy*rdy)/((sigmaY*1.8)*(sigmaY*1.8))) * streakS;
   col += vec4f(1.0, 0.3, 0.2, wideV) * wideV * 0.15;
   let sigX = 0.05*diag; let sigY = 0.025*diag;
-  let ev = exp(-(dx*dx)/(sigX*sigX) - (dy*dy)/(sigY*sigY));
+  let ev = exp(-(rdx*rdx)/(sigX*sigX) - (rdy*rdy)/(sigY*sigY));
   col += vec4f(0.85, 0.90, 1.0, ev) * ev;
   let ringR  = 0.08*diag; let ringRY = ringR/3.0;
   let ringSN = 0.006*diag/ringR;
   var ringTs = array<f32,5>(-0.30,-0.55,0.35,0.65,1.0);
   for (var i = 0u; i < 5u; i++) {
-    let ex = dx - ringTs[i]*diag; let ey = dy;
+    let ex = odx - ringTs[i]*diag; let ey = ody;
     let ed = sqrt((ex/ringR)*(ex/ringR)+(ey/ringRY)*(ey/ringRY));
     col += vec4f(0.3,0.65,1.0,1.0) * gauss1(ed-1.0,ringSN) * ringO;
   }
@@ -153,12 +153,18 @@ fn cs_lens_flare(@builtin(global_invocation_id) id : vec3u) {
   let brightnessF = f32(params.brightness)    / 100.0;
   let ringO       = f32(params.ringOpacity)   / 100.0;
   let streakS     = f32(params.streakStrength)/ 100.0;
+  let streakWF    = f32(params.streakWidth)   / 100.0;
+  let rotRad      = f32(params.streakRotation) * (3.14159265358979 / 180.0);
+  let cosR        = cos(rotRad);
+  let sinR        = sin(rotRad);
+  let rdx         = dx * cosR + dy * sinR;
+  let rdy         = -dx * sinR + dy * cosR;
   var color = vec4f(0.0);
-  if      (params.lensType == 0u) { color = flare_zoom(dx,dy,dist,cx,cy,diag,w,h,ringO,streakS); }
-  else if (params.lensType == 1u) { color = flare_prime35(dx,dy,dist,cx,cy,diag,ringO,streakS); }
-  else if (params.lensType == 2u) { color = flare_prime105(dx,dy,dist,diag,ringO,streakS); }
-  else if (params.lensType == 3u) { color = flare_movie_prime(dx,dy,dist,cx,cy,diag,w,h,ringO,streakS); }
-  else                             { color = flare_anamorphic(px,py,dx,dy,dist,cx,cy,diag,w,h,ringO,streakS); }
+  if      (params.lensType == 0u) { color = flare_zoom(rdx,rdy,dx,dy,dist,cx,cy,diag,w,h,ringO,streakS,streakWF); }
+  else if (params.lensType == 1u) { color = flare_prime35(rdx,rdy,dist,cx,cy,diag,ringO,streakS,streakWF); }
+  else if (params.lensType == 2u) { color = flare_prime105(rdx,rdy,dist,diag,ringO,streakS,streakWF); }
+  else if (params.lensType == 3u) { color = flare_movie_prime(rdx,rdy,dx,dy,dist,cx,cy,diag,w,h,ringO,streakS,streakWF); }
+  else                             { color = flare_anamorphic(rdx,rdy,dx,dy,dist,cx,cy,diag,w,h,ringO,streakS,streakWF); }
   textureStore(dstTex, vec2i(id.xy), clamp(color * brightnessF, vec4f(0.0), vec4f(1.0)));
 }
 ` as const
@@ -174,6 +180,8 @@ export async function runRenderLensFlare(
   lensType: number,
   ringOpacity: number,
   streakStrength: number,
+  streakWidth: number,
+  streakRotation: number,
 ): Promise<Uint8Array> {
   const outTex = device.createTexture({
     size: { width: w, height: h },
@@ -181,7 +189,7 @@ export async function runRenderLensFlare(
     usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
   })
 
-  const paramsData = new Uint32Array([Math.round(centerX), Math.round(centerY), brightness, lensType, ringOpacity, streakStrength, 0, 0])
+  const paramsData = new Uint32Array([Math.round(centerX), Math.round(centerY), brightness, lensType, ringOpacity, streakStrength, streakWidth, streakRotation])
   const paramsBuf  = createUniformBuffer(device, 32)
   writeUniformBuffer(device, paramsBuf, paramsData)
 

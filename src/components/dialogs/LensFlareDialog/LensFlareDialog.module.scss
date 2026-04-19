@@ -221,6 +221,22 @@
   background: #383838;
 }
 
+// ─── Streak section ─────────────────────────────────────────────────────────
+
+.streakSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.streakGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 2px solid #3a3a3a;
+  padding-left: 8px;
+}
+
 // ─── Brightness row ───────────────────────────────────────────────────────────
 
 .row {
@@ -231,7 +247,7 @@
 }
 
 .label {
-  width: 68px;
+  width: 84px;
   flex-shrink: 0;
   font-size: 11px;
   color: #aaaaaa;
@@ -246,7 +262,7 @@
   border-radius: 2px;
   outline: none;
   cursor: pointer;
-  background: #3a3a3a;
+  background: linear-gradient(to right, #0699fb 0%, #0699fb var(--pct, 0%), #3a3a3a var(--pct, 0%), #3a3a3a 100%);
   &::-webkit-slider-thumb {
     appearance: none;
     -webkit-appearance: none;

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { renderLensFlare } from '@/webgpu/filterCompute'
+import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
 import { ToolWindow, DialogButton } from '@/components'
 import styles from './LensFlareDialog.module.scss'
 
@@ -15,6 +16,14 @@ const LENS_TYPES = [
   { label: '105mm Prime' },
   { label: 'Movie Prime' },
   { label: 'Cinematic / Anamorphic' },
+]
+
+const LENS_TYPE_STREAK_DEFAULTS: { width: number; rotation: number }[] = [
+  { width: 50, rotation: 0 },
+  { width: 25, rotation: 0 },
+  { width: 75, rotation: 0 },
+  { width: 30, rotation: 0 },
+  { width: 20, rotation: 0 },
 ]
 
 // ─── Icon ─────────────────────────────────────────────────────────────────────
@@ -35,11 +44,13 @@ const LensFlareIcon = (): React.JSX.Element => (
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 export interface LensFlareDialogProps {
-  isOpen:   boolean
-  onApply:  (pixels: Uint8Array, width: number, height: number) => void
-  onCancel: () => void
-  width:    number
-  height:   number
+  isOpen:          boolean
+  onApply:         (pixels: Uint8Array, width: number, height: number) => void
+  onCancel:        () => void
+  width:           number
+  height:          number
+  canvasHandleRef: { readonly current: CanvasHandle | null }
+  activeLayerId:   string | null
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -50,6 +61,8 @@ export function LensFlareDialog({
   onCancel,
   width,
   height,
+  canvasHandleRef,
+  activeLayerId,
 }: LensFlareDialogProps): React.JSX.Element | null {
   const previewScale = Math.min(1, Math.min(PREVIEW_MAX_W / width, PREVIEW_MAX_H / height))
   const previewW = Math.round(width  * previewScale)
@@ -59,6 +72,8 @@ export function LensFlareDialog({
   const [brightness, setBrightness] = useState(100)
   const [ringOpacity, setRingOpacity] = useState(20)
   const [streakStrength, setStreakStrength] = useState(50)
+  const [streakWidth,    setStreakWidth]    = useState(LENS_TYPE_STREAK_DEFAULTS[0].width)
+  const [streakRotation, setStreakRotation] = useState(0)
   const [centerX,    setCenterX]    = useState(() => Math.round(width  / 2))
   const [centerY,    setCenterY]    = useState(() => Math.round(height / 2))
   const [isBusy,     setIsBusy]     = useState(false)
@@ -67,11 +82,14 @@ export function LensFlareDialog({
   const brightnessRef = useRef(100)
   const ringOpacityRef = useRef(20)
   const streakStrengthRef = useRef(50)
+  const streakWidthRef    = useRef(LENS_TYPE_STREAK_DEFAULTS[0].width)
+  const streakRotationRef = useRef(0)
   const centerXRef    = useRef(Math.round(width  / 2))
   const centerYRef    = useRef(Math.round(height / 2))
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null)
+  const backgroundCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
   // ── Preview render ───────────────────────────────────────────────
   const runPreview = useCallback(async (): Promise<void> => {
@@ -80,12 +98,20 @@ export function LensFlareDialog({
     const pCx    = Math.round(centerXRef.current * previewScale)
     const pCy    = Math.round(centerYRef.current * previewScale)
     try {
-      const pixels    = await renderLensFlare(previewW, previewH, pCx, pCy, brightnessRef.current, lensTypeRef.current, ringOpacityRef.current, streakStrengthRef.current)
-      const ctx       = canvas.getContext('2d')
+      const pixels = await renderLensFlare(previewW, previewH, pCx, pCy, brightnessRef.current, lensTypeRef.current, ringOpacityRef.current, streakStrengthRef.current, streakWidthRef.current, streakRotationRef.current)
+      const ctx    = canvas.getContext('2d')
       if (!ctx) return
-      const imageData = new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), previewW, previewH)
       ctx.clearRect(0, 0, previewW, previewH)
-      ctx.putImageData(imageData, 0, 0)
+      if (backgroundCanvasRef.current) {
+        ctx.drawImage(backgroundCanvasRef.current, 0, 0)
+      }
+      const tmpCanvas = document.createElement('canvas')
+      tmpCanvas.width = previewW; tmpCanvas.height = previewH
+      const tmpCtx = tmpCanvas.getContext('2d')
+      if (tmpCtx) {
+        tmpCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels.buffer as ArrayBuffer), previewW, previewH), 0, 0)
+        ctx.drawImage(tmpCanvas, 0, 0)
+      }
     } catch (err) {
       console.error('[LensFlareDialog] Preview render failed:', err)
     }
@@ -116,9 +142,31 @@ export function LensFlareDialog({
     setBrightness(100);   brightnessRef.current = 100
     setRingOpacity(20); ringOpacityRef.current = 20
     setStreakStrength(50); streakStrengthRef.current = 50
+    const def = LENS_TYPE_STREAK_DEFAULTS[0]
+    setStreakWidth(def.width);       streakWidthRef.current    = def.width
+    setStreakRotation(def.rotation); streakRotationRef.current = def.rotation
     setCenterX(defaultCx); centerXRef.current   = defaultCx
     setCenterY(defaultCy); centerYRef.current   = defaultCy
     setIsBusy(false)
+    // Load and scale background pixels to preview size
+    const bgPixels = activeLayerId ? canvasHandleRef.current?.getLayerPixels(activeLayerId) : null
+    if (bgPixels) {
+      const fullCanvas = document.createElement('canvas')
+      fullCanvas.width = width; fullCanvas.height = height
+      const fullCtx = fullCanvas.getContext('2d')
+      if (fullCtx) {
+        fullCtx.putImageData(new ImageData(new Uint8ClampedArray(bgPixels.buffer as ArrayBuffer), width, height), 0, 0)
+        const bgCanvas = document.createElement('canvas')
+        bgCanvas.width = previewW; bgCanvas.height = previewH
+        const bgCtx = bgCanvas.getContext('2d')
+        if (bgCtx) {
+          bgCtx.drawImage(fullCanvas, 0, 0, previewW, previewH)
+          backgroundCanvasRef.current = bgCanvas
+        }
+      }
+    } else {
+      backgroundCanvasRef.current = null
+    }
     void runPreview()
     return () => {
       if (debounceTimerRef.current !== null) {
@@ -143,6 +191,9 @@ export function LensFlareDialog({
   const handleLensTypeChange = useCallback((type: number): void => {
     setLensType(type)
     lensTypeRef.current = type
+    const def = LENS_TYPE_STREAK_DEFAULTS[type]
+    setStreakWidth(def.width);       streakWidthRef.current    = def.width
+    setStreakRotation(def.rotation); streakRotationRef.current = def.rotation
     triggerImmediate()
   }, [triggerImmediate])
 
@@ -164,6 +215,20 @@ export function LensFlareDialog({
     const clamped = Math.max(0, Math.min(100, Math.round(value)))
     setStreakStrength(clamped)
     streakStrengthRef.current = clamped
+    triggerDebounced()
+  }, [triggerDebounced])
+
+  const handleStreakWidthChange = useCallback((value: number): void => {
+    const clamped = Math.max(1, Math.min(500, Math.round(value)))
+    setStreakWidth(clamped)
+    streakWidthRef.current = clamped
+    triggerDebounced()
+  }, [triggerDebounced])
+
+  const handleStreakRotationChange = useCallback((value: number): void => {
+    const clamped = Math.max(0, Math.min(359, Math.round(value)))
+    setStreakRotation(clamped)
+    streakRotationRef.current = clamped
     triggerDebounced()
   }, [triggerDebounced])
 
@@ -191,6 +256,7 @@ export function LensFlareDialog({
         centerXRef.current, centerYRef.current,
         brightnessRef.current, lensTypeRef.current,
         ringOpacityRef.current, streakStrengthRef.current,
+        streakWidthRef.current, streakRotationRef.current,
       )
       onApply(pixels, width, height)
     } catch (err) {
@@ -298,6 +364,7 @@ export function LensFlareDialog({
             <input
               type="range"
               className={styles.slider}
+              style={{ '--pct': `${((brightness - 10) / 290 * 100).toFixed(1)}%` } as React.CSSProperties}
               min={10}
               max={300}
               step={1}
@@ -321,6 +388,7 @@ export function LensFlareDialog({
             <input
               type="range"
               className={styles.slider}
+              style={{ '--pct': `${ringOpacity}%` } as React.CSSProperties}
               min={0}
               max={100}
               step={1}
@@ -339,28 +407,82 @@ export function LensFlareDialog({
             />
             <span className={styles.unit}>%</span>
           </div>
-          <div className={styles.row}>
-            <span className={styles.label}>Streaks</span>
-            <input
-              type="range"
-              className={styles.slider}
-              min={0}
-              max={100}
-              step={1}
-              value={streakStrength}
-              onChange={e => handleStreakStrengthChange(e.target.valueAsNumber)}
-            />
-            <input
-              type="number"
-              className={styles.numberInput}
-              min={0}
-              max={100}
-              step={1}
-              value={streakStrength}
-              onChange={e => handleStreakStrengthChange(e.target.valueAsNumber)}
-              onBlur={e  => handleStreakStrengthChange(e.target.valueAsNumber)}
-            />
-            <span className={styles.unit}>%</span>
+          <div className={styles.streakSection}>
+            <div className={styles.sectionLabel}>Streaks</div>
+            <div className={styles.streakGroup}>
+              <div className={styles.row}>
+                <span className={styles.label}>Streaks</span>
+                <input
+                  type="range"
+                  className={styles.slider}
+                  style={{ '--pct': `${streakStrength}%` } as React.CSSProperties}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={streakStrength}
+                  onChange={e => handleStreakStrengthChange(e.target.valueAsNumber)}
+                />
+                <input
+                  type="number"
+                  className={styles.numberInput}
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={streakStrength}
+                  onChange={e => handleStreakStrengthChange(e.target.valueAsNumber)}
+                  onBlur={e  => handleStreakStrengthChange(e.target.valueAsNumber)}
+                />
+                <span className={styles.unit}>%</span>
+              </div>
+              <div className={styles.row}>
+                <span className={styles.label}>Width</span>
+                <input
+                  type="range"
+                  className={styles.slider}
+                  style={{ '--pct': `${((streakWidth - 1) / 499 * 100).toFixed(1)}%` } as React.CSSProperties}
+                  min={1}
+                  max={500}
+                  step={1}
+                  value={streakWidth}
+                  onChange={e => handleStreakWidthChange(e.target.valueAsNumber)}
+                />
+                <input
+                  type="number"
+                  className={styles.numberInput}
+                  min={1}
+                  max={500}
+                  step={1}
+                  value={streakWidth}
+                  onChange={e => handleStreakWidthChange(e.target.valueAsNumber)}
+                  onBlur={e  => handleStreakWidthChange(e.target.valueAsNumber)}
+                />
+                <span className={styles.unit}>%</span>
+              </div>
+              <div className={styles.row}>
+                <span className={styles.label}>Rotation</span>
+                <input
+                  type="range"
+                  className={styles.slider}
+                  style={{ '--pct': `${(streakRotation / 359 * 100).toFixed(1)}%` } as React.CSSProperties}
+                  min={0}
+                  max={359}
+                  step={1}
+                  value={streakRotation}
+                  onChange={e => handleStreakRotationChange(e.target.valueAsNumber)}
+                />
+                <input
+                  type="number"
+                  className={styles.numberInput}
+                  min={0}
+                  max={359}
+                  step={1}
+                  value={streakRotation}
+                  onChange={e => handleStreakRotationChange(e.target.valueAsNumber)}
+                  onBlur={e  => handleStreakRotationChange(e.target.valueAsNumber)}
+                />
+                <span className={styles.unit}>°</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

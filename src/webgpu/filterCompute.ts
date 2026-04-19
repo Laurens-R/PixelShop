@@ -158,8 +158,8 @@ class FilterComputeEngine {
     return runReduceNoise(this.device, this.reduceNoisePipeline, pixels, width, height, strength, preserveDetails, reduceColorNoise, sharpenDetails, (p, w, h, a, r, t) => this.unsharpMask(p, w, h, a, r, t))
   }
 
-  async renderLensFlare(width: number, height: number, centerX: number, centerY: number, brightness: number, lensType: number, ringOpacity: number, streakStrength: number): Promise<Uint8Array> {
-    return runRenderLensFlare(this.device, this.lensFlareRenderPipeline, width, height, centerX, centerY, brightness, lensType, ringOpacity, streakStrength)
+  async renderLensFlare(width: number, height: number, centerX: number, centerY: number, brightness: number, lensType: number, ringOpacity: number, streakStrength: number, streakWidth: number, streakRotation: number): Promise<Uint8Array> {
+    return runRenderLensFlare(this.device, this.lensFlareRenderPipeline, width, height, centerX, centerY, brightness, lensType, ringOpacity, streakStrength, streakWidth, streakRotation)
   }
 }
 
@@ -187,4 +187,4 @@ export async function clouds(pixels: Uint8Array, width: number, height: number, 
 export async function median(pixels: Uint8Array, width: number, height: number, radius: number): Promise<Uint8Array> { return _engine!.median(pixels, width, height, radius) }
 export async function bilateral(pixels: Uint8Array, width: number, height: number, radius: number, sigmaSpatial: number, sigmaColor: number): Promise<Uint8Array> { return _engine!.bilateral(pixels, width, height, radius, sigmaSpatial, sigmaColor) }
 export async function reduceNoise(pixels: Uint8Array, width: number, height: number, strength: number, preserveDetails: number, reduceColorNoise: number, sharpenDetails: number): Promise<Uint8Array> { return _engine!.reduceNoise(pixels, width, height, strength, preserveDetails, reduceColorNoise, sharpenDetails) }
-export async function renderLensFlare(width: number, height: number, centerX: number, centerY: number, brightness: number, lensType: number, ringOpacity: number, streakStrength: number): Promise<Uint8Array> { return _engine!.renderLensFlare(width, height, centerX, centerY, brightness, lensType, ringOpacity, streakStrength) }
+export async function renderLensFlare(width: number, height: number, centerX: number, centerY: number, brightness: number, lensType: number, ringOpacity: number, streakStrength: number, streakWidth: number, streakRotation: number): Promise<Uint8Array> { return _engine!.renderLensFlare(width, height, centerX, centerY, brightness, lensType, ringOpacity, streakStrength, streakWidth, streakRotation) }
