@@ -188,6 +188,7 @@ export type FilterKey =
   | 'bilateral-filter'
   | 'reduce-noise'
   | 'render-lens-flare'
+  | 'pixelate'
 
 export type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
 

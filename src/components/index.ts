@@ -71,3 +71,5 @@ export { ReduceNoiseDialog } from './dialogs/ReduceNoiseDialog/ReduceNoiseDialog
 export type { ReduceNoiseDialogProps } from './dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
 export { LensFlareDialog } from './dialogs/LensFlareDialog/LensFlareDialog'
 export type { LensFlareDialogProps } from './dialogs/LensFlareDialog/LensFlareDialog'
+export { PixelateDialog } from './dialogs/PixelateDialog/PixelateDialog'
+export type { PixelateDialogProps } from './dialogs/PixelateDialog/PixelateDialog'

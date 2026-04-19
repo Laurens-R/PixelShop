@@ -12,6 +12,7 @@ import { FILTER_MEDIAN_COMPUTE, runMedian } from './shaders/filters/median'
 import { FILTER_BILATERAL_COMPUTE, runBilateral } from './shaders/filters/bilateral'
 import { FILTER_REDUCE_NOISE_COMPUTE, runReduceNoise } from './shaders/filters/reduce-noise'
 import { FILTER_LENS_FLARE_COMPUTE, runRenderLensFlare } from './shaders/filters/lens-flare'
+import { FILTER_PIXELATE_COMPUTE, runPixelate } from './shaders/filters/pixelate'
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ class FilterComputeEngine {
   private readonly bilateralPipeline: GPUComputePipeline
   private readonly reduceNoisePipeline: GPUComputePipeline
   private readonly lensFlareRenderPipeline: GPUComputePipeline
+  private readonly pixelatePipeline: GPUComputePipeline
   private readonly intermediate0: GPUTexture
   private cachedKernelKey: string = ''
   private cachedKernelBuf: GPUBuffer | null = null
@@ -71,6 +73,7 @@ class FilterComputeEngine {
     this.bilateralPipeline = this.makePipeline(FILTER_BILATERAL_COMPUTE, 'cs_bilateral')
     this.reduceNoisePipeline = this.makePipeline(FILTER_REDUCE_NOISE_COMPUTE, 'cs_reduce_noise')
     this.lensFlareRenderPipeline = this.makePipeline(FILTER_LENS_FLARE_COMPUTE, 'cs_lens_flare')
+    this.pixelatePipeline = this.makePipeline(FILTER_PIXELATE_COMPUTE, 'cs_pixelate')
   }
 
   static create(device: GPUDevice, width: number, height: number): FilterComputeEngine {
@@ -161,6 +164,10 @@ class FilterComputeEngine {
   async renderLensFlare(width: number, height: number, centerX: number, centerY: number, brightness: number, lensType: number, ringOpacity: number, streakStrength: number, streakWidth: number, streakRotation: number): Promise<Uint8Array> {
     return runRenderLensFlare(this.device, this.lensFlareRenderPipeline, width, height, centerX, centerY, brightness, lensType, ringOpacity, streakStrength, streakWidth, streakRotation)
   }
+
+  async pixelate(pixels: Uint8Array, width: number, height: number, blockSize: number): Promise<Uint8Array> {
+    return runPixelate(this.device, this.pixelatePipeline, pixels, width, height, blockSize)
+  }
 }
 
 // ─── Module-level singleton ───────────────────────────────────────────────────
@@ -188,3 +195,4 @@ export async function median(pixels: Uint8Array, width: number, height: number, 
 export async function bilateral(pixels: Uint8Array, width: number, height: number, radius: number, sigmaSpatial: number, sigmaColor: number): Promise<Uint8Array> { return _engine!.bilateral(pixels, width, height, radius, sigmaSpatial, sigmaColor) }
 export async function reduceNoise(pixels: Uint8Array, width: number, height: number, strength: number, preserveDetails: number, reduceColorNoise: number, sharpenDetails: number): Promise<Uint8Array> { return _engine!.reduceNoise(pixels, width, height, strength, preserveDetails, reduceColorNoise, sharpenDetails) }
 export async function renderLensFlare(width: number, height: number, centerX: number, centerY: number, brightness: number, lensType: number, ringOpacity: number, streakStrength: number, streakWidth: number, streakRotation: number): Promise<Uint8Array> { return _engine!.renderLensFlare(width, height, centerX, centerY, brightness, lensType, ringOpacity, streakStrength, streakWidth, streakRotation) }
+export async function pixelate(pixels: Uint8Array, width: number, height: number, blockSize: number): Promise<Uint8Array> { return _engine!.pixelate(pixels, width, height, blockSize) }

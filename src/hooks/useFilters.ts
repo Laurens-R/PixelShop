@@ -62,6 +62,7 @@ export interface UseFiltersReturn {
   handleOpenLensFlare:    () => void
   handleApplyLensFlare:   (pixels: Uint8Array, width: number, height: number) => void
   handleInstantFilter:    (key: FilterKey) => void
+  handleOpenPixelate:     () => void
 }
 
 export function useFilters({
@@ -215,6 +216,11 @@ export function useFilters({
     if (key === 'sharpen-more') void handleSharpenMore()
   }, [handleSharpen, handleSharpenMore])
 
+  const handleOpenPixelate = useCallback(
+    () => onOpenFilterDialog('pixelate'),
+    [onOpenFilterDialog]
+  )
+
   return {
     isFiltersMenuEnabled,
     handleOpenGaussianBlur,
@@ -236,5 +242,6 @@ export function useFilters({
     handleOpenLensFlare,
     handleApplyLensFlare,
     handleInstantFilter,
+    handleOpenPixelate,
   }
 }

@@ -32,6 +32,7 @@ import { MedianFilterDialog } from '@/components/dialogs/MedianFilterDialog/Medi
 import { BilateralFilterDialog } from '@/components/dialogs/BilateralFilterDialog/BilateralFilterDialog'
 import { ReduceNoiseDialog } from '@/components/dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
 import { LensFlareDialog } from '@/components/dialogs/LensFlareDialog/LensFlareDialog'
+import { PixelateDialog } from '@/components/dialogs/PixelateDialog/PixelateDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -81,6 +82,7 @@ function AppContent(): React.JSX.Element {
   const [showBilateralFilterDialog, setShowBilateralFilterDialog] = useState(false)
   const [showReduceNoiseDialog,     setShowReduceNoiseDialog]     = useState(false)
   const [showLensFlareDialog,       setShowLensFlareDialog]       = useState(false)
+  const [showPixelateDialog,         setShowPixelateDialog]         = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -164,6 +166,7 @@ function AppContent(): React.JSX.Element {
     if (key === 'bilateral-filter') setShowBilateralFilterDialog(true)
     if (key === 'reduce-noise') setShowReduceNoiseDialog(true)
     if (key === 'render-lens-flare') setShowLensFlareDialog(true)
+    if (key === 'pixelate') setShowPixelateDialog(true)
   }, [])
 
   const filters = useFilters({
@@ -496,6 +499,17 @@ function AppContent(): React.JSX.Element {
           onCancel={() => setShowLensFlareDialog(false)}
           width={state.canvas.width}
           height={state.canvas.height}
+        />
+      )}
+      {showPixelateDialog && (
+        <PixelateDialog
+          isOpen={showPixelateDialog}
+          onClose={() => setShowPixelateDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
         />
       )}
     </div>
