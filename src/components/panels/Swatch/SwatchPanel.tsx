@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react'
+import ReactDOM from 'react-dom'
 import { useAppContext } from '@/store/AppContext'
 import { usePaletteFileOps } from '@/hooks/usePaletteFileOps'
 import { sortSwatchesByHue } from '@/utils/swatchSort'
@@ -14,36 +15,57 @@ export function SwatchPanel({ onGeneratePalette }: SwatchPanelProps): React.JSX.
     usePaletteFileOps({ swatches: state.swatches, dispatch })
   const displaySwatches = useMemo(() => sortSwatchesByHue(state.swatches), [state.swatches])
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const menuBtnRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!menuOpen) return
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false)
-      }
+      const target = e.target as Node
+      const inBtn = menuBtnRef.current?.contains(target) ?? false
+      const inDrop = dropdownRef.current?.contains(target) ?? false
+      if (!inBtn && !inDrop) setMenuOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [menuOpen])
 
+  function openMenu() {
+    if (!menuBtnRef.current) return
+    const rect = menuBtnRef.current.getBoundingClientRect()
+    setDropdownPos({ top: rect.bottom + 3, right: window.innerWidth - rect.right })
+    setMenuOpen(o => !o)
+  }
+
   return (
     <div className={styles.panelBody}>
       <div className={styles.actions}>
-        
-        <button type="button" className={styles.generateBtn} onClick={() => onGeneratePalette?.()}>Generate palette</button>
-      <div className={styles.menuWrap} ref={menuRef}>
+      <div className={styles.menuWrap}>
           <button
+            ref={menuBtnRef}
             type="button"
             className={styles.menuBtn}
             aria-label="Palette file options"
             aria-expanded={menuOpen}
-            onClick={() => setMenuOpen(o => !o)}
+            onClick={openMenu}
           >
             ≡
           </button>
-          {menuOpen && (
-            <div className={styles.dropdown}>
+          {menuOpen && ReactDOM.createPortal(
+            <div
+              ref={dropdownRef}
+              className={styles.dropdown}
+              style={{ position: 'fixed', top: dropdownPos.top, right: dropdownPos.right }}
+            >
+              <button
+                type="button"
+                className={styles.dropdownItem}
+                onClick={() => { setMenuOpen(false); onGeneratePalette?.() }}
+              >
+                Generate Palette…
+              </button>
+              <div className={styles.dropdownSeparator} />
               <button
                 type="button"
                 className={styles.dropdownItem}
@@ -66,7 +88,8 @@ export function SwatchPanel({ onGeneratePalette }: SwatchPanelProps): React.JSX.
               >
                 Open Palette…
               </button>
-            </div>
+            </div>,
+            document.body
           )}
         </div>
       </div>

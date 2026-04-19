@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ModalDialog } from '../ModalDialog/ModalDialog'
+import { DialogButton } from '../../widgets/DialogButton/DialogButton'
 import { sortSwatchesByHue } from '@/utils/swatchSort'
 import { generateColorWheel, generateNightColor, hslToRgba } from '@/utils/paletteGenerators'
 import type { SchemeType } from '@/utils/paletteGenerators'
@@ -501,16 +502,8 @@ export function GeneratePaletteDialog({
 
       {/* ── Footer ────────────────────────────────────────────────────── */}
       <div className={styles.footer}>
-        <button className={styles.cancelBtn} onClick={onClose}>
-          Cancel
-        </button>
-        <button
-          className={styles.applyBtn}
-          disabled={applyDisabled}
-          onClick={handleApply}
-        >
-          Apply
-        </button>
+        <DialogButton onClick={onClose}>Cancel</DialogButton>
+        <DialogButton primary disabled={applyDisabled} onClick={handleApply}>Apply</DialogButton>
       </div>
 
     </ModalDialog>

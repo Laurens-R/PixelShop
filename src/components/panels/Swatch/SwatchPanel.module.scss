@@ -16,27 +16,6 @@
   flex-shrink: 0;
 }
 
-.generateBtn {
-  font-size: vars.$font-size-xs;
-  font-family: vars.$font-sans;
-  color: vars.$color-text-muted;
-  background: vars.$color-surface-2;
-  border: 1px solid vars.$color-border-light;
-  border-radius: 16px;
-  padding: 2px 9px;
-  cursor: pointer;
-  transition: color vars.$transition-fast,
-              background vars.$transition-fast,
-              border-color vars.$transition-fast;
-  white-space: nowrap;
-
-  &:hover {
-    color: vars.$color-text;
-    background: vars.$color-surface-hover;
-    border-color: vars.$color-text-muted;
-  }
-}
-
 // 6 rows: 6 × 18px + 5 × 4px gap + 16px vertical padding = 144px
 .swatchGrid {
   display: flex;
@@ -122,9 +101,6 @@
 }
 
 .dropdown {
-  position: absolute;
-  top: calc(100% + 3px);
-  right: 0;
   min-width: 160px;
   background: vars.$color-surface;
   border: 1px solid vars.$color-border-light;
