@@ -9,7 +9,7 @@
 .actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px;
   padding: 5px 8px 4px;
   border-bottom: 1px solid vars.$color-border;
@@ -53,9 +53,25 @@
     @include m.focus-ring;
   }
 
-  &.swatchSelected {
+  &.swatchActive {
     border-color: #0699fb;
-    box-shadow: 0 0 0 1px #0699fb;
+    box-shadow: inset 0 0 0 2px rgba(6, 153, 251, 0.5);
+  }
+
+  &.swatchSelected {
+    box-shadow: 0 0 0 2px #0699fb;
+    border-color: #0699fb;
+  }
+
+  &.swatchGroupHighlight {
+    background-blend-mode: overlay;
+    box-shadow: inset 0 0 0 2px #e8a000;
+    border-color: #e8a000;
+  }
+
+  &.swatchSelected.swatchGroupHighlight {
+    box-shadow: 0 0 0 2px #0699fb, inset 0 0 0 2px #e8a000;
+    border-color: #e8a000;
   }
 }
 
@@ -68,6 +84,7 @@
 }
 
 .menuWrap {
+  margin-left: auto;
   position: relative;
 }
 
@@ -166,4 +183,131 @@
   &:hover {
     opacity: 1;
   }
+}
+
+// ── Group controls ────────────────────────────────────────────────────────────
+
+.groupSelect {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 22px;
+  padding: 0 4px;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-xs;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: vars.$color-text-muted;
+  }
+
+  &:focus-visible {
+    @include m.focus-ring;
+  }
+}
+
+.removeGroupBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text-muted;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color vars.$transition-fast, background vars.$transition-fast, border-color vars.$transition-fast;
+
+  &:hover:not(:disabled) {
+    color: vars.$color-text;
+    background: vars.$color-surface-hover;
+    border-color: vars.$color-border-light;
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+// ── Context menu ──────────────────────────────────────────────────────────────
+
+.contextMenu {
+  min-width: 160px;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-md;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 300;
+  padding: 3px 0;
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  padding: 5px 12px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background vars.$transition-fast;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}
+
+// ── Group name prompt ─────────────────────────────────────────────────────────
+
+.promptBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.promptInput {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: #0699fb;
+    box-shadow: 0 0 0 1px #0699fb;
+  }
+}
+
+.promptError {
+  margin: 0;
+  font-size: vars.$font-size-xs;
+  color: #e07070;
+}
+
+.promptButtons {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
 }

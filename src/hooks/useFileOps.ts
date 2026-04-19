@@ -4,7 +4,7 @@ import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
 import { IMAGE_EXTENSIONS, EXT_TO_MIME, loadImagePixels } from '@/export/imageLoader'
 import { makeTabId, fileTitle, DEFAULT_SWATCHES } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
-import type { LayerState, BackgroundFill, AppState } from '@/types'
+import type { LayerState, BackgroundFill, AppState, SwatchGroup } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { showOperationError } from '@/utils/userFeedback'
@@ -49,6 +49,27 @@ function isValidSwatchArray(val: unknown): val is { r: number; g: number; b: num
   return true
 }
 
+function isValidSwatchGroupsArray(
+  val: unknown,
+  swatchCount: number,
+): val is SwatchGroup[] {
+  if (!Array.isArray(val)) return false
+  const names = new Set<string>()
+  for (const item of val) {
+    if (typeof item !== 'object' || item === null) return false
+    const { id, name, swatchIndices } = item as Record<string, unknown>
+    if (typeof id !== 'string' || id === '') return false
+    if (typeof name !== 'string' || name === '') return false
+    if (names.has(name)) return false
+    names.add(name)
+    if (!Array.isArray(swatchIndices)) return false
+    for (const idx of swatchIndices) {
+      if (!Number.isInteger(idx) || idx < 0 || idx >= swatchCount) return false
+    }
+  }
+  return true
+}
+
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useFileOps({
@@ -78,6 +99,7 @@ export function useFileOps({
       layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
       activeLayerId: 'layer-0', zoom: 1,
       swatches: DEFAULT_SWATCHES,
+      swatchGroups: [],
     }
     const updated: TabRecord[] = [
       ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
@@ -112,6 +134,7 @@ export function useFileOps({
         canvasWidth: width, canvasHeight: height, backgroundFill: 'transparent',
         layers, activeLayerId: layerId, zoom: 1,
         swatches: DEFAULT_SWATCHES,
+        swatchGroups: [],
       }
       const snapshot      = captureActiveSnapshot()
       const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
@@ -145,6 +168,7 @@ export function useFileOps({
         adjustmentMaskPng?: string | null
       }>
       swatches?: unknown
+      swatchGroups?: unknown
     }
 
     const layerData = new Map<string, string>()
@@ -165,10 +189,19 @@ export function useFileOps({
     const docSwatches = doc.version >= 2
       ? (doc.swatches as { r: number; g: number; b: number; a: number }[])
       : DEFAULT_SWATCHES
+    let docSwatchGroups: SwatchGroup[] = []
+    if (doc.version >= 3) {
+      if (!isValidSwatchGroupsArray(doc.swatchGroups, docSwatches.length)) {
+        showOperationError('Could not open file.', 'The file contains invalid swatch group data.')
+        return
+      }
+      docSwatchGroups = doc.swatchGroups as SwatchGroup[]
+    }
     const newSnapshot: TabSnapshot = {
       canvasWidth: doc.canvas.width, canvasHeight: doc.canvas.height, backgroundFill: bg,
       layers, activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null, zoom: 1,
       swatches: docSwatches,
+      swatchGroups: docSwatchGroups,
     }
     const snapshot      = captureActiveSnapshot()
     const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
@@ -184,6 +217,7 @@ export function useFileOps({
     setPendingLayerData(null)
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
     dispatch({ type: 'SET_SWATCHES', payload: docSwatches })
+    dispatch({ type: 'SET_SWATCH_GROUPS', payload: docSwatchGroups })
   }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
 
   const handleSave = useCallback(async (saveAs = false): Promise<void> => {
@@ -209,7 +243,7 @@ export function useFileOps({
       }
     }
     const doc = {
-      version: 2,
+      version: 3,
       canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
       layers: state.layers.map(l => ({
@@ -219,6 +253,7 @@ export function useFileOps({
         adjustmentMaskPng: adjustmentMaskPngs[l.id] ?? null,
       })),
       swatches: state.swatches,
+      swatchGroups: state.swatchGroups,
     }
     await window.api.savePxshopFile(path, JSON.stringify(doc))
     const savedPath = path

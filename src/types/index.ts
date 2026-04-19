@@ -34,6 +34,12 @@ export interface RGBAColor extends RGBColor {
   a: number
 }
 
+export interface SwatchGroup {
+  id: string
+  name: string
+  swatchIndices: number[]
+}
+
 // ─── Geometry ─────────────────────────────────────────────────────────────────
 
 export interface Point {
@@ -431,6 +437,7 @@ export interface AppState {
   primaryColor: RGBAColor
   secondaryColor: RGBAColor
   swatches: RGBAColor[]
+  swatchGroups: SwatchGroup[]
   layers: LayerState[]
   activeLayerId: string | null
   canvas: CanvasState

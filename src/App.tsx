@@ -281,6 +281,7 @@ function AppContent(): React.JSX.Element {
           })}
         </main>
         <RightPanel
+          activeTabId={activeTabId}
           onMergeSelected={handleMergeSelected}
           onMergeVisible={handleMergeVisible}
           onMergeDown={handleMergeDown}

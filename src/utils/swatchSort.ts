@@ -24,28 +24,30 @@ export function rgbaToHsl(c: RGBAColor): { h: number; s: number; l: number } {
   return { h: h * 360, s, l }
 }
 
-export function sortSwatchesByHue(swatches: RGBAColor[]): RGBAColor[] {
-  const neutrals: RGBAColor[] = []
-  const chromatics: RGBAColor[] = []
-  const transparent: RGBAColor[] = []
+export function sortSwatchesByHue(swatches: RGBAColor[]): Array<{ color: RGBAColor; canonicalIndex: number }> {
+  const neutrals:    Array<{ color: RGBAColor; canonicalIndex: number }> = []
+  const chromatics:  Array<{ color: RGBAColor; canonicalIndex: number }> = []
+  const transparent: Array<{ color: RGBAColor; canonicalIndex: number }> = []
 
-  for (const sw of swatches) {
+  for (let i = 0; i < swatches.length; i++) {
+    const sw = swatches[i]
+    const entry = { color: sw, canonicalIndex: i }
     if (sw.a === 0) {
-      transparent.push(sw)
+      transparent.push(entry)
       continue
     }
     const { s } = rgbaToHsl(sw)
     if (s < 0.15) {
-      neutrals.push(sw)
+      neutrals.push(entry)
     } else {
-      chromatics.push(sw)
+      chromatics.push(entry)
     }
   }
 
-  neutrals.sort((a, b) => rgbaToHsl(a).l - rgbaToHsl(b).l)
+  neutrals.sort((a, b) => rgbaToHsl(a.color).l - rgbaToHsl(b.color).l)
   chromatics.sort((a, b) => {
-    const ha = rgbaToHsl(a)
-    const hb = rgbaToHsl(b)
+    const ha = rgbaToHsl(a.color)
+    const hb = rgbaToHsl(b.color)
     return ha.h !== hb.h ? ha.h - hb.h : ha.l - hb.l
   })
 

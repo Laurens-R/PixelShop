@@ -10,6 +10,7 @@ type ColorTab = 'Color' | 'Swatches' | 'Navigator'
 type LayerTab = 'Layers' | 'History' | 'Info'
 
 interface RightPanelProps {
+  activeTabId: string
   onMergeSelected: (ids: string[]) => void
   onMergeVisible: () => void
   onMergeDown: () => void
@@ -19,7 +20,7 @@ interface RightPanelProps {
   onGeneratePalette?: () => void
 }
 
-export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onOpenAdjustmentPanel, onGeneratePalette }: RightPanelProps): React.JSX.Element {
+export function RightPanel({ activeTabId, onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onOpenAdjustmentPanel, onGeneratePalette }: RightPanelProps): React.JSX.Element {
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
   const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
@@ -95,6 +96,7 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
         {colorTab === 'Color' && <ColorPicker />}
         {colorTab === 'Swatches' && (
           <SwatchPanel
+            activeTabId={activeTabId}
             onGeneratePalette={onGeneratePalette}
           />
         )}

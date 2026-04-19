@@ -143,13 +143,13 @@ export function GeneratePaletteDialog({
   // ── Combined sorted preview ───────────────────────────────────────
   const preview = useMemo<RGBAColor[]>(() => {
     const raw = mode === 'extract' ? extractPalette : syncPreview
-    return sortSwatchesByHue(raw)
+    return sortSwatchesByHue(raw).map(e => e.color)
   }, [mode, syncPreview, extractPalette])
 
   // ── Apply ─────────────────────────────────────────────────────────
   function handleApply(): void {
     const raw = mode === 'extract' ? extractPalette : syncPreview
-    onApply(sortSwatchesByHue(raw))
+    onApply(sortSwatchesByHue(raw).map(e => e.color))
     onClose()
   }
 

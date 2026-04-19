@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, BlendMode, BackgroundFill, GridType, SwatchGroup } from '@/types'
 import { DEFAULT_SWATCHES } from './tabTypes'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -42,6 +42,11 @@ export type AppAction =
   | { type: 'RESTORE_LAYERS'; payload: { layers: LayerState[]; activeLayerId: string | null } }
   | { type: 'RESIZE_CANVAS'; payload: { width: number; height: number } }
   | { type: 'SET_SWATCHES'; payload: RGBAColor[] }
+  | { type: 'SET_SWATCH_GROUPS'; payload: SwatchGroup[] }
+  | { type: 'ADD_SWATCH_GROUP'; payload: { name: string; swatchIndices: number[] } }
+  | { type: 'ADD_SWATCHES_TO_GROUP'; payload: { id: string; swatchIndices: number[] } }
+  | { type: 'REMOVE_SWATCH_GROUP'; payload: string }
+  | { type: 'RENAME_SWATCH_GROUP'; payload: { id: string; name: string } }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -51,6 +56,7 @@ const initialState: AppState = {
   primaryColor: { r: 0, g: 0, b: 0, a: 255 },
   secondaryColor: { r: 255, g: 255, b: 255, a: 255 },
   swatches: DEFAULT_SWATCHES,
+  swatchGroups: [],
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
   canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, gridSize: 16, gridColor: '#808080', gridType: 'normal' as GridType, backgroundFill: 'white', key: 0 },
@@ -81,9 +87,63 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, swatches: action.payload }
 
     case 'REMOVE_SWATCH': {
-      const next = state.swatches.filter((_, i) => i !== action.payload)
-      return { ...state, swatches: next }
+      const idx = action.payload
+      const nextSwatches = state.swatches.filter((_, i) => i !== idx)
+      const nextGroups = state.swatchGroups.map(g => ({
+        ...g,
+        swatchIndices: g.swatchIndices
+          .filter(i => i !== idx)
+          .map(i => (i > idx ? i - 1 : i)),
+      }))
+      return { ...state, swatches: nextSwatches, swatchGroups: nextGroups }
     }
+
+    case 'SET_SWATCH_GROUPS':
+      return { ...state, swatchGroups: action.payload }
+
+    case 'ADD_SWATCH_GROUP': {
+      const { name, swatchIndices } = action.payload
+      const existing = state.swatchGroups.find(g => g.name === name)
+      if (existing) {
+        const merged = [...new Set([...existing.swatchIndices, ...swatchIndices])]
+        return {
+          ...state,
+          swatchGroups: state.swatchGroups.map(g =>
+            g.id === existing.id ? { ...g, swatchIndices: merged } : g
+          ),
+        }
+      }
+      return {
+        ...state,
+        swatchGroups: [
+          ...state.swatchGroups,
+          { id: crypto.randomUUID(), name, swatchIndices },
+        ],
+      }
+    }
+
+    case 'ADD_SWATCHES_TO_GROUP': {
+      const { id, swatchIndices } = action.payload
+      return {
+        ...state,
+        swatchGroups: state.swatchGroups.map(g =>
+          g.id === id
+            ? { ...g, swatchIndices: [...new Set([...g.swatchIndices, ...swatchIndices])] }
+            : g
+        ),
+      }
+    }
+
+    case 'REMOVE_SWATCH_GROUP':
+      return { ...state, swatchGroups: state.swatchGroups.filter(g => g.id !== action.payload) }
+
+    case 'RENAME_SWATCH_GROUP':
+      return {
+        ...state,
+        swatchGroups: state.swatchGroups.map(g =>
+          g.id === action.payload.id ? { ...g, name: action.payload.name } : g
+        ),
+      }
 
     case 'ADD_LAYER':
       return {
