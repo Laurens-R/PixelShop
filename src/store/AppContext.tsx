@@ -40,6 +40,7 @@ export type AppAction =
   | { type: 'SWITCH_TAB';   payload: { width: number; height: number; backgroundFill: BackgroundFill; layers: LayerState[]; activeLayerId: string | null; zoom: number } }
   | { type: 'RESTORE_LAYERS'; payload: { layers: LayerState[]; activeLayerId: string | null } }
   | { type: 'RESIZE_CANVAS'; payload: { width: number; height: number } }
+  | { type: 'SET_SWATCHES'; payload: RGBAColor[] }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -95,6 +96,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ADD_SWATCH':
       return { ...state, swatches: [...state.swatches, action.payload] }
+
+    case 'SET_SWATCHES':
+      return { ...state, swatches: action.payload }
 
     case 'REMOVE_SWATCH': {
       const next = state.swatches.filter((_, i) => i !== action.payload)

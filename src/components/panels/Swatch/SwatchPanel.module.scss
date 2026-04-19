@@ -1,11 +1,57 @@
 @use '@/styles/variables' as vars;
 @use '@/styles/mixins' as m;
 
-.swatchesPanel {
+.panelBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 5px 8px 4px;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.generateBtn {
+  font-size: vars.$font-size-xs;
+  font-family: vars.$font-sans;
+  color: vars.$color-text-muted;
+  background: vars.$color-surface-2;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 16px;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: color vars.$transition-fast,
+              background vars.$transition-fast,
+              border-color vars.$transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    color: vars.$color-text;
+    background: vars.$color-surface-hover;
+    border-color: vars.$color-text-muted;
+  }
+}
+
+// 6 rows: 6 × 18px + 5 × 4px gap + 16px vertical padding = 144px
+.swatchGrid {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px;
+  padding-right: 4px;
+  max-height: 144px;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  &::-webkit-scrollbar        { width: 6px; }
+  &::-webkit-scrollbar-track  { background: vars.$color-surface; }
+  &::-webkit-scrollbar-thumb  { background: vars.$color-border-light; border-radius: 3px; }
+  &::-webkit-scrollbar-thumb:hover { background: vars.$color-text-muted; }
 }
 
 .swatchCell {
@@ -27,6 +73,11 @@
   &:focus-visible {
     @include m.focus-ring;
   }
+
+  &.swatchSelected {
+    border-color: #0699fb;
+    box-shadow: 0 0 0 1px #0699fb;
+  }
 }
 
 .swatchesEmpty {
@@ -35,4 +86,108 @@
   padding: 4px;
   text-align: center;
   width: 100%;
+}
+
+.menuWrap {
+  position: relative;
+}
+
+.menuBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-sm;
+  color: vars.$color-text-muted;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color vars.$transition-fast, background vars.$transition-fast, border-color vars.$transition-fast;
+
+  &:hover {
+    color: vars.$color-text;
+    background: vars.$color-surface-hover;
+    border-color: vars.$color-border-light;
+  }
+
+  &[aria-expanded='true'] {
+    color: vars.$color-text;
+    background: vars.$color-surface-hover;
+    border-color: vars.$color-border-light;
+  }
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 3px);
+  right: 0;
+  min-width: 160px;
+  background: vars.$color-surface;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-md;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  padding: 3px 0;
+}
+
+.dropdownItem {
+  display: block;
+  width: 100%;
+  padding: 5px 12px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: vars.$color-text;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background vars.$transition-fast;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}
+
+.dropdownSeparator {
+  height: 1px;
+  background: vars.$color-border;
+  margin: 3px 0;
+}
+
+.errorBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(192, 64, 64, 0.18);
+  border-bottom: 1px solid rgba(192, 64, 64, 0.45);
+}
+
+.errorText {
+  flex: 1;
+  font-size: vars.$font-size-xs;
+  color: #e07070;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.errorDismiss {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: #e07070;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+  opacity: 0.8;
+
+  &:hover {
+    opacity: 1;
+  }
 }

@@ -21,6 +21,14 @@ const api = {
     ipcRenderer.invoke('presets:loadCurvesPresets'),
   saveCurvesPresets: (presets: unknown): Promise<void> =>
     ipcRenderer.invoke('presets:saveCurvesPresets', presets),
+  openPaletteDialog: (): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:openPalette'),
+  savePaletteAsDialog: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:savePaletteAs', defaultPath),
+  readPaletteFile: (path: string): Promise<string> =>
+    ipcRenderer.invoke('file:readPalette', path),
+  writePaletteFile: (path: string, data: string): Promise<void> =>
+    ipcRenderer.invoke('file:writePalette', path, data),
 }
 
 if (process.contextIsolated) {

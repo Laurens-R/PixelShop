@@ -1,0 +1,521 @@
+@use '@/styles/variables' as vars;
+
+// ─── Tab strip ────────────────────────────────────────────────────────────────
+
+.tabStrip {
+  display: flex;
+  background: #242424;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.tab {
+  flex: 1;
+  height: 30px;
+  padding: 0 6px;
+  border: none;
+  border-right: 1px solid vars.$color-border;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  color: vars.$color-text-muted;
+  cursor: pointer;
+  transition: background vars.$transition-fast, color vars.$transition-fast;
+  white-space: nowrap;
+
+  &:last-child { border-right: none; }
+
+  &:hover:not(.tabDisabled):not(.tabActive) {
+    background: vars.$color-surface-hover;
+    color: vars.$color-text-dim;
+  }
+
+  &.tabActive {
+    background: vars.$color-surface;
+    color: vars.$color-text;
+    border-bottom: 2px solid vars.$color-accent-solid;
+  }
+
+  &.tabDisabled {
+    color: #444;
+    cursor: not-allowed;
+
+    &:hover { background: transparent; }
+  }
+}
+
+// ─── Mode body ────────────────────────────────────────────────────────────────
+
+.modeBody {
+  min-height: 152px;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.modePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+// ─── Slider row ───────────────────────────────────────────────────────────────
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+}
+
+.sliderLabel {
+  width: 72px;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.sliderTrack {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.psSlider {
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(
+    to right,
+    vars.$color-accent-solid 0%,
+    vars.$color-accent-solid var(--pct, 40%),
+    vars.$color-border-light var(--pct, 40%),
+    vars.$color-border-light 100%
+  );
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: vars.$color-text;
+    border: 1px solid vars.$color-border-light;
+    cursor: pointer;
+    transition: background vars.$transition-fast;
+  }
+
+  &:hover::-webkit-slider-thumb { background: #fff; }
+
+  &:focus::-webkit-slider-thumb {
+    background: vars.$color-accent-solid;
+    border-color: vars.$color-accent-solid;
+    box-shadow: 0 0 0 2px vars.$color-accent;
+  }
+
+  &::-moz-range-thumb {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: vars.$color-text;
+    border: 1px solid vars.$color-border-light;
+    cursor: pointer;
+  }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+
+    &::-webkit-slider-thumb { cursor: not-allowed; }
+  }
+}
+
+.hueSlider {
+  width: 100%;
+  height: 12px;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  border: 1px solid #111;
+  background: linear-gradient(to right,
+    hsl(0, 100%, 50%),   hsl(20, 100%, 50%),  hsl(40, 100%, 50%),  hsl(60, 100%, 50%),
+    hsl(80, 100%, 50%),  hsl(100, 100%, 50%), hsl(120, 100%, 50%), hsl(140, 100%, 50%),
+    hsl(160, 100%, 50%), hsl(180, 100%, 50%), hsl(200, 100%, 50%), hsl(220, 100%, 50%),
+    hsl(240, 100%, 50%), hsl(260, 100%, 50%), hsl(280, 100%, 50%), hsl(300, 100%, 50%),
+    hsl(320, 100%, 50%), hsl(340, 100%, 50%), hsl(360, 100%, 50%)
+  );
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 8px;
+    height: 16px;
+    border-radius: 2px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+  }
+
+  &::-moz-range-thumb {
+    width: 8px;
+    height: 16px;
+    border-radius: 2px;
+    background: #fff;
+    border: 1px solid rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+  }
+}
+
+.hueSwatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+// ─── Number input ─────────────────────────────────────────────────────────────
+
+.numInput {
+  width: 44px;
+  height: 18px;
+  padding: 0 4px;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  color: vars.$color-text;
+  text-align: right;
+  outline: none;
+  flex-shrink: 0;
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    border-color: vars.$color-accent-solid;
+    box-shadow: 0 0 0 1px vars.$color-accent-border;
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+}
+
+.unit {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+  width: 14px;
+}
+
+// ─── Select ───────────────────────────────────────────────────────────────────
+
+.psSelect {
+  flex: 1;
+  height: 20px;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  color: vars.$color-text;
+  padding: 0 4px;
+  outline: none;
+  cursor: pointer;
+  min-width: 0;
+
+  &:focus {
+    border-color: vars.$color-accent-solid;
+    box-shadow: 0 0 0 1px vars.$color-accent-border;
+  }
+}
+
+// ─── Device list ──────────────────────────────────────────────────────────────
+
+.deviceList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: vars.$color-border;
+  border: 1px solid vars.$color-border;
+  border-radius: vars.$radius-sm;
+  overflow: hidden;
+}
+
+.deviceRow {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px 0 6px;
+  background: vars.$color-surface-2;
+  cursor: pointer;
+  transition: background vars.$transition-fast;
+  gap: 7px;
+
+  &:hover:not(.deviceRowSelected) { background: vars.$color-surface-hover; }
+
+  &.deviceRowSelected { background: rgba(6, 153, 251, 0.14); }
+}
+
+.deviceRadio {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid vars.$color-border-light;
+  flex-shrink: 0;
+  background: vars.$color-bg;
+
+  .deviceRowSelected & {
+    border-color: vars.$color-accent-solid;
+    background: vars.$color-accent-solid;
+    box-shadow: inset 0 0 0 2px vars.$color-surface-2;
+  }
+}
+
+.deviceName {
+  flex: 1;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-dim;
+
+  .deviceRowSelected & { color: vars.$color-text; }
+}
+
+.deviceCount {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  text-align: right;
+
+  .deviceRowSelected & { color: rgba(6, 153, 251, 0.7); }
+}
+
+// ─── Info / warning banner ────────────────────────────────────────────────────
+
+.infoBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 7px;
+  background: rgba(255, 190, 60, 0.06);
+  border: 1px solid rgba(255, 190, 60, 0.2);
+  border-radius: vars.$radius-sm;
+  margin-bottom: 4px;
+}
+
+.infoBannerIcon {
+  flex-shrink: 0;
+  color: #c8a030;
+  font-size: vars.$font-size-sm;
+  margin-top: 0.5px;
+}
+
+.infoBannerText {
+  font-size: vars.$font-size-xs;
+  color: #c8a030;
+  line-height: 1.5;
+}
+
+// ─── Night info ───────────────────────────────────────────────────────────────
+
+.nightInfo {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  background: rgba(6, 153, 251, 0.06);
+  border: 1px solid rgba(6, 153, 251, 0.15);
+  border-radius: vars.$radius-sm;
+  margin-top: 3px;
+}
+
+.nightInfoText {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+}
+
+.nightInfoHl {
+  color: vars.$color-accent-solid;
+  font-variant-numeric: tabular-nums;
+}
+
+// ─── Night legend ─────────────────────────────────────────────────────────────
+
+.nightLegend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px 4px;
+}
+
+.legendItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.legendSwatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 1px;
+  border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+.legendSep {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  align-self: center;
+  padding-bottom: 3px;
+}
+
+.legendLabel {
+  font-size: 9px;
+  color: vars.$color-text-muted;
+  letter-spacing: 0.02em;
+}
+
+// ─── Extract loading ──────────────────────────────────────────────────────────
+
+.extractLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68px;
+  font-size: vars.$font-size-sm;
+  color: vars.$color-text-muted;
+}
+
+// ─── Preview section ──────────────────────────────────────────────────────────
+
+.previewSection {
+  flex-shrink: 0;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  padding: 0 10px;
+  border-bottom: 1px solid vars.$color-border;
+}
+
+.previewTitle {
+  font-size: vars.$font-size-xs;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: vars.$color-text-muted;
+}
+
+.previewCount {
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  font-variant-numeric: tabular-nums;
+}
+
+.previewGrid {
+  padding: 6px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 68px;
+  max-height: 114px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: vars.$color-surface-2; }
+  &::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+}
+
+.colorChip {
+  width: 18px;
+  height: 18px;
+  border-radius: 1px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.previewEmpty {
+  display: flex;
+  align-items: center;
+  font-size: vars.$font-size-xs;
+  color: vars.$color-text-muted;
+  min-height: 52px;
+  padding: 0 2px;
+}
+
+// ─── Footer ───────────────────────────────────────────────────────────────────
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 7px 10px 9px;
+  border-top: 1px solid vars.$color-border;
+  flex-shrink: 0;
+}
+
+.cancelBtn {
+  height: 22px;
+  padding: 0 12px;
+  background: transparent;
+  border: 1px solid vars.$color-border-light;
+  border-radius: vars.$radius-sm;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  color: vars.$color-text-dim;
+  cursor: pointer;
+  transition: background vars.$transition-fast, color vars.$transition-fast, border-color vars.$transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    background: vars.$color-surface-hover;
+    border-color: vars.$color-text-muted;
+    color: vars.$color-text;
+  }
+
+  &:active { background: vars.$color-surface-selected; }
+}
+
+.applyBtn {
+  height: 22px;
+  padding: 0 14px;
+  background: vars.$color-accent-solid;
+  border: 1px solid transparent;
+  border-radius: vars.$radius-sm;
+  font-size: vars.$font-size-sm;
+  font-family: vars.$font-sans;
+  color: #fff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background vars.$transition-fast;
+  white-space: nowrap;
+
+  &:hover { background: #1aa3ff; }
+  &:active { background: #057dd4; }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}

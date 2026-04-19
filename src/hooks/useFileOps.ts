@@ -7,6 +7,7 @@ import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
 import type { LayerState, BackgroundFill, AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import { showOperationError } from '@/utils/userFeedback'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,23 @@ export interface UseFileOpsReturn {
   handleNewConfirm: (settings: { width: number; height: number; backgroundFill: BackgroundFill }) => void
   handleOpen: () => Promise<void>
   handleSave: (saveAs?: boolean) => Promise<void>
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function isValidSwatchArray(val: unknown): val is { r: number; g: number; b: number; a: number }[] {
+  if (!Array.isArray(val)) return false
+  for (const item of val) {
+    if (typeof item !== 'object' || item === null) return false
+    const { r, g, b, a } = item as Record<string, unknown>
+    if (
+      !Number.isInteger(r) || (r as number) < 0 || (r as number) > 255 ||
+      !Number.isInteger(g) || (g as number) < 0 || (g as number) > 255 ||
+      !Number.isInteger(b) || (b as number) < 0 || (b as number) > 255 ||
+      !Number.isInteger(a) || (a as number) < 0 || (a as number) > 255
+    ) return false
+  }
+  return true
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -124,6 +142,7 @@ export function useFileOps({
         layerGeo?: { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number } | null
         adjustmentMaskPng?: string | null
       }>
+      swatches?: unknown
     }
 
     const layerData = new Map<string, string>()
@@ -147,11 +166,20 @@ export function useFileOps({
       ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
       { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: layerData, savedHistory: null, canvasKey: 1 },
     ]
+    if (doc.version >= 2) {
+      if (!isValidSwatchArray(doc.swatches)) {
+        showOperationError('Could not open file.', 'The file contains invalid swatch data.')
+        return
+      }
+    }
     setTabs(updated)
     setActiveTabId(newId)
     historyStore.clear({ recaptureSnapshot: false })
     setPendingLayerData(null)
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
+    if (doc.version >= 2) {
+      dispatch({ type: 'SET_SWATCHES', payload: doc.swatches as { r: number; g: number; b: number; a: number }[] })
+    }
   }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
 
   const handleSave = useCallback(async (saveAs = false): Promise<void> => {
@@ -177,7 +205,7 @@ export function useFileOps({
       }
     }
     const doc = {
-      version: 1,
+      version: 2,
       canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
       layers: state.layers.map(l => ({
@@ -186,6 +214,7 @@ export function useFileOps({
         layerGeo: layerGeos[l.id] ?? null,
         adjustmentMaskPng: adjustmentMaskPngs[l.id] ?? null,
       })),
+      swatches: state.swatches,
     }
     await window.api.savePxshopFile(path, JSON.stringify(doc))
     const savedPath = path

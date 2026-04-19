@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Dispatch, MutableRefObject } from 'react'
 import { historyStore } from '@/store/historyStore'
 import type { ClearHistoryOptions } from '@/store/historyStore'
-import type { AppState } from '@/types'
+import type { AppState, RGBAColor } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import type { TabRecord } from '@/store/tabTypes'
@@ -21,7 +21,7 @@ interface UseHistoryOptions {
 }
 
 export interface UseHistoryReturn {
-  captureHistory: (label: string) => void
+  captureHistory: (label: string, overrides?: { swatches?: RGBAColor[] }) => void
   isRestoringRef: MutableRefObject<boolean>
   suppressReadyCaptureRef: MutableRefObject<boolean>
   pendingLayerLabelRef: MutableRefObject<string | null>
@@ -43,7 +43,7 @@ export function useHistory({
   const pendingLayerLabelRef  = useRef<string | null>(null)
   const prevLayersRef         = useRef(layers)
 
-  const captureHistory = useCallback((label: string): void => {
+  const captureHistory = useCallback((label: string, overrides?: { swatches?: RGBAColor[] }): void => {
     if (isRestoringRef.current) return
     if (suppressReadyCaptureRef.current) {
       suppressReadyCaptureRef.current = false
@@ -65,6 +65,7 @@ export function useHistory({
       activeLayerId: s.activeLayerId,
       canvasWidth: s.canvas.width,
       canvasHeight: s.canvas.height,
+      swatches: overrides?.swatches ?? s.swatches,
     })
   }, [canvasHandleRef, stateRef])
 
@@ -138,6 +139,9 @@ export function useHistory({
             zoom: stateRef.current.canvas.zoom,
           },
         })
+        if (entry.swatches) {
+          dispatch({ type: 'SET_SWATCHES', payload: entry.swatches })
+        }
       } else {
         canvasHandleRef.current?.restoreAllLayerPixels(entry.layerPixels, entry.layerGeometry, entry.layerState)
         canvasHandleRef.current?.restoreAllAdjustmentMasks(entry.adjustmentMasks)
@@ -145,6 +149,9 @@ export function useHistory({
           type: 'RESTORE_LAYERS',
           payload: { layers: entry.layerState, activeLayerId: entry.activeLayerId },
         })
+        if (entry.swatches) {
+          dispatch({ type: 'SET_SWATCHES', payload: entry.swatches })
+        }
       }
 
       historyStore.setCurrent(index)

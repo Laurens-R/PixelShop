@@ -33,6 +33,7 @@ import { BilateralFilterDialog } from '@/components/dialogs/BilateralFilterDialo
 import { ReduceNoiseDialog } from '@/components/dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
 import { LensFlareDialog } from '@/components/dialogs/LensFlareDialog/LensFlareDialog'
 import { PixelateDialog } from '@/components/dialogs/PixelateDialog/PixelateDialog'
+import { GeneratePaletteDialog } from '@/components/dialogs/GeneratePaletteDialog/GeneratePaletteDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -83,6 +84,7 @@ function AppContent(): React.JSX.Element {
   const [showReduceNoiseDialog,     setShowReduceNoiseDialog]     = useState(false)
   const [showLensFlareDialog,       setShowLensFlareDialog]       = useState(false)
   const [showPixelateDialog,         setShowPixelateDialog]         = useState(false)
+  const [showGeneratePaletteDialog,   setShowGeneratePaletteDialog]   = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -202,6 +204,7 @@ function AppContent(): React.JSX.Element {
 
   // ── Export ────────────────────────────────────────────────────────
   // ── Render ────────────────────────────────────────────────────────
+  const hasActiveDocument = tabs.length > 0
   const tabInfos: TabInfo[] = tabs.map(t => ({ id: t.id, title: t.title }))
 
   return (
@@ -284,6 +287,7 @@ function AppContent(): React.JSX.Element {
           onFlattenImage={handleFlattenImage}
           onRasterizeLayer={handleRasterizeLayer}
           onOpenAdjustmentPanel={adjustments.handleOpenAdjustmentPanel}
+          onGeneratePalette={() => setShowGeneratePaletteDialog(true)}
         />
       </div>
 
@@ -512,6 +516,17 @@ function AppContent(): React.JSX.Element {
           canvasHeight={state.canvas.height}
         />
       )}
+      <GeneratePaletteDialog
+        open={showGeneratePaletteDialog}
+        onClose={() => setShowGeneratePaletteDialog(false)}
+        canvasHandleRef={canvasHandleRef}
+        swatches={state.swatches}
+        hasActiveDocument={hasActiveDocument}
+        onApply={(palette) => {
+          captureHistory('Generate Palette', { swatches: palette })
+          dispatch({ type: 'SET_SWATCHES', payload: palette })
+        }}
+      />
     </div>
   )
 }

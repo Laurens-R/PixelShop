@@ -92,4 +92,28 @@ export function registerIpcHandlers(): void {
     const json = JSON.stringify(presets, null, 2)
     await writeFile(presetsPath, json, 'utf-8')
   })
+
+  ipcMain.handle('dialog:openPalette', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Palette', extensions: ['palette'] }],
+    })
+    return canceled ? null : filePaths[0]
+  })
+
+  ipcMain.handle('dialog:savePaletteAs', async (_event, defaultPath?: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath,
+      filters: [{ name: 'Palette', extensions: ['palette'] }],
+    })
+    return canceled ? null : filePath
+  })
+
+  ipcMain.handle('file:readPalette', async (_event, path: string) => {
+    return readFile(path, 'utf-8')
+  })
+
+  ipcMain.handle('file:writePalette', async (_event, path: string, data: string) => {
+    await writeFile(path, data, 'utf-8')
+  })
 }

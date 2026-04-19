@@ -16,9 +16,10 @@ interface RightPanelProps {
   onFlattenImage: () => void
   onRasterizeLayer: (layerId: string) => void
   onOpenAdjustmentPanel?: (layerId: string) => void
+  onGeneratePalette?: () => void
 }
 
-export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onOpenAdjustmentPanel }: RightPanelProps): React.JSX.Element {
+export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onOpenAdjustmentPanel, onGeneratePalette }: RightPanelProps): React.JSX.Element {
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
   const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
@@ -89,18 +90,13 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
             </button>
           ))}
           <div className={styles.tabSpacer} />
-          <button className={styles.tabMenu} aria-label="Panel options">
-            <svg viewBox="0 0 10 10" fill="currentColor" width="10" height="10">
-              <rect x="0" y="2" width="10" height="1.2" />
-              <rect x="0" y="5" width="10" height="1.2" />
-              <rect x="0" y="8" width="10" height="1.2" />
-            </svg>
-          </button>
         </div>
 
         {colorTab === 'Color' && <ColorPicker />}
         {colorTab === 'Swatches' && (
-          <SwatchPanel />
+          <SwatchPanel
+            onGeneratePalette={onGeneratePalette}
+          />
         )}
         {colorTab === 'Navigator' && (
           <Navigator />
@@ -133,13 +129,6 @@ export function RightPanel({ onMergeSelected, onMergeVisible, onMergeDown, onFla
             </button>
           ))}
           <div className={styles.tabSpacer} />
-          <button className={styles.tabMenu} aria-label="Panel options">
-            <svg viewBox="0 0 10 10" fill="currentColor" width="10" height="10">
-              <rect x="0" y="2" width="10" height="1.2" />
-              <rect x="0" y="5" width="10" height="1.2" />
-              <rect x="0" y="8" width="10" height="1.2" />
-            </svg>
-          </button>
         </div>
 
         {layerTab === 'Layers' && (

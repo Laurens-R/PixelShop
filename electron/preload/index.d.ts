@@ -16,6 +16,10 @@ declare global {
       readFileBase64: (path: string) => Promise<string>
       loadCurvesPresets: () => Promise<CurvesPreset[]>
       saveCurvesPresets: (presets: CurvesPreset[]) => Promise<void>
+      openPaletteDialog: () => Promise<string | null>
+      savePaletteAsDialog: (defaultPath?: string) => Promise<string | null>
+      readPaletteFile: (path: string) => Promise<string>
+      writePaletteFile: (path: string, data: string) => Promise<void>
     }
   }
 

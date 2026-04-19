@@ -1,4 +1,4 @@
-import type { LayerState } from '@/types'
+import type { LayerState, RGBAColor } from '@/types'
 
 // ─── History entry ────────────────────────────────────────────────────────────
 
@@ -16,6 +16,8 @@ export interface HistoryEntry {
   activeLayerId: string | null
   canvasWidth: number
   canvasHeight: number
+  /** Swatch collection at the time of this snapshot. Optional so old entries are backward-compatible. */
+  swatches?: RGBAColor[]
 }
 
 export interface ClearHistoryOptions {
@@ -47,6 +49,7 @@ export function cloneHistoryEntry(entry: HistoryEntry): HistoryEntry {
     layerGeometry: cloneLayerGeometry(entry.layerGeometry),
     adjustmentMasks: cloneAdjustmentMasks(entry.adjustmentMasks),
     layerState: structuredClone(entry.layerState),
+    swatches: entry.swatches ? [...entry.swatches] : undefined,
   }
 }
 
