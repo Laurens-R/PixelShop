@@ -5,6 +5,7 @@ export interface AdjustmentRegistrationEntry<T extends AdjustmentType = Adjustme
   adjustmentType: T
   label: string
   defaultParams: AdjustmentParamsMap[T]
+  group?: string
 }
 
 export const ADJUSTMENT_REGISTRY = [
@@ -101,5 +102,16 @@ export const ADJUSTMENT_REGISTRY = [
     adjustmentType: 'reduce-colors' as const,
     label: 'Reduce Colors…',
     defaultParams: { mode: 'reduce', colorCount: 16, derivedPalette: null },
+  },
+  {
+    adjustmentType: 'bloom' as const,
+    label: 'Bloom…',
+    group: 'real-time-effects',
+    defaultParams: {
+      threshold: 0.5,
+      strength:  0.5,
+      spread:    20,
+      quality:   'half',
+    },
   },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

@@ -37,7 +37,7 @@ interface TopBarProps {
   onKeyboardShortcuts?: () => void
   onCreateAdjustmentLayer?: (type: AdjustmentType) => void
   isAdjustmentMenuEnabled?: boolean
-  adjustmentMenuItems?: Array<{ type: AdjustmentType; label: string }>
+  adjustmentMenuItems?: Array<{ type: AdjustmentType; label: string; group?: string }>
   onOpenFilterDialog?: (key: FilterKey) => void
   onInstantFilter?:     (key: FilterKey) => void
   isFiltersMenuEnabled?: boolean
@@ -76,11 +76,22 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
     },
     {
       label: 'Image',
-      items: (adjustmentMenuItems ?? []).map(item => ({
-        label:    item.label,
-        disabled: !isAdjustmentMenuEnabled,
-        action:   () => onCreateAdjustmentLayer?.(item.type),
-      })),
+      items: (() => {
+        const result: MenuDef['items'] = []
+        let lastGroup: string | undefined = undefined
+        for (const item of (adjustmentMenuItems ?? [])) {
+          if (item.group !== undefined && item.group !== lastGroup && lastGroup !== undefined) {
+            result.push({ separator: true, label: '' })
+          }
+          lastGroup = item.group
+          result.push({
+            label:    item.label,
+            disabled: !isAdjustmentMenuEnabled,
+            action:   () => onCreateAdjustmentLayer?.(item.type),
+          })
+        }
+        return result
+      })(),
     },
     {
       label: 'Filters',

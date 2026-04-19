@@ -176,6 +176,7 @@ export type AdjustmentType =
   | 'curves'
   | 'color-grading'
   | 'reduce-colors'
+  | 'bloom'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -294,6 +295,12 @@ export interface AdjustmentParamsMap {
     colorCount: number
     derivedPalette: RGBAColor[] | null
   }
+  'bloom': {
+    threshold: number
+    strength:  number
+    spread:    number
+    quality:   'full' | 'half' | 'quarter'
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -394,6 +401,12 @@ export interface ReduceColorsAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface BloomAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'bloom'
+  params: AdjustmentParamsMap['bloom']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -406,6 +419,7 @@ export type AdjustmentLayerState =
   | CurvesAdjustmentLayer
   | ColorGradingAdjustmentLayer
   | ReduceColorsAdjustmentLayer
+  | BloomAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 

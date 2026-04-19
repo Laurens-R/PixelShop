@@ -151,6 +151,18 @@ export function buildAdjustmentEntry(
       paletteCount,
     }
   }
+  if (ls.adjustmentType === 'bloom') {
+    return {
+      kind: 'bloom',
+      layerId: ls.id,
+      threshold: ls.params.threshold,
+      strength:  ls.params.strength,
+      spread:    ls.params.spread,
+      quality:   ls.params.quality,
+      visible:   ls.visible,
+      selMaskLayer: mask,
+    }
+  }
   const _exhaustive: never = ls
   return _exhaustive
 }

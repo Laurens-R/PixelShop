@@ -24,6 +24,11 @@ import {
   CURVES_COMPUTE,
   CG_COMPUTE,
   RC_COMPUTE,
+  BLOOM_EXTRACT_COMPUTE,
+  BLOOM_DOWNSAMPLE_COMPUTE,
+  BLOOM_BLUR_H_COMPUTE,
+  BLOOM_BLUR_V_COMPUTE,
+  BLOOM_COMPOSITE_COMPUTE,
 } from './shaders'
 import { initFilterCompute } from './filterCompute'
 import type { AdjustmentParamsMap } from '@/types'
@@ -78,6 +83,16 @@ export type AdjustmentRenderOp =
       palette: Float32Array
       paletteCount: number
     }
+  | {
+      kind: 'bloom'
+      layerId:   string
+      threshold: number
+      strength:  number
+      spread:    number
+      quality:   'full' | 'half' | 'quarter'
+      visible:   boolean
+      selMaskLayer?: GpuLayer
+    }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: GpuLayer; mask?: GpuLayer }
@@ -131,6 +146,21 @@ export class WebGPURenderer {
   private readonly curvesPipeline: GPUComputePipeline
   private readonly cgPipeline: GPUComputePipeline
   private readonly rcPipeline: GPUComputePipeline
+
+  // Bloom compute pipelines
+  private readonly bloomExtractPipeline:    GPUComputePipeline
+  private readonly bloomDownsamplePipeline: GPUComputePipeline
+  private readonly bloomBlurHPipeline:      GPUComputePipeline
+  private readonly bloomBlurVPipeline:      GPUComputePipeline
+  private readonly bloomCompositePipeline:  GPUComputePipeline
+
+  // Bloom intermediate texture cache — invalidated when quality changes
+  private bloomTexCache: {
+    quality:    'full' | 'half' | 'quarter'
+    extractTex: GPUTexture
+    blurATex:   GPUTexture
+    blurBTex:   GPUTexture
+  } | null = null
 
   // Shared vertex/tex-coord buffers
   private readonly texCoordBuffer: GPUBuffer
@@ -262,6 +292,12 @@ export class WebGPURenderer {
     this.curvesPipeline   = this.createComputePipeline(CURVES_COMPUTE,    'cs_curves')
     this.cgPipeline       = this.createComputePipeline(CG_COMPUTE,        'cs_color_grading')
     this.rcPipeline       = this.createComputePipeline(RC_COMPUTE,        'cs_reduce_colors')
+
+    this.bloomExtractPipeline    = this.createComputePipeline(BLOOM_EXTRACT_COMPUTE,    'cs_bloom_extract')
+    this.bloomDownsamplePipeline = this.createComputePipeline(BLOOM_DOWNSAMPLE_COMPUTE, 'cs_bloom_downsample')
+    this.bloomBlurHPipeline      = this.createComputePipeline(BLOOM_BLUR_H_COMPUTE,     'cs_bloom_blur_h')
+    this.bloomBlurVPipeline      = this.createComputePipeline(BLOOM_BLUR_V_COMPUTE,     'cs_bloom_blur_v')
+    this.bloomCompositePipeline  = this.createComputePipeline(BLOOM_COMPOSITE_COMPUTE,  'cs_bloom_composite')
 
     initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
   }
@@ -896,6 +932,14 @@ export class WebGPURenderer {
       this.encodeReduceColorsPass(encoder, srcTex, dstTex, entry.palette, entry.paletteCount, entry.selMaskLayer)
       return
     }
+    if (entry.kind === 'bloom') {
+      this.encodeBloomPass(
+        encoder, srcTex, dstTex,
+        entry.threshold, entry.strength, entry.spread, entry.quality,
+        entry.selMaskLayer,
+      )
+      return
+    }
     const _exhaustive: never = entry
     return _exhaustive
   }
@@ -1212,6 +1256,170 @@ export class WebGPURenderer {
     this.pendingDestroyBuffers = []
   }
 
+  private ensureBloomTextures(quality: 'full' | 'half' | 'quarter'): {
+    extractTex: GPUTexture
+    blurATex:   GPUTexture
+    blurBTex:   GPUTexture
+  } {
+    if (this.bloomTexCache && this.bloomTexCache.quality === quality) {
+      return this.bloomTexCache
+    }
+    this.bloomTexCache?.extractTex.destroy()
+    this.bloomTexCache?.blurATex.destroy()
+    this.bloomTexCache?.blurBTex.destroy()
+
+    const { device, pixelWidth: w, pixelHeight: h } = this
+    const scaleFactor = quality === 'full' ? 1 : quality === 'half' ? 2 : 4
+    const bw = Math.ceil(w / scaleFactor)
+    const bh = Math.ceil(h / scaleFactor)
+
+    const usage =
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.STORAGE_BINDING |
+      GPUTextureUsage.COPY_DST
+
+    const make = (tw: number, th: number): GPUTexture =>
+      device.createTexture({ size: { width: tw, height: th }, format: 'rgba8unorm', usage })
+
+    this.bloomTexCache = {
+      quality,
+      extractTex: make(w, h),
+      blurATex:   make(bw, bh),
+      blurBTex:   make(bw, bh),
+    }
+    return this.bloomTexCache
+  }
+
+  private encodeBloomPass(
+    encoder:      GPUCommandEncoder,
+    srcTex:       GPUTexture,
+    dstTex:       GPUTexture,
+    threshold:    number,
+    strength:     number,
+    spread:       number,
+    quality:      'full' | 'half' | 'quarter',
+    selMaskLayer: GpuLayer | undefined,
+  ): void {
+    const { device, pixelWidth: w, pixelHeight: h } = this
+    const { extractTex, blurATex, blurBTex } = this.ensureBloomTextures(quality)
+
+    const scaleFactor = quality === 'full' ? 1 : quality === 'half' ? 2 : 4
+    const bw          = Math.ceil(w / scaleFactor)
+    const bh          = Math.ceil(h / scaleFactor)
+    const blurRadius  = Math.max(1, Math.round(spread / scaleFactor))
+
+    const dummyMask    = selMaskLayer?.texture ?? srcTex
+    const maskFlagsArr = new Uint32Array(8); maskFlagsArr[0] = selMaskLayer ? 1 : 0
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, maskFlagsBuf, maskFlagsArr)
+
+    // ── Pass 1: Extract ──────────────────────────────────────────────────────
+    const extractParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, extractParamsBuf, new Float32Array([threshold, 0, 0, 0]))
+    const extractBG = device.createBindGroup({
+      layout: this.bloomExtractPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: extractTex.createView() },
+        { binding: 2, resource: { buffer: extractParamsBuf } },
+        { binding: 3, resource: dummyMask.createView() },
+        { binding: 4, resource: { buffer: maskFlagsBuf } },
+      ],
+    })
+    const extractPass = encoder.beginComputePass()
+    extractPass.setPipeline(this.bloomExtractPipeline)
+    extractPass.setBindGroup(0, extractBG)
+    extractPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    extractPass.end()
+
+    // ── Pass 2: Downsample (skipped at Full quality) ─────────────────────────
+    let workingSrc = blurATex
+    let workingDst = blurBTex
+
+    if (quality !== 'full') {
+      const dsParamsBuf = createUniformBuffer(device, 16)
+      writeUniformBuffer(device, dsParamsBuf, new Uint32Array([scaleFactor, 0, 0, 0]))
+      const dsBG = device.createBindGroup({
+        layout: this.bloomDownsamplePipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: extractTex.createView() },
+          { binding: 1, resource: blurATex.createView() },
+          { binding: 2, resource: { buffer: dsParamsBuf } },
+        ],
+      })
+      const dsPass = encoder.beginComputePass()
+      dsPass.setPipeline(this.bloomDownsamplePipeline)
+      dsPass.setBindGroup(0, dsBG)
+      dsPass.dispatchWorkgroups(Math.ceil(bw / 8), Math.ceil(bh / 8))
+      dsPass.end()
+      this.pendingDestroyBuffers.push(dsParamsBuf)
+    } else {
+      encoder.copyTextureToTexture(
+        { texture: extractTex },
+        { texture: blurATex },
+        { width: w, height: h },
+      )
+    }
+
+    // ── Passes 3–8: 3 × H+V box blur ────────────────────────────────────────
+    const blurParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, blurParamsBuf, new Uint32Array([blurRadius, 0, 0, 0]))
+
+    for (let i = 0; i < 3; i++) {
+      const hBG = device.createBindGroup({
+        layout: this.bloomBlurHPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: workingSrc.createView() },
+          { binding: 1, resource: workingDst.createView() },
+          { binding: 2, resource: { buffer: blurParamsBuf } },
+        ],
+      })
+      const hPass = encoder.beginComputePass()
+      hPass.setPipeline(this.bloomBlurHPipeline)
+      hPass.setBindGroup(0, hBG)
+      hPass.dispatchWorkgroups(Math.ceil(bw / 8), Math.ceil(bh / 8))
+      hPass.end()
+      ;[workingSrc, workingDst] = [workingDst, workingSrc]
+
+      const vBG = device.createBindGroup({
+        layout: this.bloomBlurVPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: workingSrc.createView() },
+          { binding: 1, resource: workingDst.createView() },
+          { binding: 2, resource: { buffer: blurParamsBuf } },
+        ],
+      })
+      const vPass = encoder.beginComputePass()
+      vPass.setPipeline(this.bloomBlurVPipeline)
+      vPass.setBindGroup(0, vBG)
+      vPass.dispatchWorkgroups(Math.ceil(bw / 8), Math.ceil(bh / 8))
+      vPass.end()
+      ;[workingSrc, workingDst] = [workingDst, workingSrc]
+    }
+
+    // ── Pass 9: Composite ────────────────────────────────────────────────────
+    const compParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, compParamsBuf, new Float32Array([strength, 0, 0, 0]))
+    const compBG = device.createBindGroup({
+      layout: this.bloomCompositePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: workingSrc.createView() },
+        { binding: 2, resource: dstTex.createView() },
+        { binding: 3, resource: { buffer: compParamsBuf } },
+        { binding: 4, resource: dummyMask.createView() },
+        { binding: 5, resource: { buffer: maskFlagsBuf } },
+      ],
+    })
+    const compPass = encoder.beginComputePass()
+    compPass.setPipeline(this.bloomCompositePipeline)
+    compPass.setBindGroup(0, compBG)
+    compPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    compPass.end()
+
+    this.pendingDestroyBuffers.push(extractParamsBuf, blurParamsBuf, compParamsBuf, maskFlagsBuf)
+  }
+
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
   destroy(): void {
@@ -1226,6 +1434,10 @@ export class WebGPURenderer {
       luts.green.destroy()
       luts.blue.destroy()
     }
+    this.bloomTexCache?.extractTex.destroy()
+    this.bloomTexCache?.blurATex.destroy()
+    this.bloomTexCache?.blurBTex.destroy()
+    this.bloomTexCache = null
     this.device.destroy()
   }
 }

@@ -45,6 +45,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
 import { useFilters } from '@/hooks/useFilters'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
+import type { AdjustmentRegistrationEntry } from '@/adjustments/registry'
 import { FILTER_REGISTRY } from '@/filters/registry'
 import type { FilterKey } from '@/types'
 import { selectionStore } from '@/store/selectionStore'
@@ -52,7 +53,7 @@ import styles from './App.module.scss'
 
 // ─── Statics ──────────────────────────────────────────────────────────────────
 
-const ADJUSTMENT_MENU_ITEMS = ADJUSTMENT_REGISTRY.map(e => ({ type: e.adjustmentType, label: e.label }))
+const ADJUSTMENT_MENU_ITEMS = (ADJUSTMENT_REGISTRY as readonly AdjustmentRegistrationEntry[]).map(e => ({ type: e.adjustmentType, label: e.label, group: e.group }))
 const FILTER_MENU_ITEMS = FILTER_REGISTRY.map(e => ({ key: e.key, label: e.label, instant: e.instant, group: e.group }))
 
 // ─── AppContent ───────────────────────────────────────────────────────────────

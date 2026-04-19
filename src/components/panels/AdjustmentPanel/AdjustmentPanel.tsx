@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
@@ -13,6 +13,7 @@ import { SelectiveColorPanel } from '../SelectiveColorPanel/SelectiveColorPanel'
 import { CurvesPanel } from '../CurvesPanel/CurvesPanel'
 import { ColorGradingPanel } from '../ColorGradingPanel/ColorGradingPanel'
 import { ReduceColorsPanel } from '../ReduceColorsPanel/ReduceColorsPanel'
+import { BloomOptions } from '../BloomOptions/BloomOptions'
 import { ToolWindow } from '@/components'
 import styles from './AdjustmentPanel.module.scss'
 
@@ -38,6 +39,7 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'curves':              return 'Curves'
     case 'color-grading':       return 'Color Grading'
     case 'reduce-colors':       return 'Reduce Colors'
+    case 'bloom':               return 'Bloom'
   }
 }
 
@@ -130,6 +132,14 @@ const ReduceColorsHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const BloomHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true">
+    <circle cx="6" cy="6" r="1.5" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="6" r="3" opacity="0.6" />
+    <circle cx="6" cy="6" r="4.5" opacity="0.3" />
+  </svg>
+)
+
 function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }): React.JSX.Element {
   if (type === 'brightness-contrast') return <BrightnessContrastHeaderIcon />
   if (type === 'hue-saturation') return <HueSaturationHeaderIcon />
@@ -141,6 +151,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'curves') return <CurvesHeaderIcon />
   if (type === 'color-grading') return <ColorGradingHeaderIcon />
   if (type === 'reduce-colors') return <ReduceColorsHeaderIcon />
+  if (type === 'bloom') return <BloomHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
@@ -224,6 +235,9 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
             parentLayerName={parentLayerName}
             canvasHandleRef={canvasHandleRef}
           />
+        )}
+        {adjLayer.adjustmentType === 'bloom' && (
+          <BloomOptions layer={adjLayer as BloomAdjustmentLayer} parentLayerName={parentLayerName} />
         )}
       </div>
     </ToolWindow>

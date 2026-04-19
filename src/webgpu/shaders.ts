@@ -15,3 +15,10 @@ export { SEL_COLOR_COMPUTE } from './shaders/adjustments/selective-color'
 export { CURVES_COMPUTE } from './shaders/adjustments/curves'
 export { CG_COMPUTE } from './shaders/adjustments/color-grading'
 export { RC_COMPUTE } from './shaders/adjustments/reduce-colors'
+export {
+  BLOOM_EXTRACT_COMPUTE,
+  BLOOM_DOWNSAMPLE_COMPUTE,
+  BLOOM_BLUR_H_COMPUTE,
+  BLOOM_BLUR_V_COMPUTE,
+  BLOOM_COMPOSITE_COMPUTE,
+} from './shaders/adjustments/bloom'
