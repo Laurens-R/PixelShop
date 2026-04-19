@@ -373,6 +373,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   useEffect(() => {
     if (!isActive) return
+    doRender()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.swatches, isActive])
+
+  useEffect(() => {
+    if (!isActive) return
     const unsubscribe = adjustmentPreviewStore.subscribe(() => {
       const renderer = rendererRef.current
       if (!renderer) return
@@ -412,7 +418,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       glLayersRef.current,
       buildMaskMap(),
       adjustmentMaskMap.current,
-      adjustmentPreviewStore.snapshot()
+      adjustmentPreviewStore.snapshot(),
+      state.swatches,
     )
     const pending = newPixelLayerRef.current
     if (pending && !plan.some(e => e.kind === 'layer' && e.layer === pending)) {

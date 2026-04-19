@@ -88,6 +88,14 @@ export function SwatchPanel({ onGeneratePalette }: SwatchPanelProps): React.JSX.
               >
                 Open Palette…
               </button>
+              <div className={styles.dropdownSeparator} />
+              <button
+                type="button"
+                className={styles.dropdownItem}
+                onClick={() => { setMenuOpen(false); dispatch({ type: 'SET_SWATCHES', payload: [] }) }}
+              >
+                Clear Palette
+              </button>
             </div>,
             document.body
           )}

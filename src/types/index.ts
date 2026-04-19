@@ -169,6 +169,7 @@ export type AdjustmentType =
   | 'selective-color'
   | 'curves'
   | 'color-grading'
+  | 'reduce-colors'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -282,6 +283,11 @@ export interface AdjustmentParamsMap {
     hue:         number
     lumMix:      number
   }
+  'reduce-colors': {
+    mode: 'reduce' | 'palette'
+    colorCount: number
+    derivedPalette: RGBAColor[] | null
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -376,6 +382,12 @@ export interface ColorGradingAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface ReduceColorsAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'reduce-colors'
+  params: AdjustmentParamsMap['reduce-colors']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -387,6 +399,7 @@ export type AdjustmentLayerState =
   | SelectiveColorAdjustmentLayer
   | CurvesAdjustmentLayer
   | ColorGradingAdjustmentLayer
+  | ReduceColorsAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 

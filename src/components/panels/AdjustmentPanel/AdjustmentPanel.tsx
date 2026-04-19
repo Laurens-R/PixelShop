@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
@@ -12,6 +12,7 @@ import { InvertPanel } from '../InvertPanel/InvertPanel'
 import { SelectiveColorPanel } from '../SelectiveColorPanel/SelectiveColorPanel'
 import { CurvesPanel } from '../CurvesPanel/CurvesPanel'
 import { ColorGradingPanel } from '../ColorGradingPanel/ColorGradingPanel'
+import { ReduceColorsPanel } from '../ReduceColorsPanel/ReduceColorsPanel'
 import { ToolWindow } from '@/components'
 import styles from './AdjustmentPanel.module.scss'
 
@@ -36,6 +37,7 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'selective-color':     return 'Selective Color'
     case 'curves':              return 'Curves'
     case 'color-grading':       return 'Color Grading'
+    case 'reduce-colors':       return 'Reduce Colors'
   }
 }
 
@@ -119,6 +121,15 @@ const ColorGradingHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const ReduceColorsHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+    <rect x="1.5" y="1.5" width="4" height="4" rx="0.5" />
+    <rect x="6.5" y="1.5" width="4" height="4" rx="0.5" />
+    <rect x="1.5" y="6.5" width="4" height="4" rx="0.5" />
+    <rect x="6.5" y="6.5" width="4" height="4" rx="0.5" />
+  </svg>
+)
+
 function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }): React.JSX.Element {
   if (type === 'brightness-contrast') return <BrightnessContrastHeaderIcon />
   if (type === 'hue-saturation') return <HueSaturationHeaderIcon />
@@ -129,6 +140,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'selective-color') return <SelectiveColorHeaderIcon />
   if (type === 'curves') return <CurvesHeaderIcon />
   if (type === 'color-grading') return <ColorGradingHeaderIcon />
+  if (type === 'reduce-colors') return <ReduceColorsHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
@@ -204,6 +216,13 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
           <ColorGradingPanel
             layer={adjLayer as ColorGradingAdjustmentLayer}
             parentLayerName={parentLayerName}
+          />
+        )}
+        {adjLayer.adjustmentType === 'reduce-colors' && (
+          <ReduceColorsPanel
+            layer={adjLayer as ReduceColorsAdjustmentLayer}
+            parentLayerName={parentLayerName}
+            canvasHandleRef={canvasHandleRef}
           />
         )}
       </div>

@@ -11,6 +11,7 @@ export { ColorTemperaturePanel } from './panels/ColorTemperaturePanel/ColorTempe
 export { InvertPanel } from './panels/InvertPanel/InvertPanel'
 export { SelectiveColorPanel } from './panels/SelectiveColorPanel/SelectiveColorPanel'
 export { ColorGradingPanel } from './panels/ColorGradingPanel/ColorGradingPanel'
+export { ReduceColorsPanel } from './panels/ReduceColorsPanel/ReduceColorsPanel'
 export { ColorWheelWidget } from './widgets/ColorWheelWidget/ColorWheelWidget'
 export { SliderInput } from './widgets/SliderInput/SliderInput'
 export { ToolWindow } from './widgets/ToolWindow/ToolWindow'

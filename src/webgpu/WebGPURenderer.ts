@@ -4,6 +4,7 @@ import {
   uploadTexturePatch,
   uploadR8TextureData,
   createUniformBuffer,
+  createStorageBuffer,
   writeUniformBuffer,
   createReadbackBuffer,
   createVertexBuffer,
@@ -22,6 +23,7 @@ import {
   SEL_COLOR_COMPUTE,
   CURVES_COMPUTE,
   CG_COMPUTE,
+  RC_COMPUTE,
 } from './shaders'
 import { initFilterCompute } from './filterCompute'
 import type { AdjustmentParamsMap } from '@/types'
@@ -68,6 +70,14 @@ export type AdjustmentRenderOp =
   | { kind: 'selective-color'; layerId: string; params: SelectiveColorPassParams; visible: boolean; selMaskLayer?: GpuLayer }
   | { kind: 'curves'; layerId: string; params: CurvesPassParams; luts: CurvesLuts; visible: boolean; selMaskLayer?: GpuLayer }
   | { kind: 'color-grading'; layerId: string; params: ColorGradingPassParams; visible: boolean; selMaskLayer?: GpuLayer }
+  | {
+      kind: 'reduce-colors'
+      layerId: string
+      visible: boolean
+      selMaskLayer?: GpuLayer
+      palette: Float32Array
+      paletteCount: number
+    }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: GpuLayer; mask?: GpuLayer }
@@ -120,6 +130,7 @@ export class WebGPURenderer {
   private readonly selColorPipeline: GPUComputePipeline
   private readonly curvesPipeline: GPUComputePipeline
   private readonly cgPipeline: GPUComputePipeline
+  private readonly rcPipeline: GPUComputePipeline
 
   // Shared vertex/tex-coord buffers
   private readonly texCoordBuffer: GPUBuffer
@@ -250,6 +261,7 @@ export class WebGPURenderer {
     this.selColorPipeline = this.createComputePipeline(SEL_COLOR_COMPUTE, 'cs_selective_color')
     this.curvesPipeline   = this.createComputePipeline(CURVES_COMPUTE,    'cs_curves')
     this.cgPipeline       = this.createComputePipeline(CG_COMPUTE,        'cs_color_grading')
+    this.rcPipeline       = this.createComputePipeline(RC_COMPUTE,        'cs_reduce_colors')
 
     initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
   }
@@ -880,6 +892,10 @@ export class WebGPURenderer {
       this.encodeColorGradingPass(encoder, srcTex, dstTex, entry.params, entry.selMaskLayer)
       return
     }
+    if (entry.kind === 'reduce-colors') {
+      this.encodeReduceColorsPass(encoder, srcTex, dstTex, entry.palette, entry.paletteCount, entry.selMaskLayer)
+      return
+    }
     const _exhaustive: never = entry
     return _exhaustive
   }
@@ -1143,6 +1159,52 @@ export class WebGPURenderer {
     f[27] = 0 // _pad
 
     this.encodeComputePassRaw(encoder, this.cgPipeline, srcTex, dstTex, buf, selMaskLayer)
+  }
+
+  private encodeReduceColorsPass(
+    encoder: GPUCommandEncoder,
+    srcTex: GPUTexture,
+    dstTex: GPUTexture,
+    palette: Float32Array,
+    paletteCount: number,
+    selMaskLayer?: GpuLayer,
+  ): void {
+    const { device, pixelWidth: w, pixelHeight: h } = this
+
+    const paramsData = new Uint32Array(8)
+    paramsData[0] = paletteCount
+    const paramsBuf = createUniformBuffer(device, 32)
+    device.queue.writeBuffer(paramsBuf, 0, paramsData)
+
+    const palBuf = createStorageBuffer(device, 256 * 16)
+    device.queue.writeBuffer(palBuf, 0, palette)
+
+    const maskFlagsData = new Uint32Array(8)
+    maskFlagsData[0] = selMaskLayer ? 1 : 0
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, maskFlagsBuf, maskFlagsData)
+
+    const dummyMask = selMaskLayer?.texture ?? srcTex
+
+    const bindGroup = device.createBindGroup({
+      layout: this.rcPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: dstTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+        { binding: 3, resource: dummyMask.createView() },
+        { binding: 4, resource: { buffer: maskFlagsBuf } },
+        { binding: 5, resource: { buffer: palBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.rcPipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    this.pendingDestroyBuffers.push(paramsBuf, palBuf, maskFlagsBuf)
   }
 
   private flushPendingDestroys(): void {

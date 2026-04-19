@@ -97,4 +97,9 @@ export const ADJUSTMENT_REGISTRY = [
       lumMix:      100,
     },
   },
+  {
+    adjustmentType: 'reduce-colors' as const,
+    label: 'Reduce Colors…',
+    defaultParams: { mode: 'reduce', colorCount: 16, derivedPalette: null },
+  },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

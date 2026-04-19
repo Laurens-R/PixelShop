@@ -84,6 +84,13 @@ export function createUniformBuffer(device: GPUDevice, size: number): GPUBuffer 
   })
 }
 
+export function createStorageBuffer(device: GPUDevice, size: number): GPUBuffer {
+  return device.createBuffer({
+    size,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  })
+}
+
 export function writeUniformBuffer(
   device: GPUDevice,
   buffer: GPUBuffer,
