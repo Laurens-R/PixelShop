@@ -28,6 +28,9 @@ import { AddNoiseDialog } from '@/components/dialogs/AddNoiseDialog/AddNoiseDial
 import { FilmGrainDialog } from '@/components/dialogs/FilmGrainDialog/FilmGrainDialog'
 import { LensBlurDialog } from '@/components/dialogs/LensBlurDialog/LensBlurDialog'
 import { CloudsDialog } from '@/components/dialogs/CloudsDialog/CloudsDialog'
+import { MedianFilterDialog } from '@/components/dialogs/MedianFilterDialog/MedianFilterDialog'
+import { BilateralFilterDialog } from '@/components/dialogs/BilateralFilterDialog/BilateralFilterDialog'
+import { ReduceNoiseDialog } from '@/components/dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -73,6 +76,9 @@ function AppContent(): React.JSX.Element {
   const [showFilmGrainDialog,      setShowFilmGrainDialog]      = useState(false)
   const [showLensBlurDialog,       setShowLensBlurDialog]       = useState(false)
   const [showCloudsDialog,         setShowCloudsDialog]         = useState(false)
+  const [showMedianFilterDialog,   setShowMedianFilterDialog]   = useState(false)
+  const [showBilateralFilterDialog, setShowBilateralFilterDialog] = useState(false)
+  const [showReduceNoiseDialog,     setShowReduceNoiseDialog]     = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -152,6 +158,9 @@ function AppContent(): React.JSX.Element {
     if (key === 'film-grain')    setShowFilmGrainDialog(true)
     if (key === 'lens-blur')     setShowLensBlurDialog(true)
     if (key === 'clouds')        setShowCloudsDialog(true)
+    if (key === 'median-filter') setShowMedianFilterDialog(true)
+    if (key === 'bilateral-filter') setShowBilateralFilterDialog(true)
+    if (key === 'reduce-noise') setShowReduceNoiseDialog(true)
   }, [])
 
   const filters = useFilters({
@@ -435,6 +444,39 @@ function AppContent(): React.JSX.Element {
           canvasHeight={state.canvas.height}
           foregroundColor={[state.primaryColor.r, state.primaryColor.g, state.primaryColor.b]}
           backgroundColor={[state.secondaryColor.r, state.secondaryColor.g, state.secondaryColor.b]}
+        />
+      )}
+      {showMedianFilterDialog && (
+        <MedianFilterDialog
+          isOpen={showMedianFilterDialog}
+          onClose={() => setShowMedianFilterDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showBilateralFilterDialog && (
+        <BilateralFilterDialog
+          isOpen={showBilateralFilterDialog}
+          onClose={() => setShowBilateralFilterDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
+        />
+      )}
+      {showReduceNoiseDialog && (
+        <ReduceNoiseDialog
+          isOpen={showReduceNoiseDialog}
+          onClose={() => setShowReduceNoiseDialog(false)}
+          canvasHandleRef={canvasHandleRef}
+          activeLayerId={state.activeLayerId}
+          captureHistory={captureHistory}
+          canvasWidth={state.canvas.width}
+          canvasHeight={state.canvas.height}
         />
       )}
     </div>

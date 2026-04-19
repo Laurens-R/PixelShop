@@ -787,3 +787,207 @@ fn cs_clouds(@builtin(global_invocation_id) id: vec3u) {
   textureStore(dstTex, vec2i(id.xy), vec4f(outR, outG, outB, orig.a));
 }
 `
+
+// ─── Median Filter ────────────────────────────────────────────────────────────
+
+export const FILTER_MEDIAN_COMPUTE = /* wgsl */ `
+struct MedianParams {
+  radius : u32,
+  _pad0  : u32,
+  _pad1  : u32,
+  _pad2  : u32,
+}
+
+@group(0) @binding(0) var srcTex : texture_2d<f32>;
+@group(0) @binding(1) var dstTex : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> params : MedianParams;
+
+var<private> vals: array<f32, 441>;
+
+fn insertionSort(n: u32) {
+  for (var i = 1u; i < n; i++) {
+    let key = vals[i];
+    var j = i32(i) - 1;
+    loop {
+      if (j < 0 || vals[u32(j)] <= key) { break; }
+      vals[u32(j) + 1u] = vals[u32(j)];
+      j = j - 1;
+    }
+    vals[u32(j + 1)] = key;
+  }
+}
+
+@compute @workgroup_size(8, 8)
+fn cs_median(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let r   = min(params.radius, 10u);
+  let n   = (2u * r + 1u) * (2u * r + 1u);
+  let mid = n / 2u;
+
+  let orig = textureLoad(srcTex, vec2i(id.xy), 0);
+
+  // Collect + sort R
+  var count = 0u;
+  for (var ky = -i32(r); ky <= i32(r); ky++) {
+    for (var kx = -i32(r); kx <= i32(r); kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      vals[count] = textureLoad(srcTex, vec2i(sx, sy), 0).r;
+      count += 1u;
+    }
+  }
+  insertionSort(n);
+  let medR = vals[mid];
+
+  // Collect + sort G
+  count = 0u;
+  for (var ky = -i32(r); ky <= i32(r); ky++) {
+    for (var kx = -i32(r); kx <= i32(r); kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      vals[count] = textureLoad(srcTex, vec2i(sx, sy), 0).g;
+      count += 1u;
+    }
+  }
+  insertionSort(n);
+  let medG = vals[mid];
+
+  // Collect + sort B
+  count = 0u;
+  for (var ky = -i32(r); ky <= i32(r); ky++) {
+    for (var kx = -i32(r); kx <= i32(r); kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      vals[count] = textureLoad(srcTex, vec2i(sx, sy), 0).b;
+      count += 1u;
+    }
+  }
+  insertionSort(n);
+  let medB = vals[mid];
+
+  textureStore(dstTex, vec2i(id.xy), vec4f(medR, medG, medB, orig.a));
+}
+` as const
+
+// ─── Bilateral Filter ─────────────────────────────────────────────────────────
+
+export const FILTER_BILATERAL_COMPUTE = /* wgsl */ `
+struct BilateralParams {
+  radius       : u32,
+  _pad0        : u32,
+  sigmaSpatial : f32,
+  sigmaColor   : f32,
+}
+
+@group(0) @binding(0) var srcTex : texture_2d<f32>;
+@group(0) @binding(1) var dstTex : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> params : BilateralParams;
+
+@compute @workgroup_size(8, 8)
+fn cs_bilateral(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let center = textureLoad(srcTex, vec2i(id.xy), 0);
+  let r      = i32(params.radius);
+
+  let inv2SigmaS2 = 1.0 / (2.0 * params.sigmaSpatial * params.sigmaSpatial);
+  let inv2SigmaC2 = 1.0 / (2.0 * params.sigmaColor   * params.sigmaColor);
+
+  var weightSum = 0.0;
+  var colorSum  = vec3f(0.0);
+
+  for (var ky = -r; ky <= r; ky++) {
+    for (var kx = -r; kx <= r; kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      let neighbor = textureLoad(srcTex, vec2i(sx, sy), 0);
+
+      let spatialDist2 = f32(kx * kx + ky * ky);
+      let colorDiff    = neighbor.rgb - center.rgb;
+      let colorDist2   = dot(colorDiff, colorDiff);
+
+      let w = exp(-spatialDist2 * inv2SigmaS2) * exp(-colorDist2 * inv2SigmaC2);
+
+      colorSum  += neighbor.rgb * w;
+      weightSum += w;
+    }
+  }
+
+  let result = colorSum * (1.0 / weightSum);
+  textureStore(dstTex, vec2i(id.xy), vec4f(result, center.a));
+}
+` as const
+
+export const FILTER_REDUCE_NOISE_COMPUTE = /* wgsl */ `
+struct ReduceNoiseParams {
+  strength         : u32,
+  preserveDetails  : u32,
+  reduceColorNoise : u32,
+  _pad0            : u32,
+}
+
+@group(0) @binding(0) var srcTex : texture_2d<f32>;
+@group(0) @binding(1) var dstTex : texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> params : ReduceNoiseParams;
+
+fn luma(c: vec3f) -> f32 {
+  return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+}
+
+@compute @workgroup_size(8, 8)
+fn cs_reduce_noise(@builtin(global_invocation_id) id: vec3u) {
+  let dims = textureDimensions(srcTex);
+  if (id.x >= dims.x || id.y >= dims.y) { return; }
+
+  let sigmaLuma   = f32(params.strength)         / 10.0  * 0.3;
+  let sigmaChroma = f32(params.reduceColorNoise) / 100.0 * 0.4;
+  let spatialR    = max(1u, u32(
+    f32(10u - min(params.strength, 10u)) / 10.0
+    * f32(params.preserveDetails) / 100.0
+    * 7.0 + 1.0
+  ));
+
+  let inv2SigmaS2 = 1.0 / (2.0 * f32(spatialR) * f32(spatialR));
+
+  let useLuma   = sigmaLuma   > 0.001;
+  let useChroma = sigmaChroma > 0.001;
+  let inv2SigmaL2 = select(0.0, 1.0 / (2.0 * sigmaLuma   * sigmaLuma),   useLuma);
+  let inv2SigmaC2 = select(0.0, 1.0 / (2.0 * sigmaChroma * sigmaChroma), useChroma);
+
+  let center     = textureLoad(srcTex, vec2i(id.xy), 0);
+  let centerLuma = luma(center.rgb);
+  let r          = i32(spatialR);
+
+  var weightSum = 0.0;
+  var colorSum  = vec3f(0.0);
+
+  for (var ky = -r; ky <= r; ky++) {
+    for (var kx = -r; kx <= r; kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      let neighbor     = textureLoad(srcTex, vec2i(sx, sy), 0);
+      let neighborLuma = luma(neighbor.rgb);
+
+      let spatialDist2 = f32(kx * kx + ky * ky);
+      let lumaDiff     = neighborLuma - centerLuma;
+      let colorDiff    = neighbor.rgb - center.rgb;
+      let colorDist2   = dot(colorDiff, colorDiff);
+
+      let wS = exp(-spatialDist2 * inv2SigmaS2);
+      let wL = select(1.0, exp(-lumaDiff * lumaDiff * inv2SigmaL2), useLuma);
+      let wC = select(1.0, exp(-colorDist2          * inv2SigmaC2), useChroma);
+      let w  = wS * wL * wC;
+
+      colorSum  += neighbor.rgb * w;
+      weightSum += w;
+    }
+  }
+
+  let result = colorSum * (1.0 / max(weightSum, 0.0001));
+  textureStore(dstTex, vec2i(id.xy), vec4f(result, center.a));
+}
+` as const
+

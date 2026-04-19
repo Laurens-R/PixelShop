@@ -1,5 +1,5 @@
 import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer } from './utils'
-import { FILTER_GAUSSIAN_H_COMPUTE, FILTER_GAUSSIAN_V_COMPUTE, FILTER_BOX_H_COMPUTE, FILTER_BOX_V_COMPUTE, FILTER_RADIAL_BLUR_COMPUTE, FILTER_MOTION_BLUR_COMPUTE, FILTER_LENS_BLUR_COMPUTE, FILTER_SHARPEN_COMPUTE, FILTER_SHARPEN_MORE_COMPUTE, FILTER_UNSHARP_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_GAUSS_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_LENS_COMPUTE, FILTER_SMART_SHARPEN_BLEND_COMPUTE, FILTER_ADD_NOISE_COMPUTE, FILTER_FILM_GRAIN_NOISE_COMPUTE, FILTER_FILM_GRAIN_COMBINE_COMPUTE, FILTER_CLOUDS_COMPUTE } from './filterShaders'
+import { FILTER_GAUSSIAN_H_COMPUTE, FILTER_GAUSSIAN_V_COMPUTE, FILTER_BOX_H_COMPUTE, FILTER_BOX_V_COMPUTE, FILTER_RADIAL_BLUR_COMPUTE, FILTER_MOTION_BLUR_COMPUTE, FILTER_LENS_BLUR_COMPUTE, FILTER_SHARPEN_COMPUTE, FILTER_SHARPEN_MORE_COMPUTE, FILTER_UNSHARP_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_GAUSS_COMBINE_COMPUTE, FILTER_SMART_SHARPEN_LENS_COMPUTE, FILTER_SMART_SHARPEN_BLEND_COMPUTE, FILTER_ADD_NOISE_COMPUTE, FILTER_FILM_GRAIN_NOISE_COMPUTE, FILTER_FILM_GRAIN_COMBINE_COMPUTE, FILTER_CLOUDS_COMPUTE, FILTER_MEDIAN_COMPUTE, FILTER_BILATERAL_COMPUTE, FILTER_REDUCE_NOISE_COMPUTE } from './filterShaders'
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,9 @@ class FilterComputeEngine {
   private readonly filmGrainNoisePipeline: GPUComputePipeline
   private readonly filmGrainCombinePipeline: GPUComputePipeline
   private readonly cloudsPipeline: GPUComputePipeline
+  private readonly medianPipeline: GPUComputePipeline
+  private readonly bilateralPipeline: GPUComputePipeline
+  private readonly reduceNoisePipeline: GPUComputePipeline
   private readonly intermediate0: GPUTexture
   private cachedKernelKey: string = ''
   private cachedKernelBuf: GPUBuffer | null = null
@@ -57,6 +60,9 @@ class FilterComputeEngine {
     this.filmGrainNoisePipeline   = this.createPipeline(FILTER_FILM_GRAIN_NOISE_COMPUTE, 'cs_film_grain_noise')
     this.filmGrainCombinePipeline = this.createPipeline(FILTER_FILM_GRAIN_COMBINE_COMPUTE, 'cs_film_grain_combine')
     this.cloudsPipeline = this.createPipeline(FILTER_CLOUDS_COMPUTE, 'cs_clouds')
+    this.medianPipeline = this.createPipeline(FILTER_MEDIAN_COMPUTE, 'cs_median')
+    this.bilateralPipeline = this.createPipeline(FILTER_BILATERAL_COMPUTE, 'cs_bilateral')
+    this.reduceNoisePipeline = this.createPipeline(FILTER_REDUCE_NOISE_COMPUTE, 'cs_reduce_noise')
   }
 
   static create(device: GPUDevice, width: number, height: number): FilterComputeEngine {
@@ -1311,6 +1317,231 @@ class FilterComputeEngine {
 
     return result
   }
+
+  async median(
+    pixels: Uint8Array,
+    width: number,
+    height: number,
+    radius: number,
+  ): Promise<Uint8Array> {
+    const { device } = this
+    const w = width
+    const h = height
+
+    const srcTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    })
+    device.queue.writeTexture(
+      { texture: srcTex },
+      pixels as Uint8Array<ArrayBuffer>,
+      { bytesPerRow: w * 4, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    const outTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+    })
+
+    const paramsData = new Uint32Array([radius, 0, 0, 0])
+    const paramsBuf  = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, paramsBuf, paramsData)
+
+    const encoder = device.createCommandEncoder()
+    const bindGroup = device.createBindGroup({
+      layout: this.medianPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: outTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.medianPipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    const alignedBpr = Math.ceil(w * 4 / 256) * 256
+    const readbuf    = createReadbackBuffer(device, alignedBpr * h)
+    encoder.copyTextureToBuffer(
+      { texture: outTex },
+      { buffer: readbuf, bytesPerRow: alignedBpr, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    device.queue.submit([encoder.finish()])
+
+    await readbuf.mapAsync(GPUMapMode.READ)
+    const result = unpackRows(new Uint8Array(readbuf.getMappedRange()), w, h, alignedBpr)
+    readbuf.unmap()
+
+    srcTex.destroy()
+    outTex.destroy()
+    paramsBuf.destroy()
+    readbuf.destroy()
+
+    return result
+  }
+
+  async bilateral(
+    pixels: Uint8Array,
+    width: number,
+    height: number,
+    radius: number,
+    sigmaSpatial: number,
+    sigmaColor: number,
+  ): Promise<Uint8Array> {
+    const { device } = this
+    const w = width
+    const h = height
+
+    const srcTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    })
+    device.queue.writeTexture(
+      { texture: srcTex },
+      pixels as Uint8Array<ArrayBuffer>,
+      { bytesPerRow: w * 4, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    const outTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+    })
+
+    const buf = new ArrayBuffer(16)
+    const dv  = new DataView(buf)
+    dv.setUint32(0,   radius,       true)
+    dv.setUint32(4,   0,            true)
+    dv.setFloat32(8,  sigmaSpatial, true)
+    dv.setFloat32(12, sigmaColor,   true)
+    const paramsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, paramsBuf, buf)
+
+    const encoder = device.createCommandEncoder()
+    const bindGroup = device.createBindGroup({
+      layout: this.bilateralPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: outTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.bilateralPipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    const alignedBpr = Math.ceil(w * 4 / 256) * 256
+    const readbuf    = createReadbackBuffer(device, alignedBpr * h)
+    encoder.copyTextureToBuffer(
+      { texture: outTex },
+      { buffer: readbuf, bytesPerRow: alignedBpr, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    device.queue.submit([encoder.finish()])
+
+    await readbuf.mapAsync(GPUMapMode.READ)
+    const result = unpackRows(new Uint8Array(readbuf.getMappedRange()), w, h, alignedBpr)
+    readbuf.unmap()
+
+    srcTex.destroy()
+    outTex.destroy()
+    paramsBuf.destroy()
+    readbuf.destroy()
+
+    return result
+  }
+
+  async reduceNoise(
+    pixels: Uint8Array,
+    width: number,
+    height: number,
+    strength: number,
+    preserveDetails: number,
+    reduceColorNoise: number,
+    sharpenDetails: number,
+  ): Promise<Uint8Array> {
+    const { device } = this
+    const w = width
+    const h = height
+
+    const srcTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+    })
+    device.queue.writeTexture(
+      { texture: srcTex },
+      pixels as Uint8Array<ArrayBuffer>,
+      { bytesPerRow: w * 4, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    const outTex = device.createTexture({
+      size: { width: w, height: h },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+    })
+
+    const paramsData = new Uint32Array([strength, preserveDetails, reduceColorNoise, 0])
+    const paramsBuf  = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, paramsBuf, paramsData)
+
+    const encoder = device.createCommandEncoder()
+    const bindGroup = device.createBindGroup({
+      layout: this.reduceNoisePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: outTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.reduceNoisePipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    const alignedBpr = Math.ceil(w * 4 / 256) * 256
+    const readbuf    = createReadbackBuffer(device, alignedBpr * h)
+    encoder.copyTextureToBuffer(
+      { texture: outTex },
+      { buffer: readbuf, bytesPerRow: alignedBpr, rowsPerImage: h },
+      { width: w, height: h },
+    )
+
+    device.queue.submit([encoder.finish()])
+
+    await readbuf.mapAsync(GPUMapMode.READ)
+    let result = unpackRows(new Uint8Array(readbuf.getMappedRange()), w, h, alignedBpr)
+    readbuf.unmap()
+
+    srcTex.destroy()
+    outTex.destroy()
+    paramsBuf.destroy()
+    readbuf.destroy()
+
+    if (sharpenDetails > 0) {
+      const sharpAmount = Math.round(sharpenDetails * 1.5)
+      result = await this.unsharpMask(result, w, h, sharpAmount, 1, 0)
+    }
+
+    return result
+  }
 }
 
 function unpackRows(src: Uint8Array, w: number, h: number, alignedBpr: number): Uint8Array {
@@ -1460,4 +1691,36 @@ export async function clouds(
   seed: number,
 ): Promise<Uint8Array> {
   return _engine!.clouds(pixels, width, height, scale, opacity, colorMode, fgR, fgG, fgB, bgR, bgG, bgB, seed)
+}
+
+export async function median(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+): Promise<Uint8Array> {
+  return _engine!.median(pixels, width, height, radius)
+}
+
+export async function bilateral(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  radius: number,
+  sigmaSpatial: number,
+  sigmaColor: number,
+): Promise<Uint8Array> {
+  return _engine!.bilateral(pixels, width, height, radius, sigmaSpatial, sigmaColor)
+}
+
+export async function reduceNoise(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  strength: number,
+  preserveDetails: number,
+  reduceColorNoise: number,
+  sharpenDetails: number,
+): Promise<Uint8Array> {
+  return _engine!.reduceNoise(pixels, width, height, strength, preserveDetails, reduceColorNoise, sharpenDetails)
 }

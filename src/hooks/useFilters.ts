@@ -52,6 +52,9 @@ export interface UseFiltersReturn {
   handleOpenFilmGrain:    () => void
   handleOpenLensBlur:     () => void
   handleOpenClouds:       () => void
+  handleOpenMedianFilter: () => void
+  handleOpenBilateralFilter: () => void
+  handleOpenReduceNoise: () => void
   handleInstantFilter:    (key: FilterKey) => void
 }
 
@@ -159,6 +162,21 @@ export function useFilters({
     [onOpenFilterDialog]
   )
 
+  const handleOpenMedianFilter = useCallback(
+    () => onOpenFilterDialog('median-filter'),
+    [onOpenFilterDialog]
+  )
+
+  const handleOpenBilateralFilter = useCallback(
+    () => onOpenFilterDialog('bilateral-filter'),
+    [onOpenFilterDialog]
+  )
+
+  const handleOpenReduceNoise = useCallback(
+    () => onOpenFilterDialog('reduce-noise'),
+    [onOpenFilterDialog]
+  )
+
   const handleInstantFilter = useCallback((key: FilterKey): void => {
     if (key === 'sharpen')      void handleSharpen()
     if (key === 'sharpen-more') void handleSharpenMore()
@@ -179,6 +197,9 @@ export function useFilters({
     handleOpenFilmGrain,
     handleOpenLensBlur,
     handleOpenClouds,
+    handleOpenMedianFilter,
+    handleOpenBilateralFilter,
+    handleOpenReduceNoise,
     handleInstantFilter,
   }
 }

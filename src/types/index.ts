@@ -184,6 +184,9 @@ export type FilterKey =
   | 'film-grain'
   | 'lens-blur'
   | 'clouds'
+  | 'median-filter'
+  | 'bilateral-filter'
+  | 'reduce-noise'
 
 export type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
 

@@ -29,12 +29,13 @@ export function ToolWindow({
   icon,
   onClose,
   children,
-  width = 284,
+  width,
   defaultPosition,
 }: ToolWindowProps): React.JSX.Element {
   const [pos, setPos] = useState<{ x: number; y: number }>(() => {
     if (defaultPosition) return defaultPosition
     const screenW = typeof window !== 'undefined' ? window.innerWidth : 1440
+    if(width == undefined) width = 284;
     return { x: Math.max(80, screenW - width - 290), y: 80 }
   })
 
