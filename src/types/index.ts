@@ -187,6 +187,7 @@ export type FilterKey =
   | 'median-filter'
   | 'bilateral-filter'
   | 'reduce-noise'
+  | 'render-lens-flare'
 
 export type CurvesChannel = 'rgb' | 'red' | 'green' | 'blue'
 

@@ -69,3 +69,5 @@ export { BilateralFilterDialog } from './dialogs/BilateralFilterDialog/Bilateral
 export type { BilateralFilterDialogProps } from './dialogs/BilateralFilterDialog/BilateralFilterDialog'
 export { ReduceNoiseDialog } from './dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
 export type { ReduceNoiseDialogProps } from './dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
+export { LensFlareDialog } from './dialogs/LensFlareDialog/LensFlareDialog'
+export type { LensFlareDialogProps } from './dialogs/LensFlareDialog/LensFlareDialog'

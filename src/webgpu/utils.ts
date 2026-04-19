@@ -108,3 +108,13 @@ export function createReadbackBuffer(device: GPUDevice, byteSize: number): GPUBu
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   })
 }
+
+export function unpackRows(src: Uint8Array, w: number, h: number, alignedBpr: number): Uint8Array {
+  const packedBpr = w * 4
+  if (alignedBpr === packedBpr) return src.slice()
+  const out = new Uint8Array(packedBpr * h)
+  for (let row = 0; row < h; row++) {
+    out.set(src.subarray(row * alignedBpr, row * alignedBpr + packedBpr), row * packedBpr)
+  }
+  return out
+}

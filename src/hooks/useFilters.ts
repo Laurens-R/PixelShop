@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from 'react'
-import type { FilterKey, LayerState } from '@/types'
+import type { Dispatch, MutableRefObject } from 'react'
+import type { FilterKey, LayerState, AppState } from '@/types'
 import { isPixelLayer } from '@/types'
 import { sharpen, sharpenMore } from '@/webgpu/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/window/Canvas/canvasHandle'
+import type { AppAction } from '@/store/AppContext'
 
 // ─── Selection-aware compositing helper ───────────────────────────────────────
 
@@ -35,6 +37,8 @@ interface UseFiltersOptions {
   canvasWidth:        number
   canvasHeight:       number
   captureHistory:     (label: string) => void
+  dispatch:           Dispatch<AppAction>
+  stateRef:           MutableRefObject<AppState>
 }
 
 export interface UseFiltersReturn {
@@ -55,6 +59,8 @@ export interface UseFiltersReturn {
   handleOpenMedianFilter: () => void
   handleOpenBilateralFilter: () => void
   handleOpenReduceNoise: () => void
+  handleOpenLensFlare:    () => void
+  handleApplyLensFlare:   (pixels: Uint8Array, width: number, height: number) => void
   handleInstantFilter:    (key: FilterKey) => void
 }
 
@@ -66,6 +72,8 @@ export function useFilters({
   canvasWidth,
   canvasHeight,
   captureHistory,
+  dispatch,
+  stateRef,
 }: UseFiltersOptions): UseFiltersReturn {
   const isFiltersMenuEnabled = useMemo(() => {
     const active = layers.find(l => l.id === activeLayerId)
@@ -177,6 +185,31 @@ export function useFilters({
     [onOpenFilterDialog]
   )
 
+  const handleOpenLensFlare = useCallback(
+    () => onOpenFilterDialog('render-lens-flare'),
+    [onOpenFilterDialog]
+  )
+
+  const handleApplyLensFlare = useCallback((
+    pixels: Uint8Array,
+    width:  number,
+    height: number,
+  ): void => {
+    const handle        = canvasHandleRef.current
+    const activeId      = stateRef.current.activeLayerId
+    if (!handle || !activeId) return
+    const newId = `layer-${Date.now()}`
+    captureHistory('Lens Flare')
+    handle.prepareNewLayer(newId, 'Lens Flare', pixels)
+    dispatch({
+      type:    'INSERT_LAYER_ABOVE',
+      payload: {
+        layer: { id: newId, name: 'Lens Flare', visible: true, opacity: 1, locked: false, blendMode: 'normal' },
+        aboveId: activeId,
+      },
+    })
+  }, [canvasHandleRef, stateRef, captureHistory, dispatch])
+
   const handleInstantFilter = useCallback((key: FilterKey): void => {
     if (key === 'sharpen')      void handleSharpen()
     if (key === 'sharpen-more') void handleSharpenMore()
@@ -200,6 +233,8 @@ export function useFilters({
     handleOpenMedianFilter,
     handleOpenBilateralFilter,
     handleOpenReduceNoise,
+    handleOpenLensFlare,
+    handleApplyLensFlare,
     handleInstantFilter,
   }
 }

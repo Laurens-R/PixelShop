@@ -20,4 +20,5 @@ export const FILTER_REGISTRY: FilterRegistryEntry[] = [
   { key: 'smart-sharpen',  label: 'Smart Sharpen…',   group: 'sharpen' },
   { key: 'add-noise',      label: 'Add Noise…',       group: 'noise'   },
   { key: 'film-grain',     label: 'Film Grain…',      group: 'noise'   },  { key: 'median-filter',  label: 'Median…',           group: 'noise'   },  { key: 'bilateral-filter', label: 'Bilateral…',      group: 'noise'   },  { key: 'reduce-noise',   label: 'Reduce Noise…',     group: 'noise'   },  { key: 'clouds',         label: 'Clouds…',          group: 'render'  },
+  { key: 'render-lens-flare', label: 'Lens Flare…',      group: 'render'  },
 ]

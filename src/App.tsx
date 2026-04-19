@@ -31,6 +31,7 @@ import { CloudsDialog } from '@/components/dialogs/CloudsDialog/CloudsDialog'
 import { MedianFilterDialog } from '@/components/dialogs/MedianFilterDialog/MedianFilterDialog'
 import { BilateralFilterDialog } from '@/components/dialogs/BilateralFilterDialog/BilateralFilterDialog'
 import { ReduceNoiseDialog } from '@/components/dialogs/ReduceNoiseDialog/ReduceNoiseDialog'
+import { LensFlareDialog } from '@/components/dialogs/LensFlareDialog/LensFlareDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -79,6 +80,7 @@ function AppContent(): React.JSX.Element {
   const [showMedianFilterDialog,   setShowMedianFilterDialog]   = useState(false)
   const [showBilateralFilterDialog, setShowBilateralFilterDialog] = useState(false)
   const [showReduceNoiseDialog,     setShowReduceNoiseDialog]     = useState(false)
+  const [showLensFlareDialog,       setShowLensFlareDialog]       = useState(false)
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -161,6 +163,7 @@ function AppContent(): React.JSX.Element {
     if (key === 'median-filter') setShowMedianFilterDialog(true)
     if (key === 'bilateral-filter') setShowBilateralFilterDialog(true)
     if (key === 'reduce-noise') setShowReduceNoiseDialog(true)
+    if (key === 'render-lens-flare') setShowLensFlareDialog(true)
   }, [])
 
   const filters = useFilters({
@@ -171,6 +174,8 @@ function AppContent(): React.JSX.Element {
     canvasWidth:        state.canvas.width,
     canvasHeight:       state.canvas.height,
     captureHistory,
+    dispatch,
+    stateRef,
   })
 
   // ── View actions ──────────────────────────────────────────────────
@@ -477,6 +482,18 @@ function AppContent(): React.JSX.Element {
           captureHistory={captureHistory}
           canvasWidth={state.canvas.width}
           canvasHeight={state.canvas.height}
+        />
+      )}
+      {showLensFlareDialog && (
+        <LensFlareDialog
+          isOpen={showLensFlareDialog}
+          onApply={(pixels, w, h) => {
+            filters.handleApplyLensFlare(pixels, w, h)
+            setShowLensFlareDialog(false)
+          }}
+          onCancel={() => setShowLensFlareDialog(false)}
+          width={state.canvas.width}
+          height={state.canvas.height}
         />
       )}
     </div>
