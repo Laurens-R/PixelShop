@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
 import { IMAGE_EXTENSIONS, EXT_TO_MIME, loadImagePixels } from '@/export/imageLoader'
-import { makeTabId, fileTitle } from '@/store/tabTypes'
+import { makeTabId, fileTitle, DEFAULT_SWATCHES } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
 import type { LayerState, BackgroundFill, AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
@@ -77,6 +77,7 @@ export function useFileOps({
       canvasWidth: width, canvasHeight: height, backgroundFill,
       layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
       activeLayerId: 'layer-0', zoom: 1,
+      swatches: DEFAULT_SWATCHES,
     }
     const updated: TabRecord[] = [
       ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
@@ -110,6 +111,7 @@ export function useFileOps({
       const newSnapshot: TabSnapshot = {
         canvasWidth: width, canvasHeight: height, backgroundFill: 'transparent',
         layers, activeLayerId: layerId, zoom: 1,
+        swatches: DEFAULT_SWATCHES,
       }
       const snapshot      = captureActiveSnapshot()
       const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
@@ -154,9 +156,19 @@ export function useFileOps({
     })
     const title       = fileTitle(path)
     const bg          = doc.canvas.backgroundFill ?? 'transparent'
+    if (doc.version >= 2) {
+      if (!isValidSwatchArray(doc.swatches)) {
+        showOperationError('Could not open file.', 'The file contains invalid swatch data.')
+        return
+      }
+    }
+    const docSwatches = doc.version >= 2
+      ? (doc.swatches as { r: number; g: number; b: number; a: number }[])
+      : DEFAULT_SWATCHES
     const newSnapshot: TabSnapshot = {
       canvasWidth: doc.canvas.width, canvasHeight: doc.canvas.height, backgroundFill: bg,
       layers, activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null, zoom: 1,
+      swatches: docSwatches,
     }
     const snapshot      = captureActiveSnapshot()
     const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
@@ -166,20 +178,12 @@ export function useFileOps({
       ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
       { id: newId, title, filePath: path, snapshot: newSnapshot, savedLayerData: layerData, savedHistory: null, canvasKey: 1 },
     ]
-    if (doc.version >= 2) {
-      if (!isValidSwatchArray(doc.swatches)) {
-        showOperationError('Could not open file.', 'The file contains invalid swatch data.')
-        return
-      }
-    }
     setTabs(updated)
     setActiveTabId(newId)
     historyStore.clear({ recaptureSnapshot: false })
     setPendingLayerData(null)
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
-    if (doc.version >= 2) {
-      dispatch({ type: 'SET_SWATCHES', payload: doc.swatches as { r: number; g: number; b: number; a: number }[] })
-    }
+    dispatch({ type: 'SET_SWATCHES', payload: docSwatches })
   }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
 
   const handleSave = useCallback(async (saveAs = false): Promise<void> => {

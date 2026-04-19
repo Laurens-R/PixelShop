@@ -118,14 +118,15 @@ export function GeneratePaletteDialog({
           if (!handle) return
           const result = await handle.rasterizeComposite('export')
           const { palette, count } = await quantize(result.data, extractCount)
+          const seen = new Set<number>()
           const colors: RGBAColor[] = []
           for (let i = 0; i < count; i++) {
-            colors.push({
-              r: palette[i * 4],
-              g: palette[i * 4 + 1],
-              b: palette[i * 4 + 2],
-              a: palette[i * 4 + 3],
-            })
+            const r = palette[i * 4], g = palette[i * 4 + 1], b = palette[i * 4 + 2], a = palette[i * 4 + 3]
+            const key = (r << 24) | (g << 16) | (b << 8) | a
+            if (!seen.has(key)) {
+              seen.add(key)
+              colors.push({ r, g, b, a })
+            }
           }
           setExtractPalette(colors)
         } finally {

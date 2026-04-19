@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer } from 'react'
 import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, BlendMode, BackgroundFill, GridType } from '@/types'
+import { DEFAULT_SWATCHES } from './tabTypes'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 
@@ -43,27 +44,6 @@ export type AppAction =
   | { type: 'SET_SWATCHES'; payload: RGBAColor[] }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
-
-const DEFAULT_SWATCHES: RGBAColor[] = [
-  { r: 0,   g: 0,   b: 0,   a: 255 },
-  { r: 255, g: 255, b: 255, a: 255 },
-  { r: 192, g: 192, b: 192, a: 255 },
-  { r: 128, g: 128, b: 128, a: 255 },
-  { r: 255, g: 0,   b: 0,   a: 255 },
-  { r: 128, g: 0,   b: 0,   a: 255 },
-  { r: 255, g: 255, b: 0,   a: 255 },
-  { r: 128, g: 128, b: 0,   a: 255 },
-  { r: 0,   g: 255, b: 0,   a: 255 },
-  { r: 0,   g: 128, b: 0,   a: 255 },
-  { r: 0,   g: 255, b: 255, a: 255 },
-  { r: 0,   g: 128, b: 128, a: 255 },
-  { r: 0,   g: 0,   b: 255, a: 255 },
-  { r: 0,   g: 0,   b: 128, a: 255 },
-  { r: 255, g: 0,   b: 255, a: 255 },
-  { r: 128, g: 0,   b: 128, a: 255 },
-  { r: 255, g: 128, b: 0,   a: 255 },
-  { r: 255, g: 200, b: 150, a: 255 },
-]
 
 const initialState: AppState = {
   activeTool: 'pencil',

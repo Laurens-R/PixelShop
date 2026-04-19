@@ -1,7 +1,7 @@
 import { useImperativeHandle, useRef } from 'react'
 import type React from 'react'
 import type { GpuLayer, WebGPURenderer, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
-import type { LayerState } from '@/types'
+import type { LayerState, RGBAColor } from '@/types'
 import { buildRenderPlan as buildCanvasRenderPlan } from './canvasPlan'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import { encodePng } from './pngHelpers'
@@ -71,6 +71,7 @@ interface UseCanvasHandleParams {
   glLayersRef: { readonly current: Map<string, GpuLayer> }
   adjustmentMaskMap: { readonly current: Map<string, GpuLayer> }
   layersStateRef: { readonly current: readonly LayerState[] }
+  swatchesRef: { readonly current: readonly RGBAColor[] }
   /** Returns the correctly-filtered layers + mask map + full render plan. */
   buildRenderArgs: () => { layers: GpuLayer[]; maskMap: Map<string, GpuLayer>; plan: RenderPlanEntry[] }
   width: number
@@ -85,6 +86,7 @@ export function useCanvasHandle({
   glLayersRef,
   adjustmentMaskMap,
   layersStateRef,
+  swatchesRef,
   buildRenderArgs,
   width,
   height,
@@ -120,7 +122,8 @@ export function useCanvasHandle({
       glLayersRef.current,
       maskMap,
       adjustmentMaskMap.current,
-      adjustmentPreviewStore.snapshot()
+      adjustmentPreviewStore.snapshot(),
+      swatchesRef.current as RGBAColor[]
     )
   }
 

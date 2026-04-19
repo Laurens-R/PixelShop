@@ -4,7 +4,7 @@ import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
-import { makeTabId, INITIAL_SNAPSHOT } from '@/store/tabTypes'
+import { makeTabId, INITIAL_SNAPSHOT, DEFAULT_SWATCHES } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -79,6 +79,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
     layers:         state.layers,
     activeLayerId:  state.activeLayerId,
     zoom:           state.canvas.zoom,
+    swatches:       state.swatches,
   }), [state])
 
   /** Encode every active layer's pixel data into Map<layerId, dataURL> (+ geometry entries).
@@ -133,6 +134,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
         zoom:           toTab.snapshot.zoom,
       },
     })
+    dispatch({ type: 'SET_SWATCHES', payload: toTab.snapshot.swatches ?? DEFAULT_SWATCHES })
   }, [dispatch])
 
   const handleSwitchTab = useCallback((toId: string): void => {

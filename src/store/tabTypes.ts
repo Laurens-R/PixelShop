@@ -1,5 +1,28 @@
 import type { HistoryEntry } from '@/store/historyStore'
-import type { LayerState, BackgroundFill } from '@/types'
+import type { LayerState, BackgroundFill, RGBAColor } from '@/types'
+
+// ─── Default swatch palette ───────────────────────────────────────────────────
+
+export const DEFAULT_SWATCHES: RGBAColor[] = [
+  { r: 0,   g: 0,   b: 0,   a: 255 },
+  { r: 255, g: 255, b: 255, a: 255 },
+  { r: 192, g: 192, b: 192, a: 255 },
+  { r: 128, g: 128, b: 128, a: 255 },
+  { r: 255, g: 0,   b: 0,   a: 255 },
+  { r: 128, g: 0,   b: 0,   a: 255 },
+  { r: 255, g: 255, b: 0,   a: 255 },
+  { r: 128, g: 128, b: 0,   a: 255 },
+  { r: 0,   g: 255, b: 0,   a: 255 },
+  { r: 0,   g: 128, b: 0,   a: 255 },
+  { r: 0,   g: 255, b: 255, a: 255 },
+  { r: 0,   g: 128, b: 128, a: 255 },
+  { r: 0,   g: 0,   b: 255, a: 255 },
+  { r: 0,   g: 0,   b: 128, a: 255 },
+  { r: 255, g: 0,   b: 255, a: 255 },
+  { r: 128, g: 0,   b: 128, a: 255 },
+  { r: 255, g: 128, b: 0,   a: 255 },
+  { r: 255, g: 200, b: 150, a: 255 },
+]
 
 // ─── Tab snapshot ─────────────────────────────────────────────────────────────
 
@@ -10,6 +33,7 @@ export interface TabSnapshot {
   layers: LayerState[]
   activeLayerId: string | null
   zoom: number
+  swatches: RGBAColor[]
 }
 
 // ─── Tab record ───────────────────────────────────────────────────────────────
@@ -44,4 +68,5 @@ export const INITIAL_SNAPSHOT: TabSnapshot = {
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
   zoom: 1,
+  swatches: DEFAULT_SWATCHES,
 }

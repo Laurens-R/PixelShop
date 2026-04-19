@@ -27,7 +27,8 @@ export interface UseLayersReturn {
 }
 
 function isPixelRootLayer(layer: LayerState): boolean {
-  return !('type' in layer)
+  if (!('type' in layer)) return true                           // plain pixel layer
+  return layer.type === 'text' || layer.type === 'shape'        // rasterisable root layers
 }
 
 function expandMergeLayerIds(

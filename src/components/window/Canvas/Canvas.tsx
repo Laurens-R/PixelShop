@@ -74,6 +74,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // up-to-date ordering and visibility without being re-created on every render.
   const layersStateRef = useRef(state.layers)
   layersStateRef.current = state.layers
+  const swatchesRef = useRef(state.swatches)
+  swatchesRef.current = state.swatches
   const onStrokeEndRef = useRef(onStrokeEnd)
   onStrokeEndRef.current = onStrokeEnd
   const onReadyRef = useRef(onReady)
@@ -123,6 +125,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     glLayersRef,
     adjustmentMaskMap,
     layersStateRef,
+    swatchesRef,
     buildRenderArgs: () => ({
       layers: buildOrderedGLLayers(),
       maskMap: buildMaskMap(),
