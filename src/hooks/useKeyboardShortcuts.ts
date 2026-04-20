@@ -17,6 +17,7 @@ interface UseKeyboardShortcutsOptions {
   handleToggleGrid:         () => void
   handleKeyboardShortcuts?: () => void
   handleFreeTransform?:     () => void
+  handleInvertSelection?:   () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -34,6 +35,7 @@ export function useKeyboardShortcuts({
   handleToggleGrid,
   handleKeyboardShortcuts,
   handleFreeTransform,
+  handleInvertSelection,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -52,8 +54,9 @@ export function useKeyboardShortcuts({
       else if (e.key === '0')              { e.preventDefault(); handleFitToWindow() }
       else if (e.key === 'g')              { e.preventDefault(); handleToggleGrid() }
       else if (e.key === 't')              { e.preventDefault(); handleFreeTransform?.() }
+      else if (e.key === 'i' && e.shiftKey) { e.preventDefault(); handleInvertSelection?.() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection])
 }

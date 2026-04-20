@@ -290,6 +290,37 @@ export class SelectionStore {
   }
 
   /**
+   * Invert the current selection. Each mask byte becomes (255 - value).
+   * When no selection exists (mask is null, meaning all selected), invert
+   * results in nothing selected — equivalent to clearing. When the inverted
+   * result is all-zero, the mask is also cleared.
+   */
+  invert(): void {
+    const { width: w, height: h } = this
+    if (w === 0 || h === 0) return
+    if (this.mask === null) {
+      // No active selection = implicitly all selected. Invert → nothing selected = clear.
+      this.mask = null
+      this.borderSegments = null
+      this.notify()
+      return
+    }
+    for (let i = 0; i < this.mask.length; i++) {
+      this.mask[i] = 255 - this.mask[i]
+    }
+    // Collapse all-zero result to null (nothing selected)
+    let any = false
+    for (let i = 0; i < this.mask.length; i++) if (this.mask[i]) { any = true; break }
+    if (!any) {
+      this.mask = null
+      this.borderSegments = null
+    } else {
+      this.borderSegments = this.computeBorderSegments()
+    }
+    this.notify()
+  }
+
+  /**
    * Replace the current mask with a new one (e.g. after a move operation).
    * Recomputes border segments and notifies listeners.
    */

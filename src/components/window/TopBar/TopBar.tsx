@@ -49,9 +49,10 @@ interface TopBarProps {
   filterMenuItems?: Array<{ key: FilterKey; label: string; instant?: boolean; group?: string }>
   onFreeTransform?: () => void
   isFreeTransformEnabled?: boolean
+  onInvertSelection?: () => void
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -81,6 +82,12 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Resize Image Canvas…', action: onResizeCanvas },
         { separator: true, label: '' },
         { label: 'Transform\u2026', shortcut: 'Ctrl+T', disabled: !isFreeTransformEnabled, action: onFreeTransform },
+      ]
+    },
+    {
+      label: 'Select',
+      items: [
+        { label: 'Invert Selection', shortcut: 'Ctrl+Shift+I', action: onInvertSelection },
       ]
     },
     {
@@ -174,7 +181,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
       ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection])
 
   return (
     <div className={styles.topBar}>

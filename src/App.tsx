@@ -268,6 +268,7 @@ function AppContent(): React.JSX.Element {
     handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid,
     handleKeyboardShortcuts: useCallback(() => setShowShortcutsDialog(true), []),
     handleFreeTransform: handleEnterTransform,
+    handleInvertSelection: useCallback(() => selectionStore.invert(), []),
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -332,6 +333,7 @@ function AppContent(): React.JSX.Element {
         filterMenuItems={FILTER_MENU_ITEMS}
         onFreeTransform={handleEnterTransform}
         isFreeTransformEnabled={isFreeTransformEnabled}
+        onInvertSelection={() => selectionStore.invert()}
       />
       <ToolOptionsBar />
       <TabBar

@@ -206,8 +206,9 @@ Main → Renderer communication goes through `electron/main/ipc.ts` and the type
 
 ### Top Menu
 
-Menu order: **File → Edit → Layer → Adjustments → Effects → Filters → View → Help**
+Menu order: **File → Edit → Select → Layer → Adjustments → Effects → Filters → View → Help**
 
+- **Select** menu: Invert Selection (`Ctrl+Shift+I`)
 - **Adjustments** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'color-adjustments'`
 - **Effects** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'real-time-effects'` (bloom, chromatic-aberration, halation, color-key)
 - **Layer** menu: New Layer, Duplicate Layer, Delete Layer | Rasterize Layer | Merge Selected, Merge Down, Merge Visible, Flatten Image
