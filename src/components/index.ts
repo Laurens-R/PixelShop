@@ -13,6 +13,8 @@ export { SelectiveColorPanel } from './panels/SelectiveColorPanel/SelectiveColor
 export { ColorGradingPanel } from './panels/ColorGradingPanel/ColorGradingPanel'
 export { ReduceColorsPanel } from './panels/ReduceColorsPanel/ReduceColorsPanel'
 export { BloomOptions } from './panels/BloomOptions/BloomOptions'
+export { ChromaticAberrationOptions } from './panels/ChromaticAberrationOptions/ChromaticAberrationOptions'
+export { HalationOptions } from './panels/HalationOptions/HalationOptions'
 export { ColorWheelWidget } from './widgets/ColorWheelWidget/ColorWheelWidget'
 export { SliderInput } from './widgets/SliderInput/SliderInput'
 export { ToolWindow } from './widgets/ToolWindow/ToolWindow'

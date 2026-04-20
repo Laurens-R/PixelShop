@@ -22,3 +22,5 @@ export {
   BLOOM_BLUR_V_COMPUTE,
   BLOOM_COMPOSITE_COMPUTE,
 } from './shaders/adjustments/bloom'
+export { CHROMATIC_ABERRATION_COMPUTE } from './shaders/adjustments/chromatic-aberration'
+export { HALATION_EXTRACT_COMPUTE } from './shaders/adjustments/halation'

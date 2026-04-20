@@ -163,6 +163,29 @@ export function buildAdjustmentEntry(
       selMaskLayer: mask,
     }
   }
+  if (ls.adjustmentType === 'chromatic-aberration') {
+    return {
+      kind:     'chromatic-aberration',
+      layerId:  ls.id,
+      caType:   ls.params.type,
+      distance: ls.params.distance,
+      angle:    ls.params.angle,
+      visible:  ls.visible,
+      selMaskLayer: mask,
+    }
+  }
+  if (ls.adjustmentType === 'halation') {
+    return {
+      kind:      'halation',
+      layerId:   ls.id,
+      threshold: ls.params.threshold,
+      spread:    ls.params.spread,
+      blur:      ls.params.blur,
+      strength:  ls.params.strength,
+      visible:   ls.visible,
+      selMaskLayer: mask,
+    }
+  }
   const _exhaustive: never = ls
   return _exhaustive
 }

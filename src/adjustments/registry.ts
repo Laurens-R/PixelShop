@@ -114,4 +114,25 @@ export const ADJUSTMENT_REGISTRY = [
       quality:   'half',
     },
   },
+  {
+    adjustmentType: 'chromatic-aberration' as const,
+    label: 'Chromatic Aberration…',
+    group: 'real-time-effects',
+    defaultParams: {
+      type:     'radial',
+      distance: 5,
+      angle:    0,
+    },
+  },
+  {
+    adjustmentType: 'halation' as const,
+    label: 'Halation…',
+    group: 'real-time-effects',
+    defaultParams: {
+      threshold: 0.5,
+      spread:    30,
+      blur:      2,
+      strength:  0.6,
+    },
+  },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

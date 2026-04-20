@@ -72,10 +72,12 @@ fn cs_color_grading(@builtin(global_invocation_id) id: vec3u) {
   let lumCNew = clamp((lumC - params.pivot) * params.contrast + params.pivot, 0.0, 1.0);
   if (lumC > 0.0001) { rgb = clamp(rgb * (lumCNew / lumC), vec3f(0.0), vec3f(1.0)); }
 
-  // Stage 4: Mid/Detail (luma-based to preserve hue)
+  // Stage 4: Mid/Detail — uniformly lifts or lowers the midtone range without
+  // affecting pure black or white. wMid1 peaks at 1.0 when lum=0.5 and falls
+  // smoothly to 0 at lum=0 and lum=1, so the adjustment is centred on grey.
   let lum1     = dot(rgb, vec3f(0.2126, 0.7152, 0.0722));
   let wMid1    = 4.0 * lum1 * (1.0 - lum1);
-  let lum1New  = clamp(lum1 + (params.midDetail / 100.0) * (lum1 - 0.5) * wMid1, 0.0, 1.0);
+  let lum1New  = clamp(lum1 + (params.midDetail / 100.0) * wMid1, 0.0, 1.0);
   if (lum1 > 0.0001) { rgb = clamp(rgb * (lum1New / lum1), vec3f(0.0), vec3f(1.0)); }
   else { rgb = vec3f(lum1New); }
 

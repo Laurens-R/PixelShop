@@ -29,6 +29,8 @@ import {
   BLOOM_BLUR_H_COMPUTE,
   BLOOM_BLUR_V_COMPUTE,
   BLOOM_COMPOSITE_COMPUTE,
+  CHROMATIC_ABERRATION_COMPUTE,
+  HALATION_EXTRACT_COMPUTE,
 } from './shaders'
 import { initFilterCompute } from './filterCompute'
 import type { AdjustmentParamsMap } from '@/types'
@@ -93,6 +95,25 @@ export type AdjustmentRenderOp =
       visible:   boolean
       selMaskLayer?: GpuLayer
     }
+  | {
+      kind:     'chromatic-aberration'
+      layerId:  string
+      caType:   'radial' | 'directional'
+      distance: number
+      angle:    number
+      visible:  boolean
+      selMaskLayer?: GpuLayer
+    }
+  | {
+      kind:      'halation'
+      layerId:   string
+      threshold: number
+      spread:    number
+      blur:      number
+      strength:  number
+      visible:   boolean
+      selMaskLayer?: GpuLayer
+    }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: GpuLayer; mask?: GpuLayer }
@@ -153,6 +174,13 @@ export class WebGPURenderer {
   private readonly bloomBlurHPipeline:      GPUComputePipeline
   private readonly bloomBlurVPipeline:      GPUComputePipeline
   private readonly bloomCompositePipeline:  GPUComputePipeline
+
+  // Chromatic aberration
+  private readonly caPipeline: GPUComputePipeline
+
+  // Halation
+  private readonly halationExtractPipeline: GPUComputePipeline
+  private halationTexCache: { glowATex: GPUTexture; glowBTex: GPUTexture } | null = null
 
   // Bloom intermediate texture cache — invalidated when quality changes
   private bloomTexCache: {
@@ -298,6 +326,9 @@ export class WebGPURenderer {
     this.bloomBlurHPipeline      = this.createComputePipeline(BLOOM_BLUR_H_COMPUTE,     'cs_bloom_blur_h')
     this.bloomBlurVPipeline      = this.createComputePipeline(BLOOM_BLUR_V_COMPUTE,     'cs_bloom_blur_v')
     this.bloomCompositePipeline  = this.createComputePipeline(BLOOM_COMPOSITE_COMPUTE,  'cs_bloom_composite')
+
+    this.caPipeline = this.createComputePipeline(CHROMATIC_ABERRATION_COMPUTE, 'cs_chromatic_aberration')
+    this.halationExtractPipeline = this.createComputePipeline(HALATION_EXTRACT_COMPUTE, 'cs_halation_extract')
 
     initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
   }
@@ -940,6 +971,14 @@ export class WebGPURenderer {
       )
       return
     }
+    if (entry.kind === 'chromatic-aberration') {
+      this.encodeChromaticAberrationPass(encoder, srcTex, dstTex, entry.caType, entry.distance, entry.angle, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'halation') {
+      this.encodeHalationPass(encoder, srcTex, dstTex, entry.threshold, entry.spread, entry.blur, entry.strength, entry.selMaskLayer)
+      return
+    }
     const _exhaustive: never = entry
     return _exhaustive
   }
@@ -1420,6 +1459,173 @@ export class WebGPURenderer {
     this.pendingDestroyBuffers.push(extractParamsBuf, blurParamsBuf, compParamsBuf, maskFlagsBuf)
   }
 
+  private encodeChromaticAberrationPass(
+    encoder: GPUCommandEncoder,
+    srcTex: GPUTexture,
+    dstTex: GPUTexture,
+    caType: 'radial' | 'directional',
+    distance: number,
+    angle: number,
+    selMaskLayer?: GpuLayer,
+  ): void {
+    const device = this.device
+    const w = srcTex.width
+    const h = srcTex.height
+
+    // Pack mixed u32/f32 into a 16-byte uniform buffer.
+    // Both views share the same ArrayBuffer so f[1]/f[2] write float bits
+    // into the slots that WGSL reads via bitcast<f32>(distanceBits/angleBits).
+    const buf = new ArrayBuffer(16)
+    const u = new Uint32Array(buf)
+    const f = new Float32Array(buf)
+    u[0] = caType === 'radial' ? 0 : 1
+    f[1] = distance   // writes f32 bits at byte offset 4
+    f[2] = angle      // writes f32 bits at byte offset 8
+    // u[3] remains 0 (padding)
+
+    const paramsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, paramsBuf, buf)
+
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    const hasMask = selMaskLayer != null ? 1 : 0
+    writeUniformBuffer(device, maskFlagsBuf, new Uint32Array([hasMask, 0, 0, 0, 0, 0, 0, 0]))
+
+    const dummyMask = selMaskLayer?.texture ?? srcTex  // unused when hasMask=0
+
+    const bg = device.createBindGroup({
+      layout: this.caPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: dstTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+        { binding: 3, resource: dummyMask.createView() },
+        { binding: 4, resource: { buffer: maskFlagsBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.caPipeline)
+    pass.setBindGroup(0, bg)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    this.pendingDestroyBuffers.push(paramsBuf, maskFlagsBuf)
+  }
+
+  private ensureHalationTextures(): { glowATex: GPUTexture; glowBTex: GPUTexture } {
+    if (this.halationTexCache) return this.halationTexCache
+    const { device, pixelWidth: w, pixelHeight: h } = this
+    const usage =
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.STORAGE_BINDING |
+      GPUTextureUsage.COPY_DST
+    const make = (): GPUTexture =>
+      device.createTexture({ size: { width: w, height: h }, format: 'rgba8unorm', usage })
+    this.halationTexCache = { glowATex: make(), glowBTex: make() }
+    return this.halationTexCache
+  }
+
+  private encodeHalationPass(
+    encoder:      GPUCommandEncoder,
+    srcTex:       GPUTexture,
+    dstTex:       GPUTexture,
+    threshold:    number,
+    spread:       number,
+    blur:         number,
+    strength:     number,
+    selMaskLayer: GpuLayer | undefined,
+  ): void {
+    const { device, pixelWidth: w, pixelHeight: h } = this
+    const { glowATex, glowBTex } = this.ensureHalationTextures()
+
+    const dummyMask    = selMaskLayer?.texture ?? srcTex
+    const maskFlagsArr = new Uint32Array(8); maskFlagsArr[0] = selMaskLayer ? 1 : 0
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, maskFlagsBuf, maskFlagsArr)
+
+    // ── Pass 1: Extract highlights with warm halation tint ───────────────────
+    const extractParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, extractParamsBuf, new Float32Array([threshold, 0, 0, 0]))
+    const extractBG = device.createBindGroup({
+      layout: this.halationExtractPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: glowATex.createView() },
+        { binding: 2, resource: { buffer: extractParamsBuf } },
+        { binding: 3, resource: dummyMask.createView() },
+        { binding: 4, resource: { buffer: maskFlagsBuf } },
+      ],
+    })
+    const extractPass = encoder.beginComputePass()
+    extractPass.setPipeline(this.halationExtractPipeline)
+    extractPass.setBindGroup(0, extractBG)
+    extractPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    extractPass.end()
+
+    // ── Passes 2–N: blur × H+V iterations (reuse bloom blur pipelines) ───────
+    const blurRadius   = Math.max(1, Math.round(spread))
+    const iterations   = Math.max(1, Math.min(5, Math.round(blur)))
+    const blurParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, blurParamsBuf, new Uint32Array([blurRadius, 0, 0, 0]))
+
+    let workingSrc = glowATex
+    let workingDst = glowBTex
+
+    for (let i = 0; i < iterations; i++) {
+      const hBG = device.createBindGroup({
+        layout: this.bloomBlurHPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: workingSrc.createView() },
+          { binding: 1, resource: workingDst.createView() },
+          { binding: 2, resource: { buffer: blurParamsBuf } },
+        ],
+      })
+      const hPass = encoder.beginComputePass()
+      hPass.setPipeline(this.bloomBlurHPipeline)
+      hPass.setBindGroup(0, hBG)
+      hPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+      hPass.end()
+      ;[workingSrc, workingDst] = [workingDst, workingSrc]
+
+      const vBG = device.createBindGroup({
+        layout: this.bloomBlurVPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: workingSrc.createView() },
+          { binding: 1, resource: workingDst.createView() },
+          { binding: 2, resource: { buffer: blurParamsBuf } },
+        ],
+      })
+      const vPass = encoder.beginComputePass()
+      vPass.setPipeline(this.bloomBlurVPipeline)
+      vPass.setBindGroup(0, vBG)
+      vPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+      vPass.end()
+      ;[workingSrc, workingDst] = [workingDst, workingSrc]
+    }
+
+    // ── Final pass: composite warm glow onto source (screen blend) ────────────
+    const compParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, compParamsBuf, new Float32Array([strength, 0, 0, 0]))
+    const compBG = device.createBindGroup({
+      layout: this.bloomCompositePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: workingSrc.createView() },
+        { binding: 2, resource: dstTex.createView() },
+        { binding: 3, resource: { buffer: compParamsBuf } },
+        { binding: 4, resource: dummyMask.createView() },
+        { binding: 5, resource: { buffer: maskFlagsBuf } },
+      ],
+    })
+    const compPass = encoder.beginComputePass()
+    compPass.setPipeline(this.bloomCompositePipeline)
+    compPass.setBindGroup(0, compBG)
+    compPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    compPass.end()
+
+    this.pendingDestroyBuffers.push(extractParamsBuf, blurParamsBuf, compParamsBuf, maskFlagsBuf)
+  }
+
   // ─── Lifecycle ───────────────────────────────────────────────────────────────
 
   destroy(): void {
@@ -1438,6 +1644,9 @@ export class WebGPURenderer {
     this.bloomTexCache?.blurATex.destroy()
     this.bloomTexCache?.blurBTex.destroy()
     this.bloomTexCache = null
+    this.halationTexCache?.glowATex.destroy()
+    this.halationTexCache?.glowBTex.destroy()
+    this.halationTexCache = null
     this.device.destroy()
   }
 }

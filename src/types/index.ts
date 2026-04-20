@@ -177,6 +177,8 @@ export type AdjustmentType =
   | 'color-grading'
   | 'reduce-colors'
   | 'bloom'
+  | 'chromatic-aberration'
+  | 'halation'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -301,6 +303,17 @@ export interface AdjustmentParamsMap {
     spread:    number
     quality:   'full' | 'half' | 'quarter'
   }
+  'chromatic-aberration': {
+    type:     'radial' | 'directional'
+    distance: number   // 0–50 px
+    angle:    number   // 0–360 degrees (used only when type === 'directional')
+  }
+  'halation': {
+    threshold: number  // 0–1: luminance level above which halation activates
+    spread:    number  // 0–100 px: blur radius
+    blur:      number  // 1–5: number of H+V blur iterations (more = softer)
+    strength:  number  // 0–1: composite intensity
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -407,6 +420,18 @@ export interface BloomAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface ChromaticAberrationAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'chromatic-aberration'
+  params: AdjustmentParamsMap['chromatic-aberration']
+  hasMask: boolean
+}
+
+export interface HalationAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'halation'
+  params: AdjustmentParamsMap['halation']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -420,6 +445,8 @@ export type AdjustmentLayerState =
   | ColorGradingAdjustmentLayer
   | ReduceColorsAdjustmentLayer
   | BloomAdjustmentLayer
+  | ChromaticAberrationAdjustmentLayer
+  | HalationAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 
