@@ -12,6 +12,7 @@ add_executable(pixelops
   src/resize.cpp
   src/dither.cpp
   src/curves_histogram.cpp
+  src/transform.cpp
 )
 
 target_include_directories(pixelops PRIVATE src)
@@ -29,7 +30,7 @@ if(EMSCRIPTEN)
     "-sMODULARIZE=1"
     "-sEXPORT_ES6=1"
     "-sEXPORT_NAME=createPixelOps"
-    "-sEXPORTED_FUNCTIONS=_malloc,_free,_pixelops_flood_fill,_pixelops_convolve,_pixelops_resize_bilinear,_pixelops_resize_nearest,_pixelops_dither_floyd_steinberg,_pixelops_dither_bayer,_pixelops_quantize,_pixelops_curves_histogram,_pixelops_remove_motion_blur"
+    "-sEXPORTED_FUNCTIONS=_malloc,_free,_pixelops_flood_fill,_pixelops_convolve,_pixelops_resize_bilinear,_pixelops_resize_nearest,_pixelops_dither_floyd_steinberg,_pixelops_dither_bayer,_pixelops_quantize,_pixelops_curves_histogram,_pixelops_remove_motion_blur,_pixelops_affine_transform,_pixelops_perspective_transform"
     "-sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPF32"
     "-sALLOW_MEMORY_GROWTH=1"
     "-O2"

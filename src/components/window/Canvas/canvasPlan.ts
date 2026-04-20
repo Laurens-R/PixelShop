@@ -186,6 +186,20 @@ export function buildAdjustmentEntry(
       selMaskLayer: mask,
     }
   }
+  if (ls.adjustmentType === 'color-key') {
+    const { r, g, b } = ls.params.keyColor
+    return {
+      kind:         'color-key',
+      layerId:      ls.id,
+      keyR:         r / 255,
+      keyG:         g / 255,
+      keyB:         b / 255,
+      tolerance:    ls.params.tolerance,
+      softness:     ls.params.softness,
+      visible:      ls.visible,
+      selMaskLayer: mask,
+    }
+  }
   const _exhaustive: never = ls
   return _exhaustive
 }

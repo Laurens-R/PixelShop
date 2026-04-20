@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+import { ipcMain, dialog, BrowserWindow, app, clipboard, nativeImage } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -115,5 +115,17 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle('file:writePalette', async (_event, path: string, data: string) => {
     await writeFile(path, data, 'utf-8')
+  })
+
+  ipcMain.handle('clipboard:write-image', (_event, pngBase64: string) => {
+    const buf = Buffer.from(pngBase64, 'base64')
+    const img = nativeImage.createFromBuffer(buf)
+    clipboard.writeImage(img)
+  })
+
+  ipcMain.handle('clipboard:read-image', () => {
+    const img = clipboard.readImage()
+    if (img.isEmpty()) return null
+    return img.toPNG().toString('base64')
   })
 }

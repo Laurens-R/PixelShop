@@ -246,3 +246,54 @@ export async function removeMotionBlur(
     m._pixelops_remove_motion_blur(ptr, width, height, angleDeg, distance, noiseReduction)
   )
 }
+
+/**
+ * Affine transform via inverse-mapping.
+ * invMatrix: [a, b, tx, c, d, ty] — maps output (x,y) to source (u,v):
+ *   u = a*x + b*y + tx
+ *   v = c*x + d*y + ty
+ * interp: 0=nearest, 1=bilinear, 2=bicubic
+ */
+export async function applyAffineTransform(
+  src: Uint8Array,
+  srcW: number, srcH: number,
+  dstW: number, dstH: number,
+  invMatrix: Float32Array,
+  interp: number
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  const matPtr = m._malloc(invMatrix.byteLength)
+  try {
+    m.HEAPF32.set(invMatrix, matPtr >> 2)
+    return withSrcDstBuffers(m, src, dstW * dstH * 4, (srcPtr, dstPtr) =>
+      m._pixelops_affine_transform(srcPtr, srcW, srcH, dstPtr, dstW, dstH, matPtr, interp)
+    )
+  } finally {
+    m._free(matPtr)
+  }
+}
+
+/**
+ * Perspective transform via inverse 3×3 homography.
+ * invH: 9 elements, row-major — maps output (x,y) to source (u,v) via:
+ *   [u, v, w] = invH * [x, y, 1]ᵀ;  srcX = u/w, srcY = v/w
+ * interp: 0=nearest, 1=bilinear, 2=bicubic
+ */
+export async function applyPerspectiveTransform(
+  src: Uint8Array,
+  srcW: number, srcH: number,
+  dstW: number, dstH: number,
+  invH: Float32Array,
+  interp: number
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  const matPtr = m._malloc(invH.byteLength)
+  try {
+    m.HEAPF32.set(invH, matPtr >> 2)
+    return withSrcDstBuffers(m, src, dstW * dstH * 4, (srcPtr, dstPtr) =>
+      m._pixelops_perspective_transform(srcPtr, srcW, srcH, dstPtr, dstW, dstH, matPtr, interp)
+    )
+  } finally {
+    m._free(matPtr)
+  }
+}

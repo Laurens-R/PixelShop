@@ -1,0 +1,245 @@
+import React, { useEffect, useState, useCallback } from 'react'
+import { transformStore } from '@/store/transformStore'
+import type { TransformHandleMode, TransformInterpolation } from '@/types'
+import styles from './TransformToolbar.module.scss'
+
+// ─── Lock icon SVG ────────────────────────────────────────────────────────────
+
+function LockIcon({ locked }: { locked: boolean }): React.JSX.Element {
+  return locked ? (
+    // Closed chain link
+    <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <rect x="1" y="5" width="4" height="4" rx="1.2" />
+      <rect x="9" y="5" width="4" height="4" rx="1.2" />
+      <line x1="5" y1="7" x2="9" y2="7" />
+    </svg>
+  ) : (
+    // Broken chain link
+    <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <rect x="1" y="5" width="4" height="4" rx="1.2" />
+      <rect x="9" y="5" width="4" height="4" rx="1.2" />
+      <line x1="5" y1="7" x2="6.2" y2="7" />
+      <line x1="7.8" y1="7" x2="9" y2="7" />
+    </svg>
+  )
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function TransformToolbar(): React.JSX.Element {
+  const [params, setParams] = useState(() => transformStore.params)
+  const [aspectLocked, setAspectLocked] = useState(false)
+  const [handleMode, setHandleMode] = useState<TransformHandleMode>('scale')
+  const [interpolation, setInterpolation] = useState<TransformInterpolation>('bilinear')
+
+  useEffect(() => {
+    const sync = (): void => {
+      setParams({ ...transformStore.params })
+      setAspectLocked(transformStore.aspectLocked)
+      setHandleMode(transformStore.handleMode)
+      setInterpolation(transformStore.interpolation)
+    }
+    transformStore.subscribe(sync)
+    sync()
+    return () => transformStore.unsubscribe(sync)
+  }, [])
+
+  const origAspect = transformStore.originalH > 0
+    ? transformStore.originalW / transformStore.originalH
+    : 1
+
+  const commitX = useCallback((raw: string): void => {
+    const v = parseFloat(raw)
+    if (!isNaN(v)) transformStore.updateParams({ x: v })
+  }, [])
+
+  const commitY = useCallback((raw: string): void => {
+    const v = parseFloat(raw)
+    if (!isNaN(v)) transformStore.updateParams({ y: v })
+  }, [])
+
+  const commitW = useCallback((raw: string): void => {
+    const v = Math.max(1, parseFloat(raw) || 1)
+    if (transformStore.aspectLocked) {
+      transformStore.updateParams({ w: v, h: Math.round(v / origAspect) })
+    } else {
+      transformStore.updateParams({ w: v })
+    }
+  }, [origAspect])
+
+  const commitH = useCallback((raw: string): void => {
+    const v = Math.max(1, parseFloat(raw) || 1)
+    if (transformStore.aspectLocked) {
+      transformStore.updateParams({ h: v, w: Math.round(v * origAspect) })
+    } else {
+      transformStore.updateParams({ h: v })
+    }
+  }, [origAspect])
+
+  const commitRotation = useCallback((raw: string): void => {
+    const v = parseFloat(raw)
+    if (!isNaN(v)) {
+      let r = v % 360
+      if (r > 180) r -= 360
+      if (r < -180) r += 360
+      transformStore.updateParams({ rotation: r })
+    }
+  }, [])
+
+  const toggleLock = useCallback((): void => {
+    transformStore.aspectLocked = !transformStore.aspectLocked
+    transformStore.notify()
+  }, [])
+
+  const setMode = useCallback((mode: TransformHandleMode): void => {
+    const prev = transformStore.handleMode
+    transformStore.handleMode = mode
+    if (mode === 'perspective' && prev !== 'perspective') {
+      const p = transformStore.params
+      transformStore.params = {
+        ...p,
+        perspectiveCorners: [
+          { x: p.x, y: p.y },
+          { x: p.x + p.w, y: p.y },
+          { x: p.x + p.w, y: p.y + p.h },
+          { x: p.x, y: p.y + p.h },
+        ],
+      }
+    } else if (mode !== 'perspective' && prev === 'perspective') {
+      transformStore.params = { ...transformStore.params, perspectiveCorners: null }
+    }
+    transformStore.notify()
+  }, [])
+
+  const setInterp = useCallback((interp: TransformInterpolation): void => {
+    transformStore.interpolation = interp
+    transformStore.notify()
+  }, [])
+
+  const isPerspective = handleMode === 'perspective'
+
+  return (
+    <div className={styles.toolbar}>
+      {/* X / Y */}
+      <div className={styles.group}>
+        <span className={styles.groupLabel}>X</span>
+        <input
+          type="number"
+          className={styles.numInputNarrow}
+          value={Math.round(params.x)}
+          onChange={e => commitX(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        />
+      </div>
+      <div className={styles.group}>
+        <span className={styles.groupLabel}>Y</span>
+        <input
+          type="number"
+          className={styles.numInputNarrow}
+          value={Math.round(params.y)}
+          onChange={e => commitY(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        />
+      </div>
+
+      <div className={styles.sep} />
+
+      {/* W / H with lock */}
+      <div className={styles.group}>
+        <span className={styles.groupLabel}>W</span>
+        <input
+          type="number"
+          className={styles.numInput}
+          value={Math.round(params.w)}
+          onChange={e => commitW(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          min={1}
+        />
+        <button
+          className={aspectLocked ? styles.lockBtnLocked : styles.lockBtn}
+          onClick={toggleLock}
+          title={aspectLocked ? 'Unlock aspect ratio' : 'Lock aspect ratio'}
+          type="button"
+        >
+          <LockIcon locked={aspectLocked} />
+        </button>
+        <span className={styles.groupLabel}>H</span>
+        <input
+          type="number"
+          className={styles.numInput}
+          value={Math.round(params.h)}
+          onChange={e => commitH(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          min={1}
+        />
+      </div>
+
+      <div className={styles.sep} />
+
+      {/* Rotation */}
+      <div className={styles.group}>
+        <svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" style={{ opacity: isPerspective ? 0.35 : 1 }}>
+          <path d="M9.5 2.5A5 5 0 1 0 11 6" />
+          <polyline points="11,2 11,6 7,6" />
+        </svg>
+        <input
+          type="number"
+          className={styles.numInputNarrow}
+          value={parseFloat(params.rotation.toFixed(1))}
+          onChange={e => commitRotation(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          disabled={isPerspective}
+          step={0.1}
+          min={-180}
+          max={180}
+        />
+        <span className={styles.groupLabel}>°</span>
+      </div>
+
+      <div className={styles.sep} />
+
+      {/* Interpolation */}
+      <span className={styles.groupLabel}>Interp</span>
+      <select
+        className={styles.selectInput}
+        value={interpolation}
+        onChange={e => setInterp(e.target.value as TransformInterpolation)}
+      >
+        <option value="bilinear">Bilinear</option>
+        <option value="nearest">Nearest Neighbour</option>
+        <option value="bicubic">Bicubic</option>
+      </select>
+
+      <div className={styles.sep} />
+
+      {/* Mode toggles */}
+      <div className={styles.modeGroup}>
+        <button
+          className={handleMode === 'scale' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => setMode('scale')}
+          type="button"
+        >Scale</button>
+        <button
+          className={handleMode === 'perspective' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => setMode('perspective')}
+          type="button"
+        >Perspective</button>
+        <button
+          className={handleMode === 'shear' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => setMode('shear')}
+          type="button"
+        >Shear</button>
+      </div>
+
+      <div className={styles.spacer} />
+
+      {/* Cancel / Apply */}
+      <button className={styles.cancelBtn} onClick={() => transformStore.triggerCancel()} type="button">
+        Cancel
+      </button>
+      <button className={styles.applyBtn} onClick={() => transformStore.triggerApply()} type="button">
+        Apply
+      </button>
+    </div>
+  )
+}

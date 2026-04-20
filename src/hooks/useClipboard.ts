@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import type { Dispatch, MutableRefObject } from 'react'
 import { selectionStore } from '@/store/selectionStore'
 import { clipboardStore } from '@/store/clipboardStore'
+import type { ClipboardData } from '@/store/clipboardStore'
 import { makeTabId } from '@/store/tabTypes'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
@@ -22,6 +23,39 @@ export interface UseClipboardReturn {
   handleCut:    () => void
   handlePaste:  () => void
   handleDelete: () => void
+}
+
+// ─── System clipboard helpers ─────────────────────────────────────────────────
+
+/** Encode an RGBA Uint8Array as a base64 PNG string using an OffscreenCanvas. */
+async function encodePng(data: Uint8Array, width: number, height: number): Promise<string> {
+  const canvas = new OffscreenCanvas(width, height)
+  const ctx = canvas.getContext('2d')!
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(data.buffer), width, height), 0, 0)
+  const blob = await canvas.convertToBlob({ type: 'image/png' })
+  const ab = await blob.arrayBuffer()
+  const bytes = new Uint8Array(ab)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+/** Decode a base64 PNG string to an RGBA Uint8Array. */
+async function decodePng(base64: string): Promise<{ data: Uint8Array; width: number; height: number } | null> {
+  try {
+    const binaryStr = atob(base64)
+    const bytes = new Uint8Array(binaryStr.length)
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+    const blob = new Blob([bytes], { type: 'image/png' })
+    const bitmap = await createImageBitmap(blob)
+    const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(bitmap, 0, 0)
+    const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
+    return { data: new Uint8Array(imageData.data.buffer), width: bitmap.width, height: bitmap.height }
+  } catch {
+    return null
+  }
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -74,6 +108,12 @@ export function useClipboard({
       }
     }
     clipboardStore.current = { data: bboxData, width: bboxW, height: bboxH, offsetX: minX, offsetY: minY }
+
+    // Also write to the system clipboard so the image can be pasted into other apps.
+    // Fire-and-forget — a write failure is non-fatal.
+    void encodePng(bboxData, bboxW, bboxH)
+      .then(b64 => window.api.clipboardWriteImage(b64))
+      .catch(() => { /* system clipboard write is best-effort */ })
   }, [state.activeLayerId, state.canvas, canvasHandleRef])
 
   const handleCut = useCallback((): void => {
@@ -102,30 +142,47 @@ export function useClipboard({
   }, [state.activeLayerId, state.layers, state.canvas, captureHistory, canvasHandleRef])
 
   const handlePaste = useCallback((): void => {
-    const clip = clipboardStore.current
-    if (!clip) return
-    const { width: dstW, height: dstH }          = state.canvas
-    const { data: srcData, width: srcW, height: srcH, offsetX, offsetY } = clip
+    void (async () => {
+      const { width: dstW, height: dstH } = state.canvas
 
-    const layerData = new Uint8Array(dstW * dstH * 4)
-    for (let sy = 0; sy < srcH; sy++) {
-      const dy = offsetY + sy
-      if (dy < 0 || dy >= dstH) continue
-      for (let sx = 0; sx < srcW; sx++) {
-        const dx = offsetX + sx
-        if (dx < 0 || dx >= dstW) continue
-        const si = (sy * srcW + sx) * 4
-        const di = (dy * dstW + dx) * 4
-        layerData[di]     = srcData[si]
-        layerData[di + 1] = srcData[si + 1]
-        layerData[di + 2] = srcData[si + 2]
-        layerData[di + 3] = srcData[si + 3]
+      // Prefer the system clipboard so images copied from other apps can be pasted.
+      let clipData: ClipboardData | null = null
+      try {
+        const pngBase64 = await window.api.clipboardReadImage()
+        if (pngBase64) {
+          const decoded = await decodePng(pngBase64)
+          if (decoded) {
+            const { data, width: srcW, height: srcH } = decoded
+            const internal = clipboardStore.current
+            if (internal && internal.width === srcW && internal.height === srcH) {
+              // Same dimensions as internal store → came from this session's copy;
+              // reuse stored offset so the paste lands back at its original position.
+              clipData = internal
+            } else {
+              // Image came from another app (or different dimensions) — paste centred.
+              clipData = {
+                data,
+                width: srcW,
+                height: srcH,
+                offsetX: Math.floor((dstW - srcW) / 2),
+                offsetY: Math.floor((dstH - srcH) / 2),
+              }
+            }
+          }
+        }
+      } catch {
+        // System clipboard read unavailable; fall through to internal store.
       }
-    }
-    const newId = makeTabId()
-    canvasHandleRef.current?.prepareNewLayer(newId, 'Paste', layerData)
-    pendingLayerLabelRef.current = 'Paste'
-    dispatch({ type: 'ADD_LAYER', payload: { id: newId, name: 'Paste', visible: true, opacity: 1, locked: false, blendMode: 'normal' } })
+
+      if (!clipData) clipData = clipboardStore.current
+      if (!clipData) return
+
+      const { data: srcData, width: srcW, height: srcH, offsetX, offsetY } = clipData
+      const newId = makeTabId()
+      canvasHandleRef.current?.prepareNewLayer(newId, 'Paste', srcData, srcW, srcH, offsetX, offsetY)
+      pendingLayerLabelRef.current = 'Paste'
+      dispatch({ type: 'ADD_LAYER', payload: { id: newId, name: 'Paste', visible: true, opacity: 1, locked: false, blendMode: 'normal' } })
+    })()
   }, [state.canvas, dispatch, canvasHandleRef, pendingLayerLabelRef])
 
   return { handleCopy, handleCut, handlePaste, handleDelete }

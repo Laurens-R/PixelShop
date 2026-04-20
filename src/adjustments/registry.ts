@@ -13,16 +13,19 @@ export const ADJUSTMENT_REGISTRY = [
     adjustmentType: 'brightness-contrast' as const,
     label: 'Brightness/Contrast…',
     defaultParams: { brightness: 0, contrast: 0 },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'hue-saturation' as const,
     label: 'Hue/Saturation…',
     defaultParams: { hue: 0, saturation: 0, lightness: 0 },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'color-vibrance' as const,
     label: 'Color Vibrance…',
     defaultParams: { vibrance: 0, saturation: 0 },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'color-balance' as const,
@@ -33,6 +36,7 @@ export const ADJUSTMENT_REGISTRY = [
       highlights: { cr: 0, mg: 0, yb: 0 },
       preserveLuminosity: true,
     },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'black-and-white' as const,
@@ -45,16 +49,19 @@ export const ADJUSTMENT_REGISTRY = [
       blues:    20,
       magentas: 80,
     },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'color-temperature' as const,
     label: 'Color Temperature…',
     defaultParams: { temperature: 0, tint: 0 },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'color-invert' as const,
     label: 'Invert',
     defaultParams: {},
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'selective-color' as const,
@@ -71,11 +78,13 @@ export const ADJUSTMENT_REGISTRY = [
       blacks:   { cyan: 0, magenta: 0, yellow: 0, black: 0 },
       mode: 'relative',
     },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'curves' as const,
     label: 'Curves…',
     defaultParams: createDefaultCurvesParams(),
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'color-grading' as const,
@@ -97,11 +106,13 @@ export const ADJUSTMENT_REGISTRY = [
       hue:         50,
       lumMix:      100,
     },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'reduce-colors' as const,
     label: 'Reduce Colors…',
     defaultParams: { mode: 'reduce', colorCount: 16, derivedPalette: null },
+    group: 'color-adjustments',
   },
   {
     adjustmentType: 'bloom' as const,
@@ -134,5 +145,11 @@ export const ADJUSTMENT_REGISTRY = [
       blur:      2,
       strength:  0.6,
     },
+  },
+  {
+    adjustmentType: 'color-key' as const,
+    label: 'Color Key…',
+    defaultParams: { keyColor: { r: 0, g: 255, b: 0 }, tolerance: 0, softness: 0 },
+    group: 'color-adjustments',
   },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

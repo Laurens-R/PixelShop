@@ -1,7 +1,30 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { selectionStore } from '@/store/selectionStore'
 import type { TextLayerState } from '@/types'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
+
+// ─── Display store (live position/size for options bar) ───────────────────────
+
+const moveDisplay = {
+  x: null as number | null,
+  y: null as number | null,
+  w: null as number | null,
+  h: null as number | null,
+  listeners: new Set<() => void>(),
+  subscribe(fn: () => void): void { this.listeners.add(fn) },
+  unsubscribe(fn: () => void): void { this.listeners.delete(fn) },
+  /**
+   * X/Y: top-left of the layer in canvas-space (origin = canvas top-left).
+   * W/H: pixel dimensions of the layer content.
+   */
+  set(offsetX: number, offsetY: number, layerW: number, layerH: number): void {
+    this.x = offsetX
+    this.y = offsetY
+    this.w = layerW
+    this.h = layerH
+    this.listeners.forEach(fn => fn())
+  },
+}
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -108,6 +131,7 @@ function createMoveHandler(): ToolHandler {
           textLayerOrigY = textLayerSnapshot.y
         }
       }
+      moveDisplay.set(ctx.layer.offsetX, ctx.layer.offsetY, ctx.layer.layerWidth, ctx.layer.layerHeight)
     },
 
     onPointerMove({ x, y }: ToolPointerPos, ctx: ToolContext) {
@@ -129,6 +153,7 @@ function createMoveHandler(): ToolHandler {
         ctx.layer.offsetY = originalOffsetY + dy
         ctx.render(ctx.layers)
       }
+      moveDisplay.set(ctx.layer.offsetX, ctx.layer.offsetY, ctx.layer.layerWidth, ctx.layer.layerHeight)
     },
 
     onPointerUp({ x, y }: ToolPointerPos, ctx: ToolContext) {
@@ -160,8 +185,30 @@ function createMoveHandler(): ToolHandler {
 
 // ─── Options UI ───────────────────────────────────────────────────────────────
 
-function MoveOptions(_props: { styles: ToolOptionsStyles }): React.JSX.Element {
-  return <></>
+function MoveOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
+  const [pos, setPos] = useState({ x: moveDisplay.x, y: moveDisplay.y, w: moveDisplay.w, h: moveDisplay.h })
+
+  useEffect(() => {
+    const sync = (): void => setPos({ x: moveDisplay.x, y: moveDisplay.y, w: moveDisplay.w, h: moveDisplay.h })
+    moveDisplay.subscribe(sync)
+    return () => moveDisplay.unsubscribe(sync)
+  }, [])
+
+  const fmt = (v: number | null): string => v !== null ? String(v) : '—'
+
+  return (
+    <>
+      <label className={styles.optLabel}>X:</label>
+      <span className={styles.optText}>{fmt(pos.x)}</span>
+      <label className={styles.optLabel}>Y:</label>
+      <span className={styles.optText}>{fmt(pos.y)}</span>
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>W:</label>
+      <span className={styles.optText}>{fmt(pos.w)}</span>
+      <label className={styles.optLabel}>H:</label>
+      <span className={styles.optText}>{fmt(pos.h)}</span>
+    </>
+  )
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import { dodgeTool, burnTool } from './dodge'
 import { textTool } from './text'
 import { shapeTool } from './shape'
 import { noopTool } from './noop'
+import { transformTool } from './transform'
 
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   pencil:       pencilTool,
@@ -37,6 +38,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   text:         textTool,
   shape:        shapeTool,
   hand:         noopTool,
+  transform:    transformTool,
 }
 
 export type { ToolDefinition, ToolHandler, ToolContext, ToolPointerPos, ToolOptionsStyles } from './types'

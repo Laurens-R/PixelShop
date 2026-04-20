@@ -19,6 +19,7 @@
 #include "resize.h"
 #include "dither.h"
 #include "curves_histogram.h"
+#include "transform.h"
 
 extern "C" {
 
@@ -114,6 +115,30 @@ void pixelops_remove_motion_blur(
     float angleDeg, int distance, int noiseReduction
 ) {
     filters_remove_motion_blur(pixels, width, height, angleDeg, distance, noiseReduction);
+}
+
+// ─── Affine Transform (src → dst, inverse-mapped) ───────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_affine_transform(
+    const uint8_t* src, int srcW, int srcH,
+    uint8_t* dst, int dstW, int dstH,
+    const float* invMatrix,
+    int interp
+) {
+    transform_affine(src, srcW, srcH, dst, dstW, dstH, invMatrix, interp);
+}
+
+// ─── Perspective Transform (src → dst, inverse homography) ──────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_perspective_transform(
+    const uint8_t* src, int srcW, int srcH,
+    uint8_t* dst, int dstW, int dstH,
+    const float* invH,
+    int interp
+) {
+    transform_perspective(src, srcW, srcH, dst, dstW, dstH, invH, interp);
 }
 
 } // extern "C"

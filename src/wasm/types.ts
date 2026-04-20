@@ -72,6 +72,20 @@ _pixelops_remove_motion_blur(
     pixelsPtr: number, width: number, height: number,
     angleDeg: number, distance: number, noiseReduction: number
   ): void
+
+  _pixelops_affine_transform(
+    srcPtr: number, srcW: number, srcH: number,
+    dstPtr: number, dstW: number, dstH: number,
+    invMatrixPtr: number,
+    interp: number
+  ): void
+
+  _pixelops_perspective_transform(
+    srcPtr: number, srcW: number, srcH: number,
+    dstPtr: number, dstW: number, dstH: number,
+    invHPtr: number,
+    interp: number
+  ): void
 }
 
 /** Factory function exported by the Emscripten-generated ES module */

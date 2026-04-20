@@ -24,3 +24,4 @@ export {
 } from './shaders/adjustments/bloom'
 export { CHROMATIC_ABERRATION_COMPUTE } from './shaders/adjustments/chromatic-aberration'
 export { HALATION_EXTRACT_COMPUTE } from './shaders/adjustments/halation'
+export { CK_COMPUTE } from './shaders/adjustments/color-key'

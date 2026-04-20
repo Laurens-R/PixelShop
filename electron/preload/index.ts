@@ -29,6 +29,10 @@ const api = {
     ipcRenderer.invoke('file:readPalette', path),
   writePaletteFile: (path: string, data: string): Promise<void> =>
     ipcRenderer.invoke('file:writePalette', path, data),
+  clipboardWriteImage: (pngBase64: string): Promise<void> =>
+    ipcRenderer.invoke('clipboard:write-image', pngBase64),
+  clipboardReadImage: (): Promise<string | null> =>
+    ipcRenderer.invoke('clipboard:read-image'),
 }
 
 if (process.contextIsolated) {

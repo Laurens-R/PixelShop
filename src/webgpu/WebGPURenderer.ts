@@ -31,6 +31,7 @@ import {
   BLOOM_COMPOSITE_COMPUTE,
   CHROMATIC_ABERRATION_COMPUTE,
   HALATION_EXTRACT_COMPUTE,
+  CK_COMPUTE,
 } from './shaders'
 import { initFilterCompute } from './filterCompute'
 import type { AdjustmentParamsMap } from '@/types'
@@ -114,6 +115,18 @@ export type AdjustmentRenderOp =
       visible:   boolean
       selMaskLayer?: GpuLayer
     }
+  | {
+      kind:      'color-key'
+      layerId:   string
+      /** Key color components pre-normalised to 0..1. */
+      keyR:      number
+      keyG:      number
+      keyB:      number
+      tolerance: number    // 0..100
+      softness:  number    // 0..100
+      visible:   boolean
+      selMaskLayer?: GpuLayer
+    }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: GpuLayer; mask?: GpuLayer }
@@ -181,6 +194,9 @@ export class WebGPURenderer {
   // Halation
   private readonly halationExtractPipeline: GPUComputePipeline
   private halationTexCache: { glowATex: GPUTexture; glowBTex: GPUTexture } | null = null
+
+  // Color Key
+  private readonly ckPipeline: GPUComputePipeline
 
   // Bloom intermediate texture cache — invalidated when quality changes
   private bloomTexCache: {
@@ -329,6 +345,7 @@ export class WebGPURenderer {
 
     this.caPipeline = this.createComputePipeline(CHROMATIC_ABERRATION_COMPUTE, 'cs_chromatic_aberration')
     this.halationExtractPipeline = this.createComputePipeline(HALATION_EXTRACT_COMPUTE, 'cs_halation_extract')
+    this.ckPipeline = this.createComputePipeline(CK_COMPUTE, 'cs_color_key')
 
     initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
   }
@@ -979,6 +996,14 @@ export class WebGPURenderer {
       this.encodeHalationPass(encoder, srcTex, dstTex, entry.threshold, entry.spread, entry.blur, entry.strength, entry.selMaskLayer)
       return
     }
+    if (entry.kind === 'color-key') {
+      const params = new Float32Array([
+        entry.keyR, entry.keyG, entry.keyB, entry.tolerance,
+        entry.softness, 0, 0, 0,
+      ])
+      this.encodeComputePass(encoder, this.ckPipeline, srcTex, dstTex, params, entry.selMaskLayer)
+      return
+    }
     const _exhaustive: never = entry
     return _exhaustive
   }
@@ -1315,7 +1340,8 @@ export class WebGPURenderer {
     const usage =
       GPUTextureUsage.TEXTURE_BINDING |
       GPUTextureUsage.STORAGE_BINDING |
-      GPUTextureUsage.COPY_DST
+      GPUTextureUsage.COPY_DST |
+      GPUTextureUsage.COPY_SRC
 
     const make = (tw: number, th: number): GPUTexture =>
       device.createTexture({ size: { width: tw, height: th }, format: 'rgba8unorm', usage })

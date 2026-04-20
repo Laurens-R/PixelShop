@@ -301,7 +301,8 @@ type DrawMode =
   | { t: 'idle' }
   | { t: 'draw';     id: string; sx: number; sy: number }
   | { t: 'move';     id: string; gx: number; gy: number
-      ocx: number; ocy: number; ox1: number; oy1: number; ox2: number; oy2: number }
+      ocx: number; ocy: number; ox1: number; oy1: number; ox2: number; oy2: number
+      last: ShapeLayerState }
   | { t: 'resize';   id: string; hi: number; last: ShapeLayerState }
   | { t: 'rotate';   id: string; ga: number; or: number; last: ShapeLayerState }
   | { t: 'endpoint'; id: string; ep: 0 | 1; last: ShapeLayerState }
@@ -342,6 +343,7 @@ function createShapeHandler(): ToolHandler {
             t: 'move', id: active.id, gx: x, gy: y,
             ocx: active.cx, ocy: active.cy,
             ox1: active.x1, oy1: active.y1, ox2: active.x2, oy2: active.y2,
+            last: active,
           }
           return
         }
@@ -399,6 +401,7 @@ function createShapeHandler(): ToolHandler {
           x1: mode.ox1 + dx, y1: mode.oy1 + dy,
           x2: mode.ox2 + dx, y2: mode.oy2 + dy,
         }
+        mode = { ...mode, last: updated }
       } else if (mode.t === 'resize') {
         updated = applyResize(shape, mode.hi, x, y)
         mode = { ...mode, last: updated }

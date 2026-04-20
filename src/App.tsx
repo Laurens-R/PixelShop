@@ -44,6 +44,11 @@ import { useCanvasTransforms } from '@/hooks/useCanvasTransforms'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
 import { useFilters } from '@/hooks/useFilters'
+import { useTransform } from '@/hooks/useTransform'
+import { transformStore } from '@/store/transformStore'
+import { ModalDialog } from '@/components/dialogs/ModalDialog/ModalDialog'
+import { DialogButton } from '@/components/widgets/DialogButton/DialogButton'
+import type { Tool } from '@/types'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
 import type { AdjustmentRegistrationEntry } from '@/adjustments/registry'
 import { FILTER_REGISTRY } from '@/filters/registry'
@@ -152,25 +157,41 @@ function AppContent(): React.JSX.Element {
     registerAdjMask,
   })
 
+  // ── Transform guard ───────────────────────────────────────────────
+  // Declared early so any hook/callback below can use requireTransformDecision.
+  // requireTransformDecision only depends on transformStore (module-level) and
+  // the state setter — no dependency on useTransform output.
+  const [pendingGuardedAction, setPendingGuardedAction] = useState<(() => void) | null>(null)
+
+  const requireTransformDecision = useCallback((action: () => void): void => {
+    if (transformStore.isActive) {
+      setPendingGuardedAction(() => action)
+      return
+    }
+    action()
+  }, [])
+
   // ── Filters ───────────────────────────────────────────────────────
   const handleOpenFilterDialog = useCallback((key: FilterKey): void => {
-    if (key === 'gaussian-blur') setShowGaussianBlurDialog(true)
-    if (key === 'box-blur')      setShowBoxBlurDialog(true)
-    if (key === 'radial-blur')   setShowRadialBlurDialog(true)
-    if (key === 'motion-blur')   setShowMotionBlurDialog(true)
-    if (key === 'remove-motion-blur') setShowRemoveMotionBlurDialog(true)
-    if (key === 'unsharp-mask')  setShowUnsharpMaskDialog(true)
-    if (key === 'smart-sharpen') setShowSmartSharpenDialog(true)
-    if (key === 'add-noise')     setShowAddNoiseDialog(true)
-    if (key === 'film-grain')    setShowFilmGrainDialog(true)
-    if (key === 'lens-blur')     setShowLensBlurDialog(true)
-    if (key === 'clouds')        setShowCloudsDialog(true)
-    if (key === 'median-filter') setShowMedianFilterDialog(true)
-    if (key === 'bilateral-filter') setShowBilateralFilterDialog(true)
-    if (key === 'reduce-noise') setShowReduceNoiseDialog(true)
-    if (key === 'render-lens-flare') setShowLensFlareDialog(true)
-    if (key === 'pixelate') setShowPixelateDialog(true)
-  }, [])
+    requireTransformDecision(() => {
+      if (key === 'gaussian-blur') setShowGaussianBlurDialog(true)
+      if (key === 'box-blur')      setShowBoxBlurDialog(true)
+      if (key === 'radial-blur')   setShowRadialBlurDialog(true)
+      if (key === 'motion-blur')   setShowMotionBlurDialog(true)
+      if (key === 'remove-motion-blur') setShowRemoveMotionBlurDialog(true)
+      if (key === 'unsharp-mask')  setShowUnsharpMaskDialog(true)
+      if (key === 'smart-sharpen') setShowSmartSharpenDialog(true)
+      if (key === 'add-noise')     setShowAddNoiseDialog(true)
+      if (key === 'film-grain')    setShowFilmGrainDialog(true)
+      if (key === 'lens-blur')     setShowLensBlurDialog(true)
+      if (key === 'clouds')        setShowCloudsDialog(true)
+      if (key === 'median-filter') setShowMedianFilterDialog(true)
+      if (key === 'bilateral-filter') setShowBilateralFilterDialog(true)
+      if (key === 'reduce-noise') setShowReduceNoiseDialog(true)
+      if (key === 'render-lens-flare') setShowLensFlareDialog(true)
+      if (key === 'pixelate') setShowPixelateDialog(true)
+    })
+  }, [requireTransformDecision])
 
   const filters = useFilters({
     layers:             state.layers,
@@ -196,11 +217,52 @@ function AppContent(): React.JSX.Element {
   const handleFitToWindow  = useCallback(() => { canvasHandleRef.current?.fitToWindow() }, [canvasHandleRef])
   const handleToggleGrid   = useCallback(() => { dispatch({ type: 'TOGGLE_GRID' }) }, [dispatch])
 
+  // ── Transform ─────────────────────────────────────────────────────
+  const { handleEnterTransform, handleApply: handleTransformApply, handleCancel: handleTransformCancel, isFreeTransformEnabled } = useTransform({
+    canvasHandleRef, stateRef, dispatch, captureHistory,
+  })
+
+  const handleToolChange = useCallback((tool: Tool): void => {
+    requireTransformDecision(() => dispatch({ type: 'SET_TOOL', payload: tool }))
+  }, [requireTransformDecision, dispatch])
+
+  const guardedSwitchTab = useCallback((toId: string): void => {
+    requireTransformDecision(() => handleSwitchTab(toId))
+  }, [requireTransformDecision, handleSwitchTab])
+
+  const guardedCloseTab = useCallback((toId: string): void => {
+    requireTransformDecision(() => handleCloseTab(toId))
+  }, [requireTransformDecision, handleCloseTab])
+
+  const handleTransformGuardApply = useCallback((): void => {
+    const pending = pendingGuardedAction
+    setPendingGuardedAction(null)
+    if (!pending) return
+    // Subscribe to the store so we run the pending action after the async WASM apply finishes.
+    const onComplete = (): void => {
+      if (!transformStore.isActive) {
+        transformStore.unsubscribe(onComplete)
+        pending()
+      }
+    }
+    transformStore.subscribe(onComplete)
+    handleTransformApply()
+  }, [pendingGuardedAction, handleTransformApply])
+
+  const handleTransformGuardDiscard = useCallback((): void => {
+    const pending = pendingGuardedAction
+    setPendingGuardedAction(null)
+    if (!pending) return
+    handleTransformCancel()
+    pending()
+  }, [pendingGuardedAction, handleTransformCancel])
+
   // ── Keyboard shortcuts ────────────────────────────────────────────
   useKeyboardShortcuts({
     handleUndo, handleRedo, handleCopy, handleCut, handlePaste,
     handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid,
     handleKeyboardShortcuts: useCallback(() => setShowShortcutsDialog(true), []),
+    handleFreeTransform: handleEnterTransform,
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -238,27 +300,29 @@ function AppContent(): React.JSX.Element {
         onFlattenImage={handleFlattenImage}
         onAbout={() => setShowAboutDialog(true)}
         onKeyboardShortcuts={() => setShowShortcutsDialog(true)}
-        onCreateAdjustmentLayer={adjustments.handleCreateAdjustmentLayer}
+        onCreateAdjustmentLayer={(type) => requireTransformDecision(() => adjustments.handleCreateAdjustmentLayer(type))}
         isAdjustmentMenuEnabled={adjustments.isAdjustmentMenuEnabled}
         adjustmentMenuItems={ADJUSTMENT_MENU_ITEMS}
         onOpenFilterDialog={handleOpenFilterDialog}
-        onInstantFilter={filters.handleInstantFilter}
+        onInstantFilter={(key) => requireTransformDecision(() => filters.handleInstantFilter(key))}
         isFiltersMenuEnabled={filters.isFiltersMenuEnabled}
         filterMenuItems={FILTER_MENU_ITEMS}
+        onFreeTransform={handleEnterTransform}
+        isFreeTransformEnabled={isFreeTransformEnabled}
       />
       <ToolOptionsBar />
       <TabBar
         tabs={tabInfos}
         activeTabId={activeTabId}
         activeZoom={state.canvas.zoom}
-        onSwitch={handleSwitchTab}
-        onClose={handleCloseTab}
+        onSwitch={guardedSwitchTab}
+        onClose={guardedCloseTab}
       />
 
       <div className={styles.workspace}>
         <Toolbar
           activeTool={state.activeTool}
-          onToolChange={(tool) => dispatch({ type: 'SET_TOOL', payload: tool })}
+          onToolChange={handleToolChange}
         />
         <main className={styles.canvasArea}>
           {tabs.map(tab => {
@@ -288,7 +352,7 @@ function AppContent(): React.JSX.Element {
           onMergeDown={handleMergeDown}
           onFlattenImage={handleFlattenImage}
           onRasterizeLayer={handleRasterizeLayer}
-          onOpenAdjustmentPanel={adjustments.handleOpenAdjustmentPanel}
+          onOpenAdjustmentPanel={(id) => requireTransformDecision(() => adjustments.handleOpenAdjustmentPanel(id))}
           onGeneratePalette={() => setShowGeneratePaletteDialog(true)}
         />
       </div>
@@ -529,6 +593,23 @@ function AppContent(): React.JSX.Element {
           dispatch({ type: 'SET_SWATCHES', payload: palette })
         }}
       />
+
+      {/* ── Transform guard — shown when switching away from an active transform ── */}
+      <ModalDialog
+        open={pendingGuardedAction !== null}
+        title="Transform in Progress"
+        width={360}
+        onClose={() => setPendingGuardedAction(null)}
+      >
+        <div style={{ padding: '16px 20px', fontSize: 13, color: 'var(--color-text)' }}>
+          You switched tools while a transform is active. Apply or discard it before continuing.
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '8px 16px 16px' }}>
+          <DialogButton onClick={() => setPendingGuardedAction(null)}>Go Back</DialogButton>
+          <DialogButton onClick={handleTransformGuardDiscard}>Discard</DialogButton>
+          <DialogButton onClick={handleTransformGuardApply} primary>Apply</DialogButton>
+        </div>
+      </ModalDialog>
     </div>
   )
 }

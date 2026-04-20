@@ -16,6 +16,7 @@ interface UseKeyboardShortcutsOptions {
   handleFitToWindow:        () => void
   handleToggleGrid:         () => void
   handleKeyboardShortcuts?: () => void
+  handleFreeTransform?:     () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ export function useKeyboardShortcuts({
   handleFitToWindow,
   handleToggleGrid,
   handleKeyboardShortcuts,
+  handleFreeTransform,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -39,7 +41,7 @@ export function useKeyboardShortcuts({
       if (e.key === 'Escape')                                  { selectionStore.clear(); cropStore.clear(); return }
       if (e.key === 'Delete' || e.key === 'Backspace')         { e.preventDefault(); handleDelete(); return }
       if (e.key === '?' && !e.ctrlKey && !e.altKey)            { e.preventDefault(); handleKeyboardShortcuts?.(); return }
-      if (!e.ctrlKey) return
+      if (!e.ctrlKey && !e.metaKey) return
       if      (e.key === 'z')              { e.preventDefault(); handleUndo() }
       else if (e.key === 'y')              { e.preventDefault(); handleRedo() }
       else if (e.key === 'c')              { e.preventDefault(); handleCopy() }
@@ -49,8 +51,9 @@ export function useKeyboardShortcuts({
       else if (e.key === '-')              { e.preventDefault(); handleZoomOut() }
       else if (e.key === '0')              { e.preventDefault(); handleFitToWindow() }
       else if (e.key === 'g')              { e.preventDefault(); handleToggleGrid() }
+      else if (e.key === 't')              { e.preventDefault(); handleFreeTransform?.() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform])
 }

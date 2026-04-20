@@ -44,6 +44,14 @@ export class SelectionStore {
   unsubscribe(fn: Listener): void { this.listeners.delete(fn) }
   private notify(): void           { for (const fn of this.listeners) fn() }
 
+  /** Restore a previously saved mask buffer (used by transform cancel). */
+  restoreMask(mask: Uint8Array): void {
+    this.mask = mask
+    this.pending = null
+    this.borderSegments = null
+    this.notify()
+  }
+
   clear(): void {
     this.mask = null
     this.pending = null

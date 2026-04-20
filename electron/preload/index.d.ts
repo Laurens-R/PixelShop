@@ -20,6 +20,8 @@ declare global {
       savePaletteAsDialog: (defaultPath?: string) => Promise<string | null>
       readPaletteFile: (path: string) => Promise<string>
       writePaletteFile: (path: string, data: string) => Promise<void>
+      clipboardWriteImage: (pngBase64: string) => Promise<void>
+      clipboardReadImage: () => Promise<string | null>
     }
   }
 

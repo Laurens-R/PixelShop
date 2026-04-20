@@ -11,6 +11,8 @@ import { brushOptions } from '@/tools/brush'
 import { eraserOptions } from '@/tools/eraser'
 import { selectionStore } from '@/store/selectionStore'
 import { cursorStore } from '@/store/cursorStore'
+import { transformStore } from '@/store/transformStore'
+import { drawTransformOverlay } from '@/tools/transform'
 import { TextLayerEditor } from './TextLayerEditor'
 import { rasterizeTextToLayer } from './textRasterizer'
 import { rasterizeShapeToLayer } from './shapeRasterizer'
@@ -390,6 +392,26 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     return unsubscribe
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive])
+
+  useEffect(() => {
+    if (!isActive || state.activeTool !== 'transform') return
+    const redraw = (): void => {
+      const oc = toolOverlayRef.current
+      if (!oc) return
+      drawTransformOverlay(oc, transformStore, zoomRef.current)
+    }
+    redraw()
+    transformStore.subscribe(redraw)
+    return () => {
+      transformStore.unsubscribe(redraw)
+      const oc = toolOverlayRef.current
+      if (oc) {
+        const ctx = oc.getContext('2d')
+        ctx?.clearRect(0, 0, oc.width, oc.height)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, state.activeTool])
 
   function buildMaskMap(): Map<string, GpuLayer> {
     const maskMap = new Map<string, GpuLayer>()

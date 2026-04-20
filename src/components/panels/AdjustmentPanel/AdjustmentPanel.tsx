@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
@@ -16,6 +16,7 @@ import { ReduceColorsPanel } from '../ReduceColorsPanel/ReduceColorsPanel'
 import { BloomOptions } from '../BloomOptions/BloomOptions'
 import { ChromaticAberrationOptions } from '../ChromaticAberrationOptions/ChromaticAberrationOptions'
 import { HalationOptions } from '../HalationOptions/HalationOptions'
+import { ColorKeyPanel } from '../ColorKeyPanel/ColorKeyPanel'
 import { ToolWindow } from '@/components'
 import styles from './AdjustmentPanel.module.scss'
 
@@ -44,6 +45,7 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'bloom':               return 'Bloom'
     case 'chromatic-aberration': return 'Chromatic Aberration'
     case 'halation':             return 'Halation'
+    case 'color-key':            return 'Color Key'
   }
 }
 
@@ -159,6 +161,15 @@ const HalationHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const ColorKeyHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+    <rect x="1.5" y="2.5" width="9" height="7" rx="0.5" />
+    <circle cx="6" cy="6" r="2" />
+    <line x1="1.5" y1="6" x2="4" y2="6" strokeOpacity="0.5" />
+    <line x1="8" y1="6" x2="10.5" y2="6" strokeOpacity="0.5" />
+  </svg>
+)
+
 function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }): React.JSX.Element {
   if (type === 'brightness-contrast') return <BrightnessContrastHeaderIcon />
   if (type === 'hue-saturation') return <HueSaturationHeaderIcon />
@@ -173,6 +184,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'bloom') return <BloomHeaderIcon />
   if (type === 'chromatic-aberration') return <ChromaticAberrationHeaderIcon />
   if (type === 'halation') return <HalationHeaderIcon />
+  if (type === 'color-key') return <ColorKeyHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
@@ -265,6 +277,12 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
         )}
         {adjLayer.adjustmentType === 'halation' && (
           <HalationOptions layer={adjLayer as HalationAdjustmentLayer} parentLayerName={parentLayerName} />
+        )}
+        {adjLayer.adjustmentType === 'color-key' && (
+          <ColorKeyPanel
+            layer={adjLayer as ColorKeyAdjustmentLayer}
+            parentLayerName={parentLayerName}
+          />
         )}
       </div>
     </ToolWindow>

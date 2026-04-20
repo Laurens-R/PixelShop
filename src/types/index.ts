@@ -21,6 +21,25 @@ export type Tool =
   | 'shape'
   | 'hand'
   | 'zoom'
+  | 'transform'
+
+// ─── Free Transform ───────────────────────────────────────────────────────────
+
+export type TransformInterpolation = 'nearest' | 'bilinear' | 'bicubic'
+export type TransformHandleMode   = 'scale' | 'perspective' | 'shear'
+
+export interface TransformParams {
+  x: number
+  y: number
+  w: number
+  h: number
+  rotation: number
+  pivotX: number
+  pivotY: number
+  shearX: number
+  shearY: number
+  perspectiveCorners: [Point, Point, Point, Point] | null
+}
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
@@ -179,6 +198,7 @@ export type AdjustmentType =
   | 'bloom'
   | 'chromatic-aberration'
   | 'halation'
+  | 'color-key'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -314,6 +334,14 @@ export interface AdjustmentParamsMap {
     blur:      number  // 1–5: number of H+V blur iterations (more = softer)
     strength:  number  // 0–1: composite intensity
   }
+  'color-key': {
+    /** Key color as sRGB bytes (0–255). */
+    keyColor:  { r: number; g: number; b: number }
+    /** Pixels with HSV distance ≤ tolerance are fully transparent. Range 0–100. */
+    tolerance: number
+    /** Width of the soft-edge transition zone beyond the tolerance boundary. Range 0–100. */
+    softness:  number
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -432,6 +460,12 @@ export interface HalationAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface ColorKeyAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-key'
+  params: AdjustmentParamsMap['color-key']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -447,6 +481,7 @@ export type AdjustmentLayerState =
   | BloomAdjustmentLayer
   | ChromaticAberrationAdjustmentLayer
   | HalationAdjustmentLayer
+  | ColorKeyAdjustmentLayer
 
 export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
 
