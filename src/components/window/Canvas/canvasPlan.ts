@@ -196,6 +196,7 @@ export function buildAdjustmentEntry(
       keyB:         b / 255,
       tolerance:    ls.params.tolerance,
       softness:     ls.params.softness,
+      dilation:     ls.params.dilation,
       visible:      ls.visible,
       selMaskLayer: mask,
     }

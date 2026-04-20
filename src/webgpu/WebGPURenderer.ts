@@ -124,6 +124,7 @@ export type AdjustmentRenderOp =
       keyB:      number
       tolerance: number    // 0..100
       softness:  number    // 0..100
+      dilation:  number    // 0..20 px
       visible:   boolean
       selMaskLayer?: GpuLayer
     }
@@ -999,7 +1000,7 @@ export class WebGPURenderer {
     if (entry.kind === 'color-key') {
       const params = new Float32Array([
         entry.keyR, entry.keyG, entry.keyB, entry.tolerance,
-        entry.softness, 0, 0, 0,
+        entry.softness, entry.dilation, 0, 0,
       ])
       this.encodeComputePass(encoder, this.ckPipeline, srcTex, dstTex, params, entry.selMaskLayer)
       return

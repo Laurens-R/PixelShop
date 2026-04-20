@@ -33,7 +33,7 @@ async function pickWithEyedropper(): Promise<string | null> {
 
 export function ColorKeyPanel({ layer, parentLayerName }: ColorKeyPanelProps): React.JSX.Element {
   const { dispatch } = useAppContext()
-  const { keyColor, tolerance, softness } = layer.params
+  const { keyColor, tolerance, softness, dilation } = layer.params
   const pct = (v: number, lo: number, hi: number): string => String((v - lo) / (hi - lo))
 
   const updateParams = (patch: Partial<typeof layer.params>): void => {
@@ -122,6 +122,30 @@ export function ColorKeyPanel({ layer, parentLayerName }: ColorKeyPanelProps): R
         />
       </div>
 
+      <div className={styles.row}>
+        <span className={styles.label}>Expand Edge</span>
+        <div className={styles.trackWrap}>
+          <input
+            type="range"
+            className={styles.track}
+            min={0} max={20} step={1}
+            value={dilation}
+            style={{ '--pct': pct(dilation, 0, 20) } as React.CSSProperties}
+            onChange={(e) => updateParams({ dilation: Number(e.target.value) })}
+          />
+        </div>
+        <input
+          type="number"
+          className={styles.numInput}
+          min={0} max={20} step={1}
+          value={dilation}
+          onChange={(e) => {
+            const v = e.target.valueAsNumber
+            if (!isNaN(v)) updateParams({ dilation: Math.min(20, Math.max(0, Math.round(v))) })
+          }}
+        />
+      </div>
+
       <div className={styles.footer}>
         <span className={styles.footerInfo}>
           <ParentConnectorIcon />
@@ -129,7 +153,7 @@ export function ColorKeyPanel({ layer, parentLayerName }: ColorKeyPanelProps): R
         </span>
         <button
           className={styles.resetBtn}
-          onClick={() => updateParams({ keyColor: { r: 0, g: 255, b: 0 }, tolerance: 0, softness: 0 })}
+          onClick={() => updateParams({ keyColor: { r: 0, g: 255, b: 0 }, tolerance: 0, softness: 0, dilation: 0 })}
           title="Reset to defaults"
         >
           Reset

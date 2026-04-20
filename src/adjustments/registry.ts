@@ -149,7 +149,7 @@ export const ADJUSTMENT_REGISTRY = [
   {
     adjustmentType: 'color-key' as const,
     label: 'Color Key…',
-    defaultParams: { keyColor: { r: 0, g: 255, b: 0 }, tolerance: 0, softness: 0 },
-    group: 'color-adjustments',
+    defaultParams: { keyColor: { r: 0, g: 255, b: 0 }, tolerance: 0, softness: 0, dilation: 0 },
+    group: 'real-time-effects',
   },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

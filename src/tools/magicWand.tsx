@@ -6,24 +6,48 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 
 // ─── Shared options ───────────────────────────────────────────────────────────
 
-export const wandOptions = { tolerance: 32, contiguous: true }
+export const wandOptions = { tolerance: 32, contiguous: true, feather: 0, dilation: 0 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 function createMagicWandHandler(): ToolHandler {
   return {
-    async onPointerDown({ x, y, shiftKey, altKey }: ToolPointerPos, ctx: ToolContext) {
+    onPointerDown({ x, y, shiftKey, altKey }: ToolPointerPos, ctx: ToolContext) {
       const mode: SelectionMode = altKey ? 'subtract' : shiftKey ? 'add' : 'set'
-      // Sample the flattened composite so the wand operates on what the user
-      // actually sees — not just the raw (possibly transparent) active layer.
-      // This makes tolerance meaningful even in multi-layer documents.
-      const flatData = await ctx.renderer.readFlattenedPixels(ctx.layers)
+
+      // Build a canvas-sized RGBA buffer containing only the active layer's
+      // pixels placed at the layer's offset. floodFillSelect indexes with
+      // canvas-space coordinates, so the buffer must be canvas-sized.
+      const { width: cw, height: ch } = selectionStore
+      const canvasData = new Uint8Array(cw * ch * 4)
+      const layer = ctx.layer
+      const lw = layer.layerWidth
+      const lh = layer.layerHeight
+      const ox = layer.offsetX
+      const oy = layer.offsetY
+      const src = layer.data
+      for (let ly = 0; ly < lh; ly++) {
+        const cy = oy + ly
+        if (cy < 0 || cy >= ch) continue
+        for (let lx = 0; lx < lw; lx++) {
+          const cx = ox + lx
+          if (cx < 0 || cx >= cw) continue
+          const si = (ly * lw + lx) * 4
+          const di = (cy * cw + cx) * 4
+          canvasData[di]     = src[si]
+          canvasData[di + 1] = src[si + 1]
+          canvasData[di + 2] = src[si + 2]
+          canvasData[di + 3] = src[si + 3]
+        }
+      }
       selectionStore.floodFillSelect(
         x, y,
-        flatData,
+        canvasData,
         wandOptions.tolerance,
         wandOptions.contiguous,
-        mode
+        mode,
+        wandOptions.feather,
+        wandOptions.dilation,
       )
     },
 
@@ -35,8 +59,10 @@ function createMagicWandHandler(): ToolHandler {
 // ─── Options UI ───────────────────────────────────────────────────────────────
 
 function MagicWandOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
-  const [tolerance, setTolerance]     = useState(wandOptions.tolerance)
-  const [contiguous, setContiguous]   = useState(wandOptions.contiguous)
+  const [tolerance, setTolerance]   = useState(wandOptions.tolerance)
+  const [contiguous, setContiguous] = useState(wandOptions.contiguous)
+  const [feather, setFeather]       = useState(wandOptions.feather)
+  const [dilation, setDilation]     = useState(wandOptions.dilation)
 
   return (
     <>
@@ -47,6 +73,18 @@ function MagicWandOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.
         max={255}
         inputWidth={42}
         onChange={v => { wandOptions.tolerance = v; setTolerance(v) }}
+      />
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>Feather:</label>
+      <SliderInput
+        value={feather} min={0} max={100} inputWidth={38} suffix="px"
+        onChange={v => { wandOptions.feather = v; setFeather(v) }}
+      />
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>Expand:</label>
+      <SliderInput
+        value={dilation} min={0} max={50} inputWidth={38} suffix="px"
+        onChange={v => { wandOptions.dilation = v; setDilation(v) }}
       />
       <span className={styles.optSep} />
       <label className={styles.optCheckLabel}>

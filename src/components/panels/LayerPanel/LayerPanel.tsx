@@ -130,7 +130,8 @@ export function LayerPanel({
   }
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const selectedIds = new Set(state.selectedLayerIds)
+  const setSelectedIds = (next: Set<string>): void => { dispatch({ type: 'SET_SELECTED_LAYERS', payload: [...next] }) }
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flipX: boolean } | null>(null)
   const dragSrcIdx = useRef<number | null>(null)
 

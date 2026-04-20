@@ -31,7 +31,8 @@ struct CKParams {
   keyColor  : vec3f,   // sRGB 0..1 key color  (bytes  0–11)
   tolerance : f32,     // 0..100               (byte  12)
   softness  : f32,     // 0..100               (byte  16)
-  // tail-padded to 32 bytes by WGSL (next multiple of vec3f's 16-byte alignment)
+  dilation  : f32,     // 0..20 px             (byte  20)
+  // tail-padded to 32 bytes
 }
 
 @group(0) @binding(0) var srcTex    : texture_2d<f32>;
@@ -39,6 +40,21 @@ struct CKParams {
 @group(0) @binding(2) var<uniform> params    : CKParams;
 @group(0) @binding(3) var selMask   : texture_2d<f32>;
 @group(0) @binding(4) var<uniform> maskFlags : MaskFlags;
+
+// ── Helper: compute keyed alpha for a single pixel ────────────────────────────
+fn keyedAlpha(src: vec4f, kHsv: vec3f, tol: f32, soft: f32) -> f32 {
+  if (src.a < 0.0001) { return 0.0; }
+  let pHsv   = rgb2hsv(src.rgb);
+  let dH_raw = abs(pHsv.x - kHsv.x);
+  let dH     = min(dH_raw, 1.0 - dH_raw) * 2.0;
+  let dS     = abs(pHsv.y - kHsv.y);
+  let dV     = abs(pHsv.z - kHsv.z);
+  let satW   = min(pHsv.y, kHsv.y);
+  let dist   = ((dH * satW) + dS + dV) / 3.0 * 100.0;
+  if (dist <= tol) { return 0.0; }
+  if (soft > 0.0001 && dist < tol + soft) { return src.a * (dist - tol) / soft; }
+  return src.a;
+}
 
 @compute @workgroup_size(8, 8)
 fn cs_color_key(@builtin(global_invocation_id) id: vec3u) {
@@ -50,23 +66,29 @@ fn cs_color_key(@builtin(global_invocation_id) id: vec3u) {
   // Already transparent — nothing to key; preserve as-is.
   if (src.a < 0.0001) { textureStore(dstTex, coord, src); return; }
 
-  let pHsv = rgb2hsv(src.rgb);
   let kHsv = rgb2hsv(params.keyColor);
-
-  let dH_raw = abs(pHsv.x - kHsv.x);
-  let dH     = min(dH_raw, 1.0 - dH_raw) * 2.0;
-  let dS     = abs(pHsv.y - kHsv.y);
-  let dV     = abs(pHsv.z - kHsv.z);
-  let satW   = min(pHsv.y, kHsv.y);
-  let dist   = ((dH * satW) + dS + dV) / 3.0 * 100.0;
-
   let tol  = params.tolerance;
   let soft = params.softness;
-  var alpha = src.a;
-  if (dist <= tol) {
-    alpha = 0.0;
-  } else if (soft > 0.0001 && dist < tol + soft) {
-    alpha = src.a * (dist - tol) / soft;
+
+  // Compute alpha for this pixel
+  var alpha = keyedAlpha(src, kHsv, tol, soft);
+
+  // Dilation: expand the keyed-out region by sampling the neighborhood.
+  // For each pixel, take the minimum alpha across all pixels within radius.
+  // This erodes the "keep" mask, making the transparent zone larger.
+  let dilRad = i32(params.dilation);
+  if (dilRad > 0 && alpha > 0.0) {
+    let kw   = 2 * dilRad + 1;
+    let kTot = kw * kw;
+    for (var ki = 0; ki < kTot; ki++) {
+      let dy = ki / kw - dilRad;
+      let dx = ki % kw - dilRad;
+      let nc = vec2i(coord.x + dx, coord.y + dy);
+      if (nc.x < 0 || nc.x >= i32(dims.x) || nc.y < 0 || nc.y >= i32(dims.y)) { continue; }
+      let nsrc = textureLoad(srcTex, nc, 0);
+      let nAlpha = keyedAlpha(nsrc, kHsv, tol, soft);
+      if (nAlpha < alpha) { alpha = nAlpha; }
+    }
   }
 
   let adjusted = vec4f(src.rgb, alpha);

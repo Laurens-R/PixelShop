@@ -28,14 +28,19 @@ The renderer is organized around a clear separation of concerns:
 ```
 src/
   App.tsx              ← thin orchestrator: composes hooks, renders layout
-  store/               ← global state (AppContext, CanvasContext)
+  store/               ← global state (AppContext, CanvasContext) + module-level singletons
   hooks/               ← all business logic
   components/          ← all UI
   tools/               ← drawing tool handlers + options UIs
-  webgl/               ← WebGL2 renderer
+  adjustments/         ← adjustment layer registry, curves data, AdjustmentIcons
+  filters/             ← filter registry
+  rasterization/       ← unified flatten/merge/export pipeline
+  webgpu/              ← WebGPU renderer, WGSL shaders
   wasm/                ← TypeScript wrapper over C++/WASM
   export/              ← file export helpers
   types/               ← shared TypeScript types
+  utils/               ← palette, color, and miscellaneous utilities
+  styles/              ← global SCSS
 ```
 
 **`App.tsx` is a thin orchestrator.** It composes hooks and renders the layout — nothing more. Business logic that would otherwise live inline in `App.tsx` belongs in a dedicated hook under `src/hooks/`.
@@ -67,34 +72,110 @@ Each tool exports two things:
 
 Drawing options (size, opacity, hardness, etc.) are stored in a **module-level options object** (e.g. `export const brushOptions = { size: 10, ... }`). This is intentional: pointer event handlers run synchronously and cannot read React state. The options object is also exported so `Canvas.tsx` can read the current brush size for cursor rendering without coupling to React state.
 
+Every handler factory receives a **`ToolContext`** on each pointer event:
+- `ctx.renderer` — the `WebGPURenderer` instance
+- `ctx.layer` — the active `GpuLayer` (layer-local pixel data + offset)
+- `ctx.layers` — all `GpuLayer` objects
+
+**Coordinate spaces:** `GpuLayer.data` is in **layer-local** space (`layerWidth × layerHeight × 4`). Canvas-space operations (e.g. `selectionStore.floodFillSelect`) require a canvas-sized buffer. When sampling only the active layer at canvas-space coordinates, scatter `layer.data` into a canvas-sized `Uint8Array` offset by `layer.offsetX, layer.offsetY`.
+
 ### State
 
-Global app state (active tool, colors, layers, swatches) flows through `AppContext` via `useReducer`. The pattern for adding new state:
+Global app state (active tool, colors, layers, swatches, selectedLayerIds) flows through `AppContext` via `useReducer`. The pattern for adding new state:
 1. Add the new field to `AppState` in `src/types/index.ts`.
 2. Add the reducer action to `AppContext.tsx`.
 3. Export `AppAction` so hooks outside `AppContext.tsx` can dispatch.
 
-Tab state (multi-document) lives in `useTabs`. Canvas pixel data lives in WebGL while a tab is active and is serialized to `savedLayerData` only when the tab is backgrounded. Operations that change the canvas dimensions (resize, crop) must increment `canvasKey` on the tab record to force a Canvas remount with the new size.
+Tab state (multi-document) lives in `useTabs`. Canvas pixel data lives in WebGPU while a tab is active and is serialized to `savedLayerData` only when the tab is backgrounded. Operations that change the canvas dimensions (resize, crop) must increment `canvasKey` on the tab record to force a Canvas remount with the new size.
 
 Avoid re-initializing canvas layers in effects that list `rendererRef.current` as a dependency — use a `hasInitializedRef` guard instead.
 
-### WebGL (`src/webgl/`)
+**Module-level singletons** (`src/store/`): stateful objects that tools and canvas components import directly without going through React. These include `selectionStore` (selection mask + flood-fill), `historyStore`, `clipboardStore`, `adjustmentClipboardStore`, `adjustmentPreviewStore`, `cursorStore`, `cropStore`, and `transformStore`. They are not React state; update them imperatively and call their `notify()` method to trigger subscribers.
 
-`WebGLRenderer.ts` is the low-level pixel read/write layer. It operates on `WebGLLayer` objects and exposes methods used by tools and layer operations. Do not bypass it to manipulate pixel data directly.
+**`selectedLayerIds`** is kept in `AppState` (not as local panel state) so that hooks like `useLayers` can act on multi-layer selections. Any action that resets the layer stack (`SET_ACTIVE_LAYER`, `REORDER_LAYERS`, `RESTORE_LAYERS`, `NEW_CANVAS`, `OPEN_FILE`, `RESTORE_TAB`, `SWITCH_TAB`) also resets `selectedLayerIds` to `[]`.
+
+### WebGPU (`src/webgpu/`)
+
+`WebGPURenderer.ts` is the GPU pixel read/write layer. It operates on `GpuLayer` objects:
+
+```ts
+interface GpuLayer {
+  id: string
+  name: string
+  texture: GPUTexture
+  data: Uint8Array        // layer-local RGBA, layerWidth × layerHeight × 4
+  layerWidth: number
+  layerHeight: number
+  offsetX: number         // position of layer top-left on the canvas
+  offsetY: number
+  opacity: number
+  visible: boolean
+  blendMode: string
+  dirtyRect: { lx: number; ly: number; rx: number; ry: number } | null
+}
+```
+
+Key methods used by tools and layer operations:
+- `readLayerPixels(layer)` → `Uint8Array` in **layer-local** space
+- `readFlattenedPixels(layers)` → async, canvas-sized composite buffer
+- `flushLayer(layer)` — uploads `layer.data` to GPU texture
+
+Do not bypass `WebGPURenderer` to manipulate pixel data directly.
+
+WGSL shaders live in `src/webgpu/shaders/`:
+- `adjustments/` — one file per adjustment type
+- `filters/` — one file per filter type
+- `composite.ts`, `blit.ts`, `checker.ts` — compositing and utility passes
+
+The render plan for the on-screen preview is built in `src/components/window/Canvas/canvasPlan.ts` and consumed by `WebGPURenderer`.
 
 Layer compositing for flatten/merge/export is centralized in the unified rasterization pipeline (`src/rasterization/`) and executed from a shared render plan. Do not add separate compositing implementations for these operations.
 
+### Adjustment Layers
+
+Adjustment layers are non-destructive pixel operations inserted into the layer stack. They are backed by WGSL compute shaders and rendered in real time.
+
+**Registry** (`src/adjustments/registry.ts`): every adjustment type is registered with a `label`, `defaultParams`, and a `group`:
+- `'color-adjustments'` — shown in the **Adjustments** top menu
+- `'real-time-effects'` — shown in the **Effects** top menu (bloom, chromatic-aberration, halation, color-key)
+
+**Adding a new adjustment type:**
+1. Add the `AdjustmentType` literal and its `AdjustmentParamsMap` entry in `src/types/index.ts`.
+2. Register it in `src/adjustments/registry.ts` with label, defaults, and group.
+3. Write the WGSL shader in `src/webgpu/shaders/adjustments/<type>.ts`.
+4. Add the `AdjustmentRenderOp` variant + uniform dispatch in `WebGPURenderer.ts`.
+5. Add the render-plan mapping in `src/components/window/Canvas/canvasPlan.ts`.
+6. Create a panel component in `src/components/panels/<TypeName>Panel/`.
+7. Ensure unified rasterization includes it for flatten/export/merge.
+
+The WGSL uniform struct must match the `Float32Array` passed from `WebGPURenderer.ts` **exactly** (byte offsets, padding, total size).
+
+### Filters
+
+Filters are destructive one-shot operations applied to the current pixel layer. They run as WebGPU compute passes and are dispatched from `useFilters`.
+
+**Registry** (`src/filters/registry.ts`): each `FilterKey` entry maps to a label and a dialog component. WGSL shaders live in `src/webgpu/shaders/filters/<key>.ts`.
+
+**Adding a new filter:**
+1. Add the `FilterKey` literal in `src/types/index.ts`.
+2. Register it in `src/filters/registry.ts`.
+3. Write the WGSL shader in `src/webgpu/shaders/filters/<key>.ts`.
+4. Add the dispatch path in `WebGPURenderer.ts` (or `filterCompute.ts`).
+5. Create a dialog in `src/components/dialogs/<Name>Dialog/`.
+6. Wire it up in `useFilters` and the Filters top menu.
+
 ### Unified Rasterization Pipeline
 
-- Flatten, merge, and export must all run through the same centralized rasterization pipeline. Do not add ad-hoc compositing paths for one operation.
-- GPU render-plan execution is the source of truth for compositing parity.
+- Flatten, merge, and export must all run through the same centralized rasterization pipeline (`src/rasterization/`). Do not add ad-hoc compositing paths for one operation.
+- The pipeline only supports `RasterBackend = 'gpu'`. There is no CPU fallback.
+- `rasterizeDocument({ plan, width, height, reason, renderer })` is the single entry point. `reason` is one of `'flatten' | 'export' | 'sample' | 'merge'`.
 - Temporary preview-bypass state must never leak into final flatten/export/merge outputs.
 - If flatten/export/merge execution fails, surface the error to the user. Never silently no-op.
 
 Maintenance checklist for new adjustment/filter types:
 1. Add the new adjustment/filter to the adjustment registry and related adjustment types.
 2. Add its render-plan entry mapping.
-3. Add its WebGL pass/shader path.
+3. Add its WebGPU pass/shader path.
 4. Ensure unified rasterization includes it for flatten/export/merge.
 5. Add or update parity tests across screen preview, flatten, and export outputs.
 
@@ -106,7 +187,7 @@ CPU fallback policy:
 
 - All pixel blending uses **Porter-Duff "over" compositing** via `blendPixelOver` in `bresenham.ts`.
 - Track per-stroke coverage with a `Map<number, number>` (key = packed pixel index, value = max effective alpha applied) to prevent opacity accumulation within a single stroke.
-- Thick brush shapes: **circle stamp** for hard edges; **capsule SDF** for anti-aliased thick lines. Both helpers live in `bresenham.ts`.
+- Thick brush shapes: **circle stamp** for hard edges; **capsule SDF** for anti-aliased thick lines. Both helpers live in `src/tools/algorithm/bresenham.ts`.
 
 ## Conventions
 
@@ -122,6 +203,14 @@ import styles from './MyComponent.module.scss'
 ### IPC
 
 Main → Renderer communication goes through `electron/main/ipc.ts` and the typed preload at `electron/preload/index.ts`. In the renderer, use `window.electron.ipcRenderer.*`. Never import Electron modules directly in `src/`.
+
+### Top Menu
+
+Menu order: **File → Edit → Layer → Adjustments → Effects → Filters → View → Help**
+
+- **Adjustments** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'color-adjustments'`
+- **Effects** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'real-time-effects'` (bloom, chromatic-aberration, halation, color-key)
+- **Layer** menu: New Layer, Duplicate Layer, Delete Layer | Rasterize Layer | Merge Selected, Merge Down, Merge Visible, Flatten Image
 
 ### Pointer / Tablet Input
 

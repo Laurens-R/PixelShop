@@ -15,6 +15,7 @@ export type AppAction =
   | { type: 'INSERT_LAYER_ABOVE'; payload: { layer: LayerState; aboveId: string } }
   | { type: 'REMOVE_LAYER'; payload: string }
   | { type: 'SET_ACTIVE_LAYER'; payload: string }
+  | { type: 'SET_SELECTED_LAYERS'; payload: string[] }
   | { type: 'TOGGLE_LAYER_VISIBILITY'; payload: string }
   | { type: 'TOGGLE_LAYER_LOCK'; payload: string }
   | { type: 'SET_LAYER_OPACITY'; payload: { id: string; opacity: number } }
@@ -59,6 +60,7 @@ const initialState: AppState = {
   swatchGroups: [],
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
+  selectedLayerIds: [],
   canvas: { width: 512, height: 512, zoom: 1, panX: 0, panY: 0, showGrid: false, gridSize: 16, gridColor: '#808080', gridType: 'normal' as GridType, backgroundFill: 'white', key: 0 },
   history: { canUndo: false, canRedo: false },
   openAdjustmentLayerId: null,
@@ -215,7 +217,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_OPEN_ADJUSTMENT':
       return { ...state, openAdjustmentLayerId: action.payload }
     case 'SET_ACTIVE_LAYER':
-      return { ...state, activeLayerId: action.payload }
+      return { ...state, activeLayerId: action.payload, selectedLayerIds: [] }
+
+    case 'SET_SELECTED_LAYERS':
+      return { ...state, selectedLayerIds: action.payload }
 
     case 'TOGGLE_LAYER_VISIBILITY':
       return {
@@ -260,7 +265,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       }
 
     case 'REORDER_LAYERS':
-      return { ...state, layers: action.payload }
+      return { ...state, layers: action.payload, selectedLayerIds: [] }
 
     case 'ADD_TEXT_LAYER':
       return {
@@ -311,6 +316,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
         activeLayerId: 'layer-0',
+        selectedLayerIds: [],
         canvas: {
           ...state.canvas,
           width: action.payload.width,
@@ -329,6 +335,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: action.payload.layers,
         activeLayerId: action.payload.activeLayerId,
+        selectedLayerIds: [],
         canvas: {
           ...state.canvas,
           width: action.payload.width,
@@ -346,6 +353,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: action.payload.layers,
         activeLayerId: action.payload.activeLayerId,
+        selectedLayerIds: [],
       }
 
     case 'RESIZE_CANVAS':
@@ -364,6 +372,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: action.payload.layers,
         activeLayerId: action.payload.activeLayerId,
+        selectedLayerIds: [],
         canvas: {
           ...state.canvas,
           width: action.payload.width,
@@ -384,6 +393,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: action.payload.layers,
         activeLayerId: action.payload.activeLayerId,
+        selectedLayerIds: [],
         canvas: {
           ...state.canvas,
           width: action.payload.width,

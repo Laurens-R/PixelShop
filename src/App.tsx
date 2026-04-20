@@ -48,7 +48,7 @@ import { useTransform } from '@/hooks/useTransform'
 import { transformStore } from '@/store/transformStore'
 import { ModalDialog } from '@/components/dialogs/ModalDialog/ModalDialog'
 import { DialogButton } from '@/components/widgets/DialogButton/DialogButton'
-import type { Tool } from '@/types'
+import type { Tool, LayerState } from '@/types'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
 import type { AdjustmentRegistrationEntry } from '@/adjustments/registry'
 import { FILTER_REGISTRY } from '@/filters/registry'
@@ -58,7 +58,12 @@ import styles from './App.module.scss'
 
 // ─── Statics ──────────────────────────────────────────────────────────────────
 
-const ADJUSTMENT_MENU_ITEMS = (ADJUSTMENT_REGISTRY as readonly AdjustmentRegistrationEntry[]).map(e => ({ type: e.adjustmentType, label: e.label, group: e.group }))
+const ADJUSTMENT_MENU_ITEMS = (ADJUSTMENT_REGISTRY as readonly AdjustmentRegistrationEntry[])
+  .filter(e => e.group !== 'real-time-effects')
+  .map(e => ({ type: e.adjustmentType, label: e.label, group: e.group }))
+const EFFECTS_MENU_ITEMS = (ADJUSTMENT_REGISTRY as readonly AdjustmentRegistrationEntry[])
+  .filter(e => e.group === 'real-time-effects')
+  .map(e => ({ type: e.adjustmentType, label: e.label, group: e.group }))
 const FILTER_MENU_ITEMS = FILTER_REGISTRY.map(e => ({ key: e.key, label: e.label, instant: e.instant, group: e.group }))
 
 // ─── AppContent ───────────────────────────────────────────────────────────────
@@ -270,6 +275,16 @@ function AppContent(): React.JSX.Element {
   const hasActiveDocument = tabs.length > 0
   const tabInfos: TabInfo[] = tabs.map(t => ({ id: t.id, title: t.title }))
 
+  const activeLayer = state.layers.find(l => l.id === state.activeLayerId) ?? null
+  const isRasterizeLayerEnabled = activeLayer !== null && !('type' in activeLayer && (activeLayer.type === 'mask' || activeLayer.type === 'adjustment'))
+  const effectiveSelectedIds = new Set(state.selectedLayerIds)
+  if (state.activeLayerId) effectiveSelectedIds.add(state.activeLayerId)
+  const isPixelRootLayer = (l: LayerState): boolean => !('type' in l) || l.type === 'text' || l.type === 'shape'
+  const isMergeSelectedEnabled = [...effectiveSelectedIds].filter(id => {
+    const l = state.layers.find(x => x.id === id)
+    return l !== undefined && isPixelRootLayer(l)
+  }).length >= 2
+
   return (
     <div className={styles.app}>
       <TopBar
@@ -298,11 +313,19 @@ function AppContent(): React.JSX.Element {
         onMergeDown={handleMergeDown}
         onMergeVisible={handleMergeVisible}
         onFlattenImage={handleFlattenImage}
+        onRasterizeLayer={state.activeLayerId ? () => handleRasterizeLayer(state.activeLayerId!) : undefined}
+        isRasterizeEnabled={isRasterizeLayerEnabled}
+        onMergeSelected={() => {
+          const ids = [...effectiveSelectedIds]
+          handleMergeSelected(ids)
+        }}
+        isMergeSelectedEnabled={isMergeSelectedEnabled}
         onAbout={() => setShowAboutDialog(true)}
         onKeyboardShortcuts={() => setShowShortcutsDialog(true)}
         onCreateAdjustmentLayer={(type) => requireTransformDecision(() => adjustments.handleCreateAdjustmentLayer(type))}
         isAdjustmentMenuEnabled={adjustments.isAdjustmentMenuEnabled}
         adjustmentMenuItems={ADJUSTMENT_MENU_ITEMS}
+        effectsMenuItems={EFFECTS_MENU_ITEMS}
         onOpenFilterDialog={handleOpenFilterDialog}
         onInstantFilter={(key) => requireTransformDecision(() => filters.handleInstantFilter(key))}
         isFiltersMenuEnabled={filters.isFiltersMenuEnabled}

@@ -341,6 +341,8 @@ export interface AdjustmentParamsMap {
     tolerance: number
     /** Width of the soft-edge transition zone beyond the tolerance boundary. Range 0–100. */
     softness:  number
+    /** Expand the keyed-out region by this many pixels. Range 0–20. */
+    dilation:  number
   }
 }
 
@@ -516,6 +518,8 @@ export interface AppState {
   swatchGroups: SwatchGroup[]
   layers: LayerState[]
   activeLayerId: string | null
+  /** Layer IDs ctrl/cmd-clicked in the Layers panel for multi-selection operations. */
+  selectedLayerIds: string[]
   canvas: CanvasState
   history: {
     canUndo: boolean

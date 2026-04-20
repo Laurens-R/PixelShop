@@ -143,7 +143,9 @@ export class SelectionStore {
     layerData: Uint8Array,
     tolerance: number,
     contiguous: boolean,
-    mode: SelectionMode = 'set'
+    mode: SelectionMode = 'set',
+    feather = 0,
+    dilation = 0,
   ): void {
     const { width: w, height: h } = this
     if (sx < 0 || sx >= w || sy < 0 || sy >= h) return
@@ -188,11 +190,39 @@ export class SelectionStore {
     }
 
     this.pending = null
+    if (dilation > 0) this.applyDilate(m, dilation)
+    if (feather > 0) this.applyFeather(m, feather)
     this.applyMask(m, mode)
     this.notify()
   }
 
   // ── Internals ───────────────────────────────────────────────────────────────
+
+  /**
+   * Morphological dilation: expand selected region by `radius` pixels (square kernel).
+   * Each pixel takes the maximum value within the kernel neighborhood.
+   */
+  private applyDilate(mask: Uint8Array, radius: number): void {
+    if (radius <= 0) return
+    const { width: w, height: h } = this
+    const r = Math.round(radius)
+    const tmp = new Uint8Array(w * h)
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let maxV = 0
+        for (let dy = -r; dy <= r; dy++) {
+          const ny = Math.max(0, Math.min(h - 1, y + dy))
+          for (let dx = -r; dx <= r; dx++) {
+            const nx = Math.max(0, Math.min(w - 1, x + dx))
+            const v = mask[ny * w + nx]
+            if (v > maxV) maxV = v
+          }
+        }
+        tmp[y * w + x] = maxV
+      }
+    }
+    mask.set(tmp)
+  }
 
   /**
    * In-place separable Gaussian blur on a 0–255 mask.
