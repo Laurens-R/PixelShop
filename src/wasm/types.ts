@@ -86,6 +86,22 @@ _pixelops_remove_motion_blur(
     invHPtr: number,
     interp: number
   ): void
+
+  /**
+   * Content-aware inpainting via PatchMatch.
+   * pixels: RGBA source, width×height×4 bytes.
+   * mask:   single-channel fill mask, width×height bytes (255 = fill, 0 = source).
+   * patchSize: patch half-radius (recommended: 4 → 9×9 patches).
+   * out:    pre-allocated RGBA output buffer, same size as pixels.
+   */
+  _pixelops_inpaint(
+    pixelsPtr: number,
+    width: number,
+    height: number,
+    maskPtr: number,
+    patchSize: number,
+    outPtr: number
+  ): void
 }
 
 /** Factory function exported by the Emscripten-generated ES module */

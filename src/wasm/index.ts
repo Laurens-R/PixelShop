@@ -297,3 +297,40 @@ export async function applyPerspectiveTransform(
     m._free(matPtr)
   }
 }
+
+/**
+ * Content-aware inpainting (PatchMatch).
+ *
+ * @param pixels   RGBA flat canvas composite, width × height × 4 bytes.
+ * @param width    Canvas width in pixels.
+ * @param height   Canvas height in pixels.
+ * @param mask     Single-channel fill mask from selectionStore.mask,
+ *                 width × height bytes (255 = fill region, 0 = source region).
+ * @returns        RGBA output buffer, same dimensions as pixels.
+ *                 Pixels outside the mask are unchanged copies of the input.
+ */
+export async function inpaintRegion(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  mask: Uint8Array,
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  const PATCH_SIZE = 4 // → 9×9 patches
+  const byteLen = pixels.byteLength // width * height * 4
+
+  const pixelsPtr = m._malloc(byteLen)
+  const maskPtr   = m._malloc(mask.byteLength)
+  const outPtr    = m._malloc(byteLen)
+  try {
+    m.HEAPU8.set(pixels, pixelsPtr)
+    m.HEAPU8.set(mask,   maskPtr)
+    m._pixelops_inpaint(pixelsPtr, width, height, maskPtr, PATCH_SIZE, outPtr)
+    // Re-read HEAPU8 in case WASM memory grew during the call
+    return m.HEAPU8.slice(outPtr, outPtr + byteLen)
+  } finally {
+    m._free(pixelsPtr)
+    m._free(maskPtr)
+    m._free(outPtr)
+  }
+}

@@ -34,6 +34,7 @@ import { ReduceNoiseDialog } from '@/components/dialogs/ReduceNoiseDialog/Reduce
 import { LensFlareDialog } from '@/components/dialogs/LensFlareDialog/LensFlareDialog'
 import { PixelateDialog } from '@/components/dialogs/PixelateDialog/PixelateDialog'
 import { GeneratePaletteDialog } from '@/components/dialogs/GeneratePaletteDialog/GeneratePaletteDialog'
+import { ContentAwareFillProgress } from '@/components'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -46,6 +47,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
 import { useFilters } from '@/hooks/useFilters'
 import { useTransform } from '@/hooks/useTransform'
+import { useContentAwareFill } from '@/hooks/useContentAwareFill'
 import { transformStore } from '@/store/transformStore'
 import { cloneStampStore } from '@/store/cloneStampStore'
 import { ModalDialog } from '@/components/dialogs/ModalDialog/ModalDialog'
@@ -99,9 +101,14 @@ function AppContent(): React.JSX.Element {
   const [showPixelateDialog,         setShowPixelateDialog]         = useState(false)
   const [showGeneratePaletteDialog,   setShowGeneratePaletteDialog]   = useState(false)
   const [cloneStampNotification,       setCloneStampNotification]       = useState<string | null>(null)
+  const [isContentAwareFilling,        setIsContentAwareFilling]        = useState(false)
+  const [contentAwareFillError,        setContentAwareFillError]        = useState<string | null>(null)
+  const [contentAwareFillLabel,        setContentAwareFillLabel]        = useState('Filling…')
+  const [hasSelection,                 setHasSelection]                 = useState(false)
 
   // ── Clone stamp source deletion notification ─────────────────────
   const cloneStampNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const contentAwareFillErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     cloneStampStore.onSourceDeleted = () => {
       setCloneStampNotification('⚠ Source layer was deleted — Alt+click to set a new source')
@@ -112,6 +119,19 @@ function AppContent(): React.JSX.Element {
       cloneStampStore.onSourceDeleted = null
       if (cloneStampNotifTimerRef.current !== null) clearTimeout(cloneStampNotifTimerRef.current)
     }
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (contentAwareFillErrorTimerRef.current !== null) clearTimeout(contentAwareFillErrorTimerRef.current)
+    }
+  }, [])
+
+  // ── Selection state for menu enabled sync ────────────────────────
+  useEffect(() => {
+    const update = (): void => setHasSelection(selectionStore.hasSelection())
+    selectionStore.subscribe(update)
+    return () => selectionStore.unsubscribe(update)
   }, [])
 
   // ── Tab management ────────────────────────────────────────────────
@@ -232,6 +252,18 @@ function AppContent(): React.JSX.Element {
     stateRef,
   })
 
+  // ── Content-Aware Fill / Delete ────────────────────────────────────
+  const { handleContentAwareFill, handleContentAwareDelete } = useContentAwareFill({
+    canvasHandleRef, stateRef, captureHistory, dispatch,
+    pendingLayerLabelRef, setIsContentAwareFilling,
+    setFillLabel: setContentAwareFillLabel,
+    onError: (msg) => {
+      setContentAwareFillError(msg)
+      if (contentAwareFillErrorTimerRef.current !== null) clearTimeout(contentAwareFillErrorTimerRef.current)
+      contentAwareFillErrorTimerRef.current = setTimeout(() => setContentAwareFillError(null), 4000)
+    },
+  })
+
   // ── View actions ──────────────────────────────────────────────────
   const handleUndo         = useCallback(() => { historyStore.undo() }, [])
   const handleRedo         = useCallback(() => { historyStore.redo() }, [])
@@ -292,6 +324,7 @@ function AppContent(): React.JSX.Element {
     handleFreeTransform: handleEnterTransform,
     handleInvertSelection: useCallback(() => selectionStore.invert(), []),
     handleCloneStamp: useCallback(() => handleToolChange('clone-stamp'), [handleToolChange]),
+    handleContentAwareDelete: useCallback(() => void handleContentAwareDelete(), [handleContentAwareDelete]),
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -345,6 +378,8 @@ function AppContent(): React.JSX.Element {
       case 'copy':            handleCopy(); break
       case 'paste':           handlePaste(); break
       case 'delete':          handleDelete(); break
+      case 'contentAwareFill':   void handleContentAwareFill();   break
+      case 'contentAwareDelete': void handleContentAwareDelete(); break
       case 'resizeImage':     setShowResizeDialog(true); break
       case 'resizeCanvas':    setShowResizeCanvasDialog(true); break
       case 'freeTransform':   requireTransformDecision(handleEnterTransform); break
@@ -374,6 +409,7 @@ function AppContent(): React.JSX.Element {
     handleRasterizeLayer, handleGroupLayers, handleUngroupLayers, handleMergeSelected,
     handleMergeDown, handleMergeVisible, handleFlattenImage, handleZoomIn, handleZoomOut,
     handleFitToWindow, handleToggleGrid, handleEnterTransform,
+    handleContentAwareFill, handleContentAwareDelete,
     state.activeLayerId, effectiveSelectedIds,
   ])
 
@@ -398,16 +434,18 @@ function AppContent(): React.JSX.Element {
   useEffect(() => {
     if (!isMac) return
     const enabled: Record<string, boolean> = {
-      freeTransform:  isFreeTransformEnabled,
-      rasterizeLayer: isRasterizeLayerEnabled,
-      mergeSelected:  isMergeSelectedEnabled,
+      freeTransform:    isFreeTransformEnabled,
+      rasterizeLayer:   isRasterizeLayerEnabled,
+      mergeSelected:    isMergeSelectedEnabled,
+      contentAwareFill:   hasSelection && !isContentAwareFilling,
+      contentAwareDelete: hasSelection && !isContentAwareFilling,
     }
     for (const ai of ADJUSTMENT_MENU_ITEMS) enabled[`adj:${ai.type}`]   = adjustments.isAdjustmentMenuEnabled
     for (const ei of EFFECTS_MENU_ITEMS)    enabled[`adj:${ei.type}`]   = adjustments.isAdjustmentMenuEnabled
     for (const fi of FILTER_MENU_ITEMS)     enabled[`filter:${fi.key}`] = filters.isFiltersMenuEnabled
     window.api.setMenuItemEnabled(enabled)
   }, [isMac, isFreeTransformEnabled, isRasterizeLayerEnabled, isMergeSelectedEnabled,
-      adjustments.isAdjustmentMenuEnabled, filters.isFiltersMenuEnabled])
+      hasSelection, isContentAwareFilling, adjustments.isAdjustmentMenuEnabled, filters.isFiltersMenuEnabled])
 
   // Sync Show Grid checkbox state.
   useEffect(() => {
@@ -499,6 +537,7 @@ function AppContent(): React.JSX.Element {
               />
             )
           })}
+          <ContentAwareFillProgress visible={isContentAwareFilling} label={contentAwareFillLabel} sublabel="Analyzing image…" />
         </main>
         <RightPanel
           activeTabId={activeTabId}
@@ -756,7 +795,10 @@ function AppContent(): React.JSX.Element {
         <div className={styles.notification}>{cloneStampNotification}</div>
       )}
 
-      {/* ── Transform guard — shown when switching away from an active transform ── */}
+      {contentAwareFillError && (
+        <div className={styles.notification}>{contentAwareFillError}</div>
+      )}
+
       <ModalDialog
         open={pendingGuardedAction !== null}
         title="Transform in Progress"

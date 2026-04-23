@@ -19,6 +19,7 @@ interface UseKeyboardShortcutsOptions {
   handleFreeTransform?:     () => void
   handleInvertSelection?:   () => void
   handleCloneStamp?:        () => void
+  handleContentAwareDelete?: () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -38,11 +39,13 @@ export function useKeyboardShortcuts({
   handleFreeTransform,
   handleInvertSelection,
   handleCloneStamp,
+  handleContentAwareDelete,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'Escape')                                  { selectionStore.clear(); cropStore.clear(); return }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && e.shiftKey) { e.preventDefault(); handleContentAwareDelete?.(); return }
       if (e.key === 'Delete' || e.key === 'Backspace')         { e.preventDefault(); handleDelete(); return }
       if (e.key === '?' && !e.ctrlKey && !e.altKey)            { e.preventDefault(); handleKeyboardShortcuts?.(); return }
       if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
@@ -63,5 +66,5 @@ export function useKeyboardShortcuts({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleCloneStamp])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleCloneStamp, handleContentAwareDelete])
 }

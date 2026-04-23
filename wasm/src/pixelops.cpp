@@ -20,6 +20,7 @@
 #include "dither.h"
 #include "curves_histogram.h"
 #include "transform.h"
+#include "inpaint.h"
 
 extern "C" {
 
@@ -139,6 +140,17 @@ void pixelops_perspective_transform(
     int interp
 ) {
     transform_perspective(src, srcW, srcH, dst, dstW, dstH, invH, interp);
+}
+
+// ─── Content-Aware Inpainting (PatchMatch) ───────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_inpaint(
+    const uint8_t* pixels, int width, int height,
+    const uint8_t* mask, int patchSize,
+    uint8_t* out
+) {
+    inpaint(pixels, width, height, mask, patchSize, out);
 }
 
 } // extern "C"
