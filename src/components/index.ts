@@ -85,3 +85,5 @@ export { GeneratePaletteDialog } from './dialogs/GeneratePaletteDialog/GenerateP
 export type { GeneratePaletteDialogProps } from './dialogs/GeneratePaletteDialog/GeneratePaletteDialog'
 export { ContentAwareFillProgress } from './dialogs/ContentAwareFillProgress/ContentAwareFillProgress'
 export type { ContentAwareFillProgressProps } from './dialogs/ContentAwareFillProgress/ContentAwareFillProgress'
+export { ContentAwareFillOptionsDialog } from './dialogs/ContentAwareFillOptionsDialog/ContentAwareFillOptionsDialog'
+export type { ContentAwareFillOptionsDialogProps } from './dialogs/ContentAwareFillOptionsDialog/ContentAwareFillOptionsDialog'

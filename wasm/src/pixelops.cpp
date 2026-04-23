@@ -148,9 +148,10 @@ EMSCRIPTEN_KEEPALIVE
 void pixelops_inpaint(
     const uint8_t* pixels, int width, int height,
     const uint8_t* mask, int patchSize,
+    const uint8_t* sourceMask,  // nullable; 1=eligible source, 0=excluded. null=unconstrained.
     uint8_t* out
 ) {
-    inpaint(pixels, width, height, mask, patchSize, out);
+    inpaint(pixels, width, height, mask, patchSize, sourceMask, out);
 }
 
 } // extern "C"

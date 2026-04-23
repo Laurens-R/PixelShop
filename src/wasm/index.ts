@@ -306,6 +306,8 @@ export async function applyPerspectiveTransform(
  * @param height   Canvas height in pixels.
  * @param mask     Single-channel fill mask from selectionStore.mask,
  *                 width × height bytes (255 = fill region, 0 = source region).
+ * @param sourceMask  Optional source-eligibility mask (1 = eligible, 0 = excluded).
+ *                    Pass undefined for unconstrained (sample entire image).
  * @returns        RGBA output buffer, same dimensions as pixels.
  *                 Pixels outside the mask are unchanged copies of the input.
  */
@@ -314,23 +316,30 @@ export async function inpaintRegion(
   width: number,
   height: number,
   mask: Uint8Array,
+  sourceMask?: Uint8Array,
 ): Promise<Uint8Array> {
   const m = await getPixelOps()
   const PATCH_SIZE = 4 // → 9×9 patches
   const byteLen = pixels.byteLength // width * height * 4
 
-  const pixelsPtr = m._malloc(byteLen)
-  const maskPtr   = m._malloc(mask.byteLength)
-  const outPtr    = m._malloc(byteLen)
+  const pixelsPtr    = m._malloc(byteLen)
+  const maskPtr      = m._malloc(mask.byteLength)
+  const outPtr       = m._malloc(byteLen)
+  let   sourceMaskPtr = 0
   try {
     m.HEAPU8.set(pixels, pixelsPtr)
     m.HEAPU8.set(mask,   maskPtr)
-    m._pixelops_inpaint(pixelsPtr, width, height, maskPtr, PATCH_SIZE, outPtr)
+    if (sourceMask !== undefined) {
+      sourceMaskPtr = m._malloc(sourceMask.byteLength)
+      m.HEAPU8.set(sourceMask, sourceMaskPtr)
+    }
+    m._pixelops_inpaint(pixelsPtr, width, height, maskPtr, PATCH_SIZE, sourceMaskPtr, outPtr)
     // Re-read HEAPU8 in case WASM memory grew during the call
     return m.HEAPU8.slice(outPtr, outPtr + byteLen)
   } finally {
     m._free(pixelsPtr)
     m._free(maskPtr)
+    if (sourceMaskPtr !== 0) m._free(sourceMaskPtr)
     m._free(outPtr)
   }
 }

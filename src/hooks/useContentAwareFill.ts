@@ -5,6 +5,7 @@ import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { selectionStore } from '@/store/selectionStore'
 import { inpaintRegion, getPixelOps } from '@/wasm'
+import { computeSourceMask } from '@/utils/computeSourceMask'
 import { extractErrorMessage } from '@/utils/userFeedback'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,8 +22,8 @@ interface UseContentAwareFillOptions {
 }
 
 export interface UseContentAwareFillReturn {
-  handleContentAwareFill:   () => Promise<void>
-  handleContentAwareDelete: () => Promise<void>
+  runContentAwareFill:   (samplingRadius: number) => Promise<void>
+  runContentAwareDelete: (samplingRadius: number) => Promise<void>
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ export function useContentAwareFill({
 
   const isRunningRef = useRef(false)
 
-  const runInpaint = useCallback(async (eraseActiveLayer: boolean): Promise<void> => {
+  const runInpaint = useCallback(async (eraseActiveLayer: boolean, samplingRadius: number): Promise<void> => {
     if (isRunningRef.current) return
     isRunningRef.current = true
     const handle = canvasHandleRef.current
@@ -76,6 +77,24 @@ export function useContentAwareFill({
       return
     }
 
+    // Compute source mask from sampling radius
+    const sourceMask = computeSourceMask(mask, cw, ch, samplingRadius)
+
+    if (sourceMask !== null) {
+      const PATCH_SIZE = 4
+      const MIN_SOURCE_PIXELS = (2 * PATCH_SIZE + 1) ** 2
+      let eligibleCount = 0
+      for (let i = 0; i < sourceMask.length; i++) eligibleCount += sourceMask[i]
+      if (eligibleCount < MIN_SOURCE_PIXELS) {
+        onError(
+          'Sampling radius is too small — no source pixels available. ' +
+          'Try a larger radius or set it to 0.'
+        )
+        isRunningRef.current = false
+        return
+      }
+    }
+
     if (!handle) return
 
     const label = eraseActiveLayer ? 'Content-Aware Delete' : 'Content-Aware Fill'
@@ -88,7 +107,7 @@ export function useContentAwareFill({
       const { data: composite, width, height } = await handle.rasterizeComposite('sample')
 
       // Run PatchMatch inpainting — mask is canvas-space 1ch (255=fill, 0=source)
-      const inpainted = await inpaintRegion(composite, width, height, mask)
+      const inpainted = await inpaintRegion(composite, width, height, mask, sourceMask ?? undefined)
 
       // Build fill layer: inpainted pixels only where mask is set; transparent elsewhere
       const fillLayerData = new Uint8Array(width * height * 4)
@@ -150,8 +169,8 @@ export function useContentAwareFill({
     }
   }, [canvasHandleRef, stateRef, captureHistory, dispatch, pendingLayerLabelRef, setIsContentAwareFilling, setFillLabel, onError])
 
-  const handleContentAwareFill   = useCallback(() => runInpaint(false), [runInpaint])
-  const handleContentAwareDelete = useCallback(() => runInpaint(true),  [runInpaint])
+  const runContentAwareFill   = useCallback((samplingRadius: number) => runInpaint(false, samplingRadius), [runInpaint])
+  const runContentAwareDelete = useCallback((samplingRadius: number) => runInpaint(true,  samplingRadius), [runInpaint])
 
-  return { handleContentAwareFill, handleContentAwareDelete }
+  return { runContentAwareFill, runContentAwareDelete }
 }

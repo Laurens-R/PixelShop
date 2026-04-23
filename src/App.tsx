@@ -35,6 +35,7 @@ import { LensFlareDialog } from '@/components/dialogs/LensFlareDialog/LensFlareD
 import { PixelateDialog } from '@/components/dialogs/PixelateDialog/PixelateDialog'
 import { GeneratePaletteDialog } from '@/components/dialogs/GeneratePaletteDialog/GeneratePaletteDialog'
 import { ContentAwareFillProgress } from '@/components'
+import { ContentAwareFillOptionsDialog } from '@/components/dialogs/ContentAwareFillOptionsDialog/ContentAwareFillOptionsDialog'
 import { useTabs } from '@/hooks/useTabs'
 import { useHistory } from '@/hooks/useHistory'
 import { useFileOps } from '@/hooks/useFileOps'
@@ -100,6 +101,8 @@ function AppContent(): React.JSX.Element {
   const [showLensFlareDialog,       setShowLensFlareDialog]       = useState(false)
   const [showPixelateDialog,         setShowPixelateDialog]         = useState(false)
   const [showGeneratePaletteDialog,   setShowGeneratePaletteDialog]   = useState(false)
+  const [showContentAwareFillOptionsDialog, setShowContentAwareFillOptionsDialog] = useState(false)
+  const [contentAwareFillOptionsMode,  setContentAwareFillOptionsMode]  = useState<'fill' | 'delete'>('fill')
   const [cloneStampNotification,       setCloneStampNotification]       = useState<string | null>(null)
   const [isContentAwareFilling,        setIsContentAwareFilling]        = useState(false)
   const [contentAwareFillError,        setContentAwareFillError]        = useState<string | null>(null)
@@ -253,7 +256,7 @@ function AppContent(): React.JSX.Element {
   })
 
   // ── Content-Aware Fill / Delete ────────────────────────────────────
-  const { handleContentAwareFill, handleContentAwareDelete } = useContentAwareFill({
+  const { runContentAwareFill, runContentAwareDelete } = useContentAwareFill({
     canvasHandleRef, stateRef, captureHistory, dispatch,
     pendingLayerLabelRef, setIsContentAwareFilling,
     setFillLabel: setContentAwareFillLabel,
@@ -263,6 +266,20 @@ function AppContent(): React.JSX.Element {
       contentAwareFillErrorTimerRef.current = setTimeout(() => setContentAwareFillError(null), 4000)
     },
   })
+
+  const handleOpenCafDialog = useCallback((mode: 'fill' | 'delete'): void => {
+    setContentAwareFillOptionsMode(mode)
+    setShowContentAwareFillOptionsDialog(true)
+  }, [])
+
+  const handleCafConfirm = useCallback((samplingRadius: number): void => {
+    setShowContentAwareFillOptionsDialog(false)
+    if (contentAwareFillOptionsMode === 'fill') {
+      void runContentAwareFill(samplingRadius)
+    } else {
+      void runContentAwareDelete(samplingRadius)
+    }
+  }, [contentAwareFillOptionsMode, runContentAwareFill, runContentAwareDelete])
 
   // ── View actions ──────────────────────────────────────────────────
   const handleUndo         = useCallback(() => { historyStore.undo() }, [])
@@ -324,7 +341,7 @@ function AppContent(): React.JSX.Element {
     handleFreeTransform: handleEnterTransform,
     handleInvertSelection: useCallback(() => selectionStore.invert(), []),
     handleCloneStamp: useCallback(() => handleToolChange('clone-stamp'), [handleToolChange]),
-    handleContentAwareDelete: useCallback(() => void handleContentAwareDelete(), [handleContentAwareDelete]),
+    handleContentAwareDelete: useCallback(() => handleOpenCafDialog('delete'), [handleOpenCafDialog]),
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -378,8 +395,8 @@ function AppContent(): React.JSX.Element {
       case 'copy':            handleCopy(); break
       case 'paste':           handlePaste(); break
       case 'delete':          handleDelete(); break
-      case 'contentAwareFill':   void handleContentAwareFill();   break
-      case 'contentAwareDelete': void handleContentAwareDelete(); break
+      case 'contentAwareFill':   handleOpenCafDialog('fill');   break
+      case 'contentAwareDelete': handleOpenCafDialog('delete'); break
       case 'resizeImage':     setShowResizeDialog(true); break
       case 'resizeCanvas':    setShowResizeCanvasDialog(true); break
       case 'freeTransform':   requireTransformDecision(handleEnterTransform); break
@@ -409,7 +426,7 @@ function AppContent(): React.JSX.Element {
     handleRasterizeLayer, handleGroupLayers, handleUngroupLayers, handleMergeSelected,
     handleMergeDown, handleMergeVisible, handleFlattenImage, handleZoomIn, handleZoomOut,
     handleFitToWindow, handleToggleGrid, handleEnterTransform,
-    handleContentAwareFill, handleContentAwareDelete,
+    handleOpenCafDialog,
     state.activeLayerId, effectiveSelectedIds,
   ])
 
@@ -789,6 +806,13 @@ function AppContent(): React.JSX.Element {
           captureHistory('Generate Palette', { swatches: palette })
           dispatch({ type: 'SET_SWATCHES', payload: palette })
         }}
+      />
+
+      <ContentAwareFillOptionsDialog
+        open={showContentAwareFillOptionsDialog}
+        mode={contentAwareFillOptionsMode}
+        onConfirm={handleCafConfirm}
+        onCancel={() => setShowContentAwareFillOptionsDialog(false)}
       />
 
       {cloneStampNotification && (

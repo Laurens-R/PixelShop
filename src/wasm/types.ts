@@ -92,6 +92,7 @@ _pixelops_remove_motion_blur(
    * pixels: RGBA source, width×height×4 bytes.
    * mask:   single-channel fill mask, width×height bytes (255 = fill, 0 = source).
    * patchSize: patch half-radius (recommended: 4 → 9×9 patches).
+   * sourceMaskPtr: pointer to source-eligibility mask (1=eligible, 0=excluded), or 0 for unconstrained.
    * out:    pre-allocated RGBA output buffer, same size as pixels.
    */
   _pixelops_inpaint(
@@ -100,6 +101,7 @@ _pixelops_remove_motion_blur(
     height: number,
     maskPtr: number,
     patchSize: number,
+    sourceMaskPtr: number,
     outPtr: number
   ): void
 }

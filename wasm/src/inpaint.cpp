@@ -25,6 +25,7 @@ struct PyramidLevel {
     int height = 0;
     std::vector<uint8_t> pixels;
     std::vector<uint8_t> mask;
+    std::vector<uint8_t> sourceMask;   // empty = unconstrained at this level
 };
 
 struct LevelBuffers {
@@ -133,6 +134,23 @@ static PyramidLevel downsampleLevel(const PyramidLevel& src) {
         }
     }
 
+    if (!src.sourceMask.empty()) {
+        dst.sourceMask.resize(static_cast<size_t>(dst.width) * dst.height, 0);
+        for (int y = 0; y < dst.height; ++y) {
+            for (int x = 0; x < dst.width; ++x) {
+                uint8_t sm = 0;
+                for (int oy = 0; oy < 2 && !sm; ++oy) {
+                    const int sy = clampI(y * 2 + oy, 0, src.height - 1);
+                    for (int ox = 0; ox < 2 && !sm; ++ox) {
+                        const int sx = clampI(x * 2 + ox, 0, src.width - 1);
+                        sm = static_cast<uint8_t>(sm | src.sourceMask[sy * src.width + sx]);
+                    }
+                }
+                dst.sourceMask[y * dst.width + x] = sm;
+            }
+        }
+    }
+
     return dst;
 }
 
@@ -140,6 +158,7 @@ static void buildLevelBuffers(
     const std::vector<uint8_t>& mask,
     int width,
     int height,
+    const uint8_t* sourceMask,
     LevelBuffers& buffers
 ) {
     const int n = width * height;
@@ -156,7 +175,7 @@ static void buildLevelBuffers(
             if (mask[idx]) {
                 buffers.isFill[idx] = 1;
                 buffers.fillPixels.emplace_back(x, y);
-            } else {
+            } else if (sourceMask == nullptr || sourceMask[idx] != 0) {
                 buffers.sourcePixels.emplace_back(x, y);
             }
         }
@@ -233,6 +252,7 @@ static void buildLevelBuffers(
 void inpaint(
     const uint8_t* pixels, int width, int height,
     const uint8_t* mask, int patchSize,
+    const uint8_t* sourceMask,
     uint8_t* out
 ) {
     const int n = width * height;
@@ -246,6 +266,9 @@ void inpaint(
     level0.height = height;
     level0.pixels.assign(pixels, pixels + static_cast<size_t>(n) * 4);
     level0.mask.assign(mask, mask + static_cast<size_t>(n));
+    if (sourceMask != nullptr) {
+        level0.sourceMask.assign(sourceMask, sourceMask + static_cast<size_t>(n));
+    }
 
     std::vector<PyramidLevel> levels;
     levels.push_back(std::move(level0));
@@ -283,7 +306,8 @@ void inpaint(
         const int levelN = w * h;
 
         LevelBuffers buffers;
-        buildLevelBuffers(level.mask, w, h, buffers);
+        const uint8_t* levelSourceMask = level.sourceMask.empty() ? nullptr : level.sourceMask.data();
+        buildLevelBuffers(level.mask, w, h, levelSourceMask, buffers);
 
         if (buffers.fillPixels.empty()) {
             prevNnf.clear();
@@ -324,6 +348,9 @@ void inpaint(
                     continue;
                 }
                 if (level.mask[candSy * w + candSx]) {
+                    continue;
+                }
+                if (!level.sourceMask.empty() && !level.sourceMask[candSy * w + candSx]) {
                     continue;
                 }
 
@@ -445,6 +472,9 @@ void inpaint(
                         if (level.mask[candSy * w + candSx]) {
                             continue;
                         }
+                        if (!level.sourceMask.empty() && !level.sourceMask[candSy * w + candSx]) {
+                            continue;
+                        }
 
                         const float candCost = patchSSD(working.data(), w, h, fx, fy, candSx, candSy, patchSize);
                         if (candCost < nnfCost[i]) {
@@ -462,7 +492,7 @@ void inpaint(
                         std::uniform_real_distribution<float> distR(-radius, radius);
                         const int candSx = clampI(static_cast<int>(baseSx + distR(rng)), 0, w - 1);
                         const int candSy = clampI(static_cast<int>(baseSy + distR(rng)), 0, h - 1);
-                        if (!level.mask[candSy * w + candSx]) {
+                        if (!level.mask[candSy * w + candSx] && (level.sourceMask.empty() || level.sourceMask[candSy * w + candSx])) {
                             const float candCost = patchSSD(working.data(), w, h, fx, fy, candSx, candSy, patchSize);
                             if (candCost < nnfCost[i]) {
                                 nnfCost[i] = candCost;
@@ -518,6 +548,9 @@ void inpaint(
                             continue;
                         }
                         if (level.mask[sy2 * w + sx2]) {
+                            continue;
+                        }
+                        if (!level.sourceMask.empty() && !level.sourceMask[sy2 * w + sx2]) {
                             continue;
                         }
 

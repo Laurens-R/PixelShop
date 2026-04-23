@@ -1,0 +1,85 @@
+@use '@/styles/variables' as vars;
+
+.body {
+  padding: 10px 10px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.description {
+  font-size: 11px;
+  color: vars.$color-text-muted;
+  line-height: 1.45;
+  padding: 0 1px;
+}
+
+.fieldRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+}
+
+.fieldLabel {
+  font-size: 11px;
+  color: vars.$color-text-dim;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.fieldSpacer {
+  flex: 1;
+}
+
+.numberInput {
+  width: 52px;
+  height: 20px;
+  padding: 0 5px;
+  background: vars.$color-bg;
+  border: 1px solid vars.$color-border-light;
+  border-radius: 2px;
+  font-size: 11px;
+  font-family: vars.$font-sans;
+  color: vars.$color-text;
+  text-align: right;
+  outline: none;
+  flex-shrink: 0;
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  &:focus {
+    border-color: vars.$color-accent-solid;
+    box-shadow: 0 0 0 1px vars.$color-accent-border;
+  }
+}
+
+.unit {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  flex-shrink: 0;
+  width: 14px;
+}
+
+.zeroHint {
+  font-size: 10px;
+  color: vars.$color-text-muted;
+  font-style: italic;
+  padding: 0 1px;
+  margin-top: -4px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 7px 10px 9px;
+  border-top: 1px solid vars.$color-border;
+}
