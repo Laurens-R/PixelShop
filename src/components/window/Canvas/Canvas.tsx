@@ -4,7 +4,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useAppContext } from '@/store/AppContext'
 import { useCanvasContext } from '@/store/CanvasContext'
 import type { GpuLayer, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
-import type { TextLayerState, ShapeLayerState, PixelLayerState, MaskLayerState } from '@/types'
+import type { TextLayerState, ShapeLayerState, MaskLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { brushOptions } from '@/tools/brush'
@@ -472,41 +472,15 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     const activeId = state.activeLayerId
     let activeLayer = activeId ? glLayersRef.current.get(activeId) : undefined
 
-    // If a paint tool fires on a text/shape (but NOT mask) layer, auto-create a new
-    // pixel layer above it on first pointerDown and redirect drawing there.
-    if (TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && activeLayer) {
-      const stateMeta = state.layers.find((l) => l.id === activeId)
-      if (stateMeta && 'type' in stateMeta && stateMeta.type !== 'mask') {
-        if (!newPixelLayerRef.current) {
-          const { pixelWidth: cw, pixelHeight: ch } = renderer
-          const newId = `layer-${Date.now()}-${Math.random().toString(36).slice(2)}`
-          const newName = `Layer ${state.layers.length + 1}`
-          const initW = Math.min(128, cw)
-          const initH = Math.min(128, ch)
-          const ox = Math.round((cw - initW) / 2)
-          const oy = Math.round((ch - initH) / 2)
-          const gl = renderer.createLayer(newId, newName, initW, initH, ox, oy)
-          glLayersRef.current.set(newId, gl)
-          newPixelLayerRef.current = gl
-          const layerState: PixelLayerState = {
-            id: newId, name: newName, visible: true, opacity: 1, locked: false, blendMode: 'normal',
-          }
-          dispatch({ type: 'INSERT_LAYER_ABOVE', payload: { layer: layerState, aboveId: activeId! } })
-        }
-        activeLayer = newPixelLayerRef.current
-      }
-    }
-
     // Text/shape tools don't need an existing pixel layer — they create their own
     if (!activeLayer && state.activeTool !== 'text' && state.activeTool !== 'shape') return null
-    // Block pixel-modifying tools on locked layers and (for non-redirecting tools) on text/shape layers.
+    // Block pixel-modifying tools on locked layers and on non-pixel layers (text, shape, group, adjustment).
     // Mask layers are allowed — tools paint grayscale onto the mask buffer.
-    // Tools with paintsOntoPixelLayer already redirected above to a new pixel layer — they are allowed.
     if (TOOL_REGISTRY[state.activeTool].modifiesPixels) {
       const stateMeta = state.layers.find((l) => l.id === activeId)
       if (stateMeta && 'locked' in stateMeta && stateMeta.locked) return null
       const isParametric = stateMeta && 'type' in stateMeta && stateMeta.type !== 'mask'
-      if (!TOOL_REGISTRY[state.activeTool].paintsOntoPixelLayer && isParametric) return null
+      if (isParametric) return null
     }
     // Detect mask layer — constrain colors to grayscale
     const activeMeta = state.layers.find((l) => l.id === activeId)

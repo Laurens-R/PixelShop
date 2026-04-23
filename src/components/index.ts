@@ -17,6 +17,7 @@ export { ChromaticAberrationOptions } from './panels/ChromaticAberrationOptions/
 export { HalationOptions } from './panels/HalationOptions/HalationOptions'
 export { ColorKeyPanel } from './panels/ColorKeyPanel/ColorKeyPanel'
 export { DropShadowOptions } from './panels/DropShadowOptions/DropShadowOptions'
+export { GlowOptions } from './panels/GlowOptions/GlowOptions'
 export { ColorWheelWidget } from './widgets/ColorWheelWidget/ColorWheelWidget'
 export { SliderInput } from './widgets/SliderInput/SliderInput'
 export { ToolWindow } from './widgets/ToolWindow/ToolWindow'

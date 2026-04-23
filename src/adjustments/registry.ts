@@ -167,4 +167,17 @@ export const ADJUSTMENT_REGISTRY = [
       knockout:  true,
     },
   },
+  {
+    adjustmentType: 'glow' as const,
+    label: 'Glow…',
+    group: 'real-time-effects',
+    defaultParams: {
+      color:     { r: 255, g: 255, b: 153, a: 255 },
+      opacity:   75,
+      spread:    0,
+      softness:  15,
+      blendMode: 'normal',
+      knockout:  true,
+    },
+  },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

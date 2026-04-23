@@ -151,6 +151,22 @@ export type AdjustmentRenderOp =
       visible:   boolean
       selMaskLayer?: GpuLayer
     }
+  | {
+      kind:      'glow'
+      layerId:   string
+      /** Glow color components pre-normalised to 0..1. */
+      colorR:    number
+      colorG:    number
+      colorB:    number
+      colorA:    number    // 0..1 (color.a / 255)
+      opacity:   number    // 0..1 (pre-divided by 100)
+      spread:    number    // 0..100 px
+      softness:  number    // 0..100 px
+      blendMode: 'normal' | 'multiply' | 'screen'
+      knockout:  boolean
+      visible:   boolean
+      selMaskLayer?: GpuLayer
+    }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: GpuLayer; mask?: GpuLayer }
@@ -1097,6 +1113,18 @@ export class WebGPURenderer {
         entry.colorR, entry.colorG, entry.colorB, entry.colorA,
         entry.opacity,
         entry.offsetX, entry.offsetY,
+        entry.spread, entry.softness,
+        entry.blendMode, entry.knockout,
+        entry.selMaskLayer,
+      )
+      return
+    }
+    if (entry.kind === 'glow') {
+      this.encodeDropShadowPass(
+        encoder, srcTex, dstTex,
+        entry.colorR, entry.colorG, entry.colorB, entry.colorA,
+        entry.opacity,
+        0, 0,
         entry.spread, entry.softness,
         entry.blendMode, entry.knockout,
         entry.selMaskLayer,

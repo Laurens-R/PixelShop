@@ -244,6 +244,9 @@ const TOOL_GRID: ToolGrid = [
   ]
 ]
 
+/** Tools that can only operate on a pixel layer. */
+const PIXEL_ONLY_TOOLS = new Set<Tool>(['brush', 'pencil', 'eraser', 'fill', 'gradient', 'dodge', 'burn'])
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface ToolbarProps {
@@ -260,6 +263,9 @@ export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): 
   const shapePickerOpenRef                  = useRef(false)
   const shapeButtonRef                      = useRef<HTMLDivElement>(null)
   const flyoutRef                           = useRef<HTMLDivElement>(null)
+
+  const activeLayer = state.layers.find(l => l.id === state.activeLayerId) ?? null
+  const pixelToolsDisabled = activeLayer == null || 'type' in activeLayer
 
   // Single always-mounted listener — no mount/unmount race on each toggle
   useEffect(() => {
@@ -363,7 +369,8 @@ export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): 
                       <button
                         key={tool.id}
                         className={`${styles.toolBtn} ${activeTool === tool.id ? styles.active : ''}`}
-                        onClick={() => onToolChange?.(tool.id)}
+                        onClick={() => !PIXEL_ONLY_TOOLS.has(tool.id as Tool) || !pixelToolsDisabled ? onToolChange?.(tool.id) : undefined}
+                        disabled={PIXEL_ONLY_TOOLS.has(tool.id as Tool) && pixelToolsDisabled}
                         aria-label={`${tool.label}  (${tool.shortcut})`}
                         aria-pressed={activeTool === tool.id}
                         title={`${tool.label}  ${tool.shortcut}`}

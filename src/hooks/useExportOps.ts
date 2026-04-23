@@ -2,9 +2,9 @@ import { useCallback, type MutableRefObject } from 'react'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
 import type { AppState } from '@/types'
-import { exportPng } from '@/export/exportPng'
-import { exportJpeg } from '@/export/exportJpeg'
-import { exportWebp } from '@/export/exportWebp'
+import { exportPng } from '@/io/exportPng'
+import { exportJpeg } from '@/io/exportJpeg'
+import { exportWebp } from '@/io/exportWebp'
 import { showOperationError } from '@/utils/userFeedback'
 
 interface UseExportOpsOptions {

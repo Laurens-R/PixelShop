@@ -201,6 +201,7 @@ export type AdjustmentType =
   | 'halation'
   | 'color-key'
   | 'drop-shadow'
+  | 'glow'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -364,6 +365,20 @@ export interface AdjustmentParamsMap {
     /** When true, the shadow is masked by the inverse of the source alpha. Default: true */
     knockout:  boolean
   }
+  'glow': {
+    /** Glow color including alpha channel. r/g/b/a are 0–255. Default: { r:255, g:255, b:153, a:255 } */
+    color:     RGBAColor
+    /** Overall glow opacity, 0–100 (%). Applied on top of color.a. Default: 75 */
+    opacity:   number
+    /** Morphological dilation radius in pixels, 0–100. Default: 0 */
+    spread:    number
+    /** Gaussian blur radius in pixels, 0–100. Default: 15 */
+    softness:  number
+    /** How the glow composites with layers beneath it. Default: 'normal' */
+    blendMode: 'normal' | 'multiply' | 'screen'
+    /** When true, the glow is masked by the inverse of the source alpha (outer glow only). Default: true */
+    knockout:  boolean
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -494,6 +509,12 @@ export interface DropShadowAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface GlowAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'glow'
+  params: AdjustmentParamsMap['glow']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -511,6 +532,7 @@ export type AdjustmentLayerState =
   | HalationAdjustmentLayer
   | ColorKeyAdjustmentLayer
   | DropShadowAdjustmentLayer
+  | GlowAdjustmentLayer
 
 export interface GroupLayerState {
   id:        string

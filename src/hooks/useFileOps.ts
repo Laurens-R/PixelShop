@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
-import { IMAGE_EXTENSIONS, EXT_TO_MIME, loadImagePixels } from '@/export/imageLoader'
+import { IMAGE_EXTENSIONS, EXT_TO_MIME, loadImagePixels } from '@/io/imageLoader'
 import { makeTabId, fileTitle, DEFAULT_SWATCHES } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
 import type { LayerState, BackgroundFill, AppState, SwatchGroup } from '@/types'
