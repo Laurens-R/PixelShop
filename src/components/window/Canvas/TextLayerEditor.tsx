@@ -170,8 +170,8 @@ export function TextLayerEditor({
         position: 'fixed',
         left:     screenX,
         top:      screenY,
-        width:    boxWpx + BORDER * 2,
-        height:   boxHpx + BORDER * 2,
+        width:    boxWpx,
+        height:   boxHpx,
       }}
       onPointerMove={onHandlePointerMove}
       onPointerUp={onHandlePointerUp}
