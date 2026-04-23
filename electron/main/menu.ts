@@ -7,12 +7,15 @@ export interface MenuBuildPayload {
   adjustments: Array<{ id: string; label: string; group?: string }>
   effects:     Array<{ id: string; label: string; group?: string }>
   filters:     Array<{ id: string; label: string; instant?: boolean; group?: string }>
+  recentFiles: string[]
 }
 
 // ─── Internal state ───────────────────────────────────────────────────────────
 
 // Map from item id → MenuItem for dynamic enable/checked updates.
 const itemsById = new Map<string, MenuItem>()
+
+let recentFilesList: string[] = []
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +65,7 @@ function groupedItems(
 
 export function buildAndSetMacMenu(payload: MenuBuildPayload): void {
   itemsById.clear()
+  recentFilesList = payload.recentFiles
 
   const appName = app.name || 'PixelShop'
 
@@ -86,12 +90,30 @@ export function buildAndSetMacMenu(payload: MenuBuildPayload): void {
     {
       label: 'File',
       submenu: [
-        item('New\u2026',       'new',    { accelerator: 'CmdOrCtrl+N' }),
-        item('Open\u2026',      'open',   { accelerator: 'CmdOrCtrl+O' }),
+        item('New\u2026',        'new',    { accelerator: 'CmdOrCtrl+N' }),
+        item('Open\u2026',       'open',   { accelerator: 'CmdOrCtrl+O' }),
+        {
+          label: 'Open Recent',
+          submenu: payload.recentFiles.length > 0
+            ? [
+                ...payload.recentFiles.map((filePath, i) => ({
+                  id:    `recentFile:${i}`,
+                  label: filePath.split(/[\\/]/).pop() ?? filePath,
+                  click: () => send(`recentFile:${i}`),
+                })),
+                sep(),
+                item('Clear Recent', 'clearRecentFiles'),
+              ]
+            : [{ label: 'No Recent Files', enabled: false }],
+        },
         sep(),
-        item('Save',            'save',   { accelerator: 'CmdOrCtrl+S' }),
-        item('Save As\u2026',   'saveAs', { accelerator: 'CmdOrCtrl+Shift+S' }),
-        item('Export As\u2026', 'export', { accelerator: 'CmdOrCtrl+E' }),
+        item('Close',            'close'),
+        item('Close All',        'closeAll'),
+        sep(),
+        item('Save',             'save',    { accelerator: 'CmdOrCtrl+S' }),
+        item('Save As\u2026',    'saveAs',  { accelerator: 'CmdOrCtrl+Shift+S' }),
+        item('Save a Copy\u2026','saveACopy'),
+        item('Export As\u2026',  'export',  { accelerator: 'CmdOrCtrl+E' }),
       ],
     },
 
@@ -121,7 +143,13 @@ export function buildAndSetMacMenu(payload: MenuBuildPayload): void {
     {
       label: 'Select',
       submenu: [
-        item('Invert Selection', 'invertSelection', { accelerator: 'CmdOrCtrl+Shift+I', noIntercept: true }),
+        item('All',              'selectAll',        { accelerator: 'CmdOrCtrl+A',       noIntercept: true }),
+        item('Deselect',         'deselect',         { accelerator: 'CmdOrCtrl+D',       noIntercept: true }),
+        sep(),
+        item('All Layers',       'selectAllLayers',  { accelerator: 'Alt+CmdOrCtrl+A',   noIntercept: true }),
+        item('Deselect Layers',  'deselectLayers'),
+        sep(),
+        item('Invert Selection', 'invertSelection',  { accelerator: 'CmdOrCtrl+Shift+I', noIntercept: true }),
       ],
     },
 
@@ -207,6 +235,10 @@ export function buildAndSetMacMenu(payload: MenuBuildPayload): void {
 }
 
 // ─── Dynamic state updates ────────────────────────────────────────────────────
+
+export function getRecentFileByIndex(index: number): string | undefined {
+  return recentFilesList[index]
+}
 
 export function setMacMenuItemEnabled(updates: Record<string, boolean>): void {
   for (const [id, enabled] of Object.entries(updates)) {

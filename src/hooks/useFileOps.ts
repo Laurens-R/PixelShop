@@ -23,13 +23,16 @@ interface UseFileOpsOptions {
   serializeActiveTabPixels: () => Map<string, string> | null
   handleSwitchTab: (toId: string) => void
   dispatch: Dispatch<AppAction>
+  onRecentFilesUpdated?: (files: string[]) => void
 }
 
 export interface UseFileOpsReturn {
   untitledCounter: number
   handleNewConfirm: (settings: { width: number; height: number; backgroundFill: BackgroundFill }) => void
   handleOpen: () => Promise<void>
+  handleOpenPath: (path: string) => Promise<void>
   handleSave: (saveAs?: boolean) => Promise<void>
+  handleSaveACopy: () => Promise<void>
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -84,6 +87,7 @@ export function useFileOps({
   serializeActiveTabPixels,
   handleSwitchTab,
   dispatch,
+  onRecentFilesUpdated,
 }: UseFileOpsOptions): UseFileOpsReturn {
   const [untitledCounter, setUntitledCounter] = useState(1)
 
@@ -112,10 +116,7 @@ export function useFileOps({
     dispatch({ type: 'NEW_CANVAS', payload: { width, height, backgroundFill } })
   }, [tabs, activeTabId, untitledCounter, captureActiveSnapshot, serializeActiveTabPixels, dispatch, setTabs, setActiveTabId, setPendingLayerData])
 
-  const handleOpen = useCallback(async (): Promise<void> => {
-    const path = await window.api.openPxshopDialog()
-    if (!path) return
-
+  const openFromPath = useCallback(async (path: string): Promise<void> => {
     // ── Image file import ──────────────────────────────────────────────────
     const ext = path.slice(path.lastIndexOf('.')).toLowerCase()
     if (IMAGE_EXTENSIONS.has(ext)) {
@@ -149,6 +150,8 @@ export function useFileOps({
       historyStore.clear({ recaptureSnapshot: false })
       setPendingLayerData(null)
       dispatch({ type: 'SWITCH_TAB', payload: { width, height, backgroundFill: 'transparent', layers, activeLayerId: layerId, zoom: 1 } })
+      const updatedRecent = await window.api.addRecentFile(path)
+      onRecentFilesUpdated?.(updatedRecent)
       return
     }
 
@@ -218,7 +221,19 @@ export function useFileOps({
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
     dispatch({ type: 'SET_SWATCHES', payload: docSwatches })
     dispatch({ type: 'SET_SWATCH_GROUPS', payload: docSwatchGroups })
-  }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData])
+    const updated2 = await window.api.addRecentFile(path)
+    onRecentFilesUpdated?.(updated2)
+  }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData, onRecentFilesUpdated])
+
+  const handleOpen = useCallback(async (): Promise<void> => {
+    const path = await window.api.openPxshopDialog()
+    if (!path) return
+    await openFromPath(path)
+  }, [openFromPath])
+
+  const handleOpenPath = useCallback(async (path: string): Promise<void> => {
+    await openFromPath(path)
+  }, [openFromPath])
 
   const handleSave = useCallback(async (saveAs = false): Promise<void> => {
     const activeTab = tabs.find(t => t.id === activeTabId)
@@ -259,7 +274,45 @@ export function useFileOps({
     const savedPath = path
     const title     = fileTitle(savedPath)
     setTabs(prev => prev.map(t => t.id === activeTabId ? { ...t, filePath: savedPath, title } : t))
-  }, [tabs, activeTabId, state, canvasHandleRef, setTabs])
+    const updated = await window.api.addRecentFile(savedPath)
+    onRecentFilesUpdated?.(updated)
+  }, [tabs, activeTabId, state, canvasHandleRef, setTabs, onRecentFilesUpdated])
 
-  return { untitledCounter, handleNewConfirm, handleOpen, handleSave }
+  const handleSaveACopy = useCallback(async (): Promise<void> => {
+    const activeTab = tabs.find(t => t.id === activeTabId)
+    const path = await window.api.savePxshopDialog(activeTab?.filePath ?? undefined)
+    if (!path) return
+
+    const layerPngs: Record<string, string>  = {}
+    const adjustmentMaskPngs: Record<string, string> = {}
+    const layerGeos: Record<string, { layerWidth: number; layerHeight: number; offsetX: number; offsetY: number }> = {}
+    for (const layer of state.layers) {
+      const result = canvasHandleRef.current?.exportLayerPng(layer.id)
+      if (result) {
+        layerPngs[layer.id] = result.png
+        layerGeos[layer.id] = { layerWidth: result.layerWidth, layerHeight: result.layerHeight, offsetX: result.offsetX, offsetY: result.offsetY }
+      }
+      if ('type' in layer && layer.type === 'adjustment') {
+        const maskPng = canvasHandleRef.current?.exportAdjustmentMaskPng(layer.id)
+        if (maskPng) adjustmentMaskPngs[layer.id] = maskPng
+      }
+    }
+    const doc = {
+      version: 3,
+      canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
+      activeLayerId: state.activeLayerId,
+      layers: state.layers.map(l => ({
+        ...l,
+        pngData: layerPngs[l.id] ?? null,
+        layerGeo: layerGeos[l.id] ?? null,
+        adjustmentMaskPng: adjustmentMaskPngs[l.id] ?? null,
+      })),
+      swatches: state.swatches,
+      swatchGroups: state.swatchGroups,
+    }
+    await window.api.savePxshopFile(path, JSON.stringify(doc))
+    // The current tab's filePath is NOT updated — this is a copy.
+  }, [tabs, activeTabId, state, canvasHandleRef])
+
+  return { untitledCounter, handleNewConfirm, handleOpen, handleOpenPath, handleSave, handleSaveACopy }
 }

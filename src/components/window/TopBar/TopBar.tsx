@@ -55,23 +55,51 @@ interface TopBarProps {
   onFreeTransform?: () => void
   isFreeTransformEnabled?: boolean
   onInvertSelection?: () => void
+  onSelectAll?:       () => void
+  onDeselect?:        () => void
+  onSelectAllLayers?: () => void
+  onDeselectLayers?:  () => void
+  onClose?: () => void
+  onCloseAll?: () => void
+  onSaveACopy?: () => void
+  recentFiles?: string[]
+  onOpenRecent?: (path: string) => void
+  onClearRecentFiles?: () => void
+  onExit?: () => void
   /** When true, hides the custom menu bar (logo + menu) — used on macOS where the native app menu is shown instead. */
   isMac?: boolean
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onNewLayerGroup, onDuplicateLayer, onDeleteLayer, onGroupLayers, isGroupLayersEnabled, onUngroupLayers, isUngroupLayersEnabled, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection, isMac }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onNewLayerGroup, onDuplicateLayer, onDeleteLayer, onGroupLayers, isGroupLayersEnabled, onUngroupLayers, isUngroupLayersEnabled, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection, onSelectAll, onDeselect, onSelectAllLayers, onDeselectLayers, onClose, onCloseAll, onSaveACopy, recentFiles, onOpenRecent, onClearRecentFiles, onExit, isMac }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
       items: [
-        { label: 'New…',        shortcut: 'Ctrl+N',       action: onNew },
-        { label: 'Open…',       shortcut: 'Ctrl+O',       action: onOpen },
+        { label: 'New\u2026',        shortcut: 'Ctrl+N',       action: onNew },
+        { label: 'Open\u2026',       shortcut: 'Ctrl+O',       action: onOpen },
+        {
+          label: 'Open Recent',
+          submenu: (recentFiles && recentFiles.length > 0)
+            ? [
+                ...recentFiles.map(path => ({
+                  label: path.split(/[\\/]/).pop() ?? path,
+                  action: () => onOpenRecent?.(path),
+                })),
+                { separator: true, label: '' },
+                { label: 'Clear Recent', action: onClearRecentFiles },
+              ]
+            : [{ label: 'No Recent Files', disabled: true }],
+        },
         { separator: true, label: '' },
-        { label: 'Save',           shortcut: 'Ctrl+S',       action: onSave },
-        { label: 'Save As…',    shortcut: 'Ctrl+Shift+S', action: onSaveAs },
-        { label: 'Export As…',  shortcut: 'Ctrl+E',       action: onExport },
+        { label: 'Close',            action: onClose },
+        { label: 'Close All',        action: onCloseAll },
         { separator: true, label: '' },
-        { label: 'Quit',           shortcut: 'Ctrl+Q' }
+        { label: 'Save',             shortcut: 'Ctrl+S',       action: onSave },
+        { label: 'Save As\u2026',    shortcut: 'Ctrl+Shift+S', action: onSaveAs },
+        { label: 'Save a Copy\u2026',                          action: onSaveACopy },
+        { label: 'Export As\u2026',  shortcut: 'Ctrl+E',       action: onExport },
+        { separator: true, label: '' },
+        { label: 'Exit',             action: onExit },
       ]
     },
     {
@@ -94,6 +122,12 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
     {
       label: 'Select',
       items: [
+        { label: 'All',              shortcut: 'Ctrl+A',       action: onSelectAll },
+        { label: 'Deselect',         shortcut: 'Ctrl+D',       action: onDeselect },
+        { separator: true, label: '' },
+        { label: 'All Layers',       shortcut: 'Alt+Ctrl+A',   action: onSelectAllLayers },
+        { label: 'Deselect Layers',                            action: onDeselectLayers },
+        { separator: true, label: '' },
         { label: 'Invert Selection', shortcut: 'Ctrl+Shift+I', action: onInvertSelection },
       ]
     },
@@ -192,7 +226,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
       ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onNewLayerGroup, onDuplicateLayer, onDeleteLayer, onGroupLayers, isGroupLayersEnabled, onUngroupLayers, isUngroupLayersEnabled, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onNewLayerGroup, onDuplicateLayer, onDeleteLayer, onGroupLayers, isGroupLayersEnabled, onUngroupLayers, isUngroupLayersEnabled, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection, onSelectAll, onDeselect, onSelectAllLayers, onDeselectLayers, onClose, onCloseAll, onSaveACopy, recentFiles, onOpenRecent, onClearRecentFiles, onExit])
 
   // On macOS the native application menu replaces the entire custom top bar.
   if (isMac) return null

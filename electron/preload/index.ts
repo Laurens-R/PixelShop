@@ -35,6 +35,14 @@ const api = {
   clipboardReadImage: (): Promise<string | null> =>
     ipcRenderer.invoke('clipboard:read-image'),
 
+  // ── Recent files ─────────────────────────────────────────────────────────────
+  getRecentFiles: (): Promise<string[]> => ipcRenderer.invoke('recentFiles:get'),
+  addRecentFile: (path: string): Promise<string[]> => ipcRenderer.invoke('recentFiles:add', path),
+  clearRecentFiles: (): Promise<void> => ipcRenderer.invoke('recentFiles:clear'),
+
+  // ── App lifecycle ─────────────────────────────────────────────────────────────
+  exitApp: (): Promise<void> => ipcRenderer.invoke('app:exit'),
+
   // ── Platform & native menu (macOS) ────────────────────────────────
   platform: process.platform as string,
 
@@ -50,6 +58,7 @@ const api = {
     adjustments: Array<{ id: string; label: string; group?: string }>
     effects:     Array<{ id: string; label: string; group?: string }>
     filters:     Array<{ id: string; label: string; instant?: boolean; group?: string }>
+    recentFiles: string[]
   }): void => {
     ipcRenderer.send('menu:build', payload)
   },

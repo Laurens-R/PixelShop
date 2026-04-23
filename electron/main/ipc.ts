@@ -130,4 +130,45 @@ export function registerIpcHandlers(): void {
     if (img.isEmpty()) return null
     return img.toPNG().toString('base64')
   })
+
+  // ── Recent files ─────────────────────────────────────────────────────────────
+
+  const RECENT_FILES_MAX = 10
+
+  const recentFilesPath = (): string => join(app.getPath('userData'), 'recent-files.json')
+
+  const loadRecentFiles = async (): Promise<string[]> => {
+    try {
+      const data = await readFile(recentFilesPath(), 'utf-8')
+      const arr = JSON.parse(data)
+      return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  }
+
+  const saveRecentFiles = async (files: string[]): Promise<void> => {
+    await writeFile(recentFilesPath(), JSON.stringify(files), 'utf-8')
+  }
+
+  ipcMain.handle('recentFiles:get', async () => {
+    return loadRecentFiles()
+  })
+
+  ipcMain.handle('recentFiles:add', async (_event, path: string) => {
+    const files = await loadRecentFiles()
+    const updated = [path, ...files.filter(f => f !== path)].slice(0, RECENT_FILES_MAX)
+    await saveRecentFiles(updated)
+    return updated
+  })
+
+  ipcMain.handle('recentFiles:clear', async () => {
+    await saveRecentFiles([])
+  })
+
+  // ── App lifecycle ─────────────────────────────────────────────────────────────
+
+  ipcMain.handle('app:exit', () => {
+    app.quit()
+  })
 }

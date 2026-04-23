@@ -108,6 +108,7 @@ function AppContent(): React.JSX.Element {
   const [contentAwareFillError,        setContentAwareFillError]        = useState<string | null>(null)
   const [contentAwareFillLabel,        setContentAwareFillLabel]        = useState('Filling…')
   const [hasSelection,                 setHasSelection]                 = useState(false)
+  const [recentFiles,                  setRecentFiles]                  = useState<string[]>([])
 
   // ── Clone stamp source deletion notification ─────────────────────
   const cloneStampNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -137,6 +138,11 @@ function AppContent(): React.JSX.Element {
     return () => selectionStore.unsubscribe(update)
   }, [])
 
+  // ── Recent files ──────────────────────────────────────────────────
+  useEffect(() => {
+    window.api.getRecentFiles().then(setRecentFiles)
+  }, [])
+
   // ── Tab management ────────────────────────────────────────────────
   const {
     tabs, setTabs, activeTabId, setActiveTabId,
@@ -155,10 +161,11 @@ function AppContent(): React.JSX.Element {
   })
 
   // ── File operations ───────────────────────────────────────────────
-  const { handleNewConfirm, handleOpen, handleSave } = useFileOps({
+  const { handleNewConfirm, handleOpen, handleOpenPath, handleSave, handleSaveACopy } = useFileOps({
     canvasHandleRef, state, tabs, activeTabId,
     setTabs, setActiveTabId, setPendingLayerData,
     captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch,
+    onRecentFilesUpdated: setRecentFiles,
   })
 
   // ── Export operations ────────────────────────────────────────────
@@ -293,6 +300,25 @@ function AppContent(): React.JSX.Element {
   const handleFitToWindow  = useCallback(() => { canvasHandleRef.current?.fitToWindow() }, [canvasHandleRef])
   const handleToggleGrid   = useCallback(() => { dispatch({ type: 'TOGGLE_GRID' }) }, [dispatch])
 
+  const handleSelectAll = useCallback((): void => {
+    const { width, height } = stateRef.current.canvas
+    if (width === 0 || height === 0) return
+    selectionStore.setRect(0, 0, width - 1, height - 1, 'set')
+  }, [])
+
+  const handleDeselect = useCallback((): void => {
+    selectionStore.clear()
+  }, [])
+
+  const handleSelectAllLayers = useCallback((): void => {
+    const allIds = stateRef.current.layers.map(l => l.id)
+    dispatch({ type: 'SET_SELECTED_LAYERS', payload: allIds })
+  }, [dispatch])
+
+  const handleDeselectLayers = useCallback((): void => {
+    dispatch({ type: 'SET_SELECTED_LAYERS', payload: [] })
+  }, [dispatch])
+
   // ── Transform ─────────────────────────────────────────────────────
   const { handleEnterTransform, handleApply: handleTransformApply, handleCancel: handleTransformCancel, isFreeTransformEnabled } = useTransform({
     canvasHandleRef, stateRef, dispatch, captureHistory,
@@ -309,6 +335,20 @@ function AppContent(): React.JSX.Element {
   const guardedCloseTab = useCallback((toId: string): void => {
     requireTransformDecision(() => handleCloseTab(toId))
   }, [requireTransformDecision, handleCloseTab])
+
+  const handleClose = useCallback((): void => {
+    guardedCloseTab(activeTabId)
+  }, [guardedCloseTab, activeTabId])
+
+  const handleCloseAll = useCallback((): void => {
+    const ids = tabs.filter(t => t.id !== activeTabId).map(t => t.id)
+    for (const id of ids) handleCloseTab(id)
+  }, [tabs, activeTabId, handleCloseTab])
+
+  const handleClearRecentFiles = useCallback(async (): Promise<void> => {
+    await window.api.clearRecentFiles()
+    setRecentFiles([])
+  }, [])
 
   const handleTransformGuardApply = useCallback((): void => {
     const pending = pendingGuardedAction
@@ -340,6 +380,9 @@ function AppContent(): React.JSX.Element {
     handleKeyboardShortcuts: useCallback(() => setShowShortcutsDialog(true), []),
     handleFreeTransform: handleEnterTransform,
     handleInvertSelection: useCallback(() => selectionStore.invert(), []),
+    handleSelectAll,
+    handleDeselect,
+    handleSelectAllLayers,
     handleCloneStamp: useCallback(() => handleToolChange('clone-stamp'), [handleToolChange]),
     handleContentAwareDelete: useCallback(() => handleOpenCafDialog('delete'), [handleOpenCafDialog]),
   })
@@ -382,13 +425,24 @@ function AppContent(): React.JSX.Element {
       }
       return
     }
+    // Dynamic: recent files
+    if (actionId.startsWith('recentFile:')) {
+      const idx = parseInt(actionId.slice(11), 10)
+      const path = recentFiles[idx]
+      if (path) void handleOpenPath(path)
+      return
+    }
     // Static actions
     switch (actionId) {
       case 'new':             setShowNewImageDialog(true); break
-      case 'open':            handleOpen(); break
-      case 'save':            handleSave(false); break
-      case 'saveAs':          handleSave(true); break
+      case 'open':            void handleOpen(); break
+      case 'close':           handleClose(); break
+      case 'closeAll':        handleCloseAll(); break
+      case 'save':            void handleSave(false); break
+      case 'saveAs':          void handleSave(true); break
+      case 'saveACopy':       void handleSaveACopy(); break
       case 'export':          setShowExportDialog(true); break
+      case 'clearRecentFiles': void handleClearRecentFiles(); break
       case 'undo':            handleUndo(); break
       case 'redo':            handleRedo(); break
       case 'cut':             handleCut(); break
@@ -401,6 +455,10 @@ function AppContent(): React.JSX.Element {
       case 'resizeCanvas':    setShowResizeCanvasDialog(true); break
       case 'freeTransform':   requireTransformDecision(handleEnterTransform); break
       case 'invertSelection': selectionStore.invert(); break
+      case 'selectAll':        handleSelectAll(); break
+      case 'deselect':         handleDeselect(); break
+      case 'selectAllLayers':  handleSelectAllLayers(); break
+      case 'deselectLayers':   handleDeselectLayers(); break
       case 'newLayer':        handleNewLayer(); break
       case 'duplicateLayer':  handleDuplicateLayer(); break
       case 'deleteLayer':     handleDeleteActiveLayer(); break
@@ -421,11 +479,14 @@ function AppContent(): React.JSX.Element {
     }
   }, [
     requireTransformDecision, adjustments, filters, handleOpenFilterDialog,
-    handleOpen, handleSave, handleUndo, handleRedo, handleCut, handleCopy, handlePaste,
+    handleOpen, handleOpenPath, handleClose, handleCloseAll, handleSave, handleSaveACopy,
+    handleClearRecentFiles, recentFiles,
+    handleUndo, handleRedo, handleCut, handleCopy, handlePaste,
     handleDelete, handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer,
     handleRasterizeLayer, handleGroupLayers, handleUngroupLayers, handleMergeSelected,
     handleMergeDown, handleMergeVisible, handleFlattenImage, handleZoomIn, handleZoomOut,
     handleFitToWindow, handleToggleGrid, handleEnterTransform,
+    handleSelectAll, handleDeselect, handleSelectAllLayers, handleDeselectLayers,
     handleOpenCafDialog,
     state.activeLayerId, effectiveSelectedIds,
   ])
@@ -437,8 +498,9 @@ function AppContent(): React.JSX.Element {
       adjustments: ADJUSTMENT_MENU_ITEMS.map(i => ({ id: i.type, label: i.label, group: i.group })),
       effects:     EFFECTS_MENU_ITEMS.map(i => ({ id: i.type, label: i.label, group: i.group })),
       filters:     FILTER_MENU_ITEMS.map(i => ({ id: i.key, label: i.label, group: i.group })),
+      recentFiles,
     })
-  }, [isMac])
+  }, [isMac, recentFiles])
 
   // Register the IPC action listener once. Handler is always fresh via the ref.
   useEffect(() => {
@@ -477,9 +539,16 @@ function AppContent(): React.JSX.Element {
         onDebug={() => window.api.openDevTools()}
         onNew={() => setShowNewImageDialog(true)}
         onOpen={handleOpen}
-        onSave={() => handleSave(false)}
-        onSaveAs={() => handleSave(true)}
+        onSave={() => void handleSave(false)}
+        onSaveAs={() => void handleSave(true)}
+        onSaveACopy={handleSaveACopy}
         onExport={() => setShowExportDialog(true)}
+        onClose={handleClose}
+        onCloseAll={handleCloseAll}
+        recentFiles={recentFiles}
+        onOpenRecent={handleOpenPath}
+        onClearRecentFiles={handleClearRecentFiles}
+        onExit={() => void window.api.exitApp()}
         onUndo={handleUndo}
         onRedo={handleRedo}
         onCopy={handleCopy}
@@ -519,6 +588,10 @@ function AppContent(): React.JSX.Element {
         onFreeTransform={handleEnterTransform}
         isFreeTransformEnabled={isFreeTransformEnabled}
         onInvertSelection={() => selectionStore.invert()}
+        onSelectAll={handleSelectAll}
+        onDeselect={handleDeselect}
+        onSelectAllLayers={handleSelectAllLayers}
+        onDeselectLayers={handleDeselectLayers}
       />
       <ToolOptionsBar />
       <TabBar

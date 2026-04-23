@@ -8,6 +8,7 @@ export interface MenuItemDef {
   separator?: boolean
   disabled?: boolean
   checked?: boolean
+  submenu?: MenuItemDef[]
 }
 
 export interface MenuDef {
@@ -72,6 +73,66 @@ interface MenuBarProps {
   menus?: MenuDef[]
 }
 
+// ─── SubmenuItem ──────────────────────────────────────────────────────────────
+
+interface SubmenuItemProps {
+  item: MenuItemDef
+  onClose: () => void
+}
+
+function SubmenuItem({ item, onClose }: SubmenuItemProps): React.JSX.Element {
+  const [open, setOpen] = useState(false)
+
+  if (item.submenu) {
+    return (
+      <li role="none" className={styles.submenuEntry}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        <button
+          className={`${styles.menuItem} ${styles.hasSubmenu}`}
+          disabled={item.disabled}
+          role="menuitem"
+          aria-haspopup="true"
+          aria-expanded={open}
+        >
+          <span className={styles.checkMark} />
+          <span className={styles.itemLabel}>{item.label}</span>
+          <span className={styles.submenuArrow}>›</span>
+        </button>
+        {open && (
+          <ul className={`${styles.dropdown} ${styles.submenuDropdown}`} role="menu">
+            {item.submenu.map((sub, i) =>
+              sub.separator ? (
+                <li key={i} role="separator" className={styles.separator} />
+              ) : (
+                <SubmenuItem key={sub.label + i} item={sub} onClose={onClose} />
+              )
+            )}
+          </ul>
+        )}
+      </li>
+    )
+  }
+
+  return (
+    <li role="none">
+      <button
+        className={styles.menuItem}
+        onClick={() => { if (!item.disabled && !item.separator) { item.action?.(); onClose() } }}
+        role="menuitem"
+        disabled={item.disabled}
+      >
+        <span className={styles.checkMark}>{item.checked ? '✓' : ''}</span>
+        <span className={styles.itemLabel}>{item.label}</span>
+        {item.shortcut && <span className={styles.shortcut}>{item.shortcut}</span>}
+      </button>
+    </li>
+  )
+}
+
+// ─── MenuBar ──────────────────────────────────────────────────────────────────
+
 export function MenuBar({ menus = DEFAULT_MENUS }: MenuBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
   const navRef = useRef<HTMLElement>(null)
@@ -105,12 +166,6 @@ export function MenuBar({ menus = DEFAULT_MENUS }: MenuBarProps): React.JSX.Elem
     }
   }
 
-  const handleItemClick = (item: MenuItemDef): void => {
-    if (item.disabled || item.separator) return
-    item.action?.()
-    close()
-  }
-
   return (
     <nav ref={navRef} className={styles.menuBar} aria-label="Application menu">
       {menus.map((menu) => (
@@ -131,20 +186,7 @@ export function MenuBar({ menus = DEFAULT_MENUS }: MenuBarProps): React.JSX.Elem
                 item.separator ? (
                   <li key={i} role="separator" className={styles.separator} />
                 ) : (
-                  <li key={item.label} role="none">
-                    <button
-                      className={styles.menuItem}
-                      onClick={() => handleItemClick(item)}
-                      role="menuitem"
-                      disabled={item.disabled}
-                    >
-                      <span className={styles.checkMark}>{item.checked ? '✓' : ''}</span>
-                      <span className={styles.itemLabel}>{item.label}</span>
-                      {item.shortcut && (
-                        <span className={styles.shortcut}>{item.shortcut}</span>
-                      )}
-                    </button>
-                  </li>
+                  <SubmenuItem key={item.label + i} item={item} onClose={close} />
                 )
               )}
             </ul>

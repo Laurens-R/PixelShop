@@ -18,6 +18,9 @@ interface UseKeyboardShortcutsOptions {
   handleKeyboardShortcuts?: () => void
   handleFreeTransform?:     () => void
   handleInvertSelection?:   () => void
+  handleSelectAll?:         () => void
+  handleDeselect?:          () => void
+  handleSelectAllLayers?:   () => void
   handleCloneStamp?:        () => void
   handleContentAwareDelete?: () => void
 }
@@ -38,6 +41,9 @@ export function useKeyboardShortcuts({
   handleKeyboardShortcuts,
   handleFreeTransform,
   handleInvertSelection,
+  handleSelectAll,
+  handleDeselect,
+  handleSelectAllLayers,
   handleCloneStamp,
   handleContentAwareDelete,
 }: UseKeyboardShortcutsOptions): void {
@@ -63,8 +69,11 @@ export function useKeyboardShortcuts({
       else if (e.key === 'g')              { e.preventDefault(); handleToggleGrid() }
       else if (e.key === 't')              { e.preventDefault(); handleFreeTransform?.() }
       else if (e.key === 'i' && e.shiftKey) { e.preventDefault(); handleInvertSelection?.() }
+      else if (e.key === 'a' && !e.altKey)  { e.preventDefault(); handleSelectAll?.() }
+      else if (e.key === 'd' && !e.altKey)  { e.preventDefault(); handleDeselect?.() }
+      else if (e.key === 'a' &&  e.altKey)  { e.preventDefault(); handleSelectAllLayers?.() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleCloneStamp, handleContentAwareDelete])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleSelectAll, handleDeselect, handleSelectAllLayers, handleCloneStamp, handleContentAwareDelete])
 }
