@@ -5,6 +5,8 @@ import type { AppState } from '@/types'
 import { exportPng } from '@/io/exportPng'
 import { exportJpeg } from '@/io/exportJpeg'
 import { exportWebp } from '@/io/exportWebp'
+import { exportTga } from '@/io/exportTga'
+import { exportTiff } from '@/io/exportTiff'
 import { showOperationError } from '@/utils/userFeedback'
 
 interface UseExportOpsOptions {
@@ -29,6 +31,8 @@ export function useExportOps({
       let dataUrl: string
       if      (settings.format === 'png')  dataUrl = exportPng(data, width, height)
       else if (settings.format === 'webp') dataUrl = exportWebp(data, width, height, { quality: settings.webpQuality })
+      else if (settings.format === 'tga')  dataUrl = exportTga(data, width, height)
+      else if (settings.format === 'tiff') dataUrl = exportTiff(data, width, height)
       else                                 dataUrl = exportJpeg(data, width, height, { quality: settings.jpegQuality, background: settings.jpegBackground })
       await window.api.exportImage(settings.filePath, dataUrl.replace(/^data:[^;]+;base64,/, ''))
     } catch (error) {

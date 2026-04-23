@@ -5,7 +5,7 @@ import styles from './ExportDialog.module.scss'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ExportFormat = 'png' | 'jpeg' | 'webp'
+export type ExportFormat = 'png' | 'jpeg' | 'webp' | 'tga' | 'tiff'
 
 export interface ExportSettings {
   filePath: string
@@ -26,8 +26,8 @@ export interface ExportDialogProps {
 /** Replace or append the correct extension based on the chosen format. */
 function applyExtension(filePath: string, format: ExportFormat): string {
   if (!filePath) return filePath
-  const ext = format === 'png' ? '.png' : format === 'webp' ? '.webp' : '.jpg'
-  return filePath.replace(/\.(png|jpe?g|webp)$/i, '') + ext
+  const ext = format === 'png' ? '.png' : format === 'webp' ? '.webp' : format === 'tga' ? '.tga' : format === 'tiff' ? '.tiff' : '.jpg'
+  return filePath.replace(/\.(png|jpe?g|webp|tga|tiff?)$/i, '') + ext
 }
 
 /** Convert a CSS hex colour (#rrggbb) to the format expected by <input type="color">. */
@@ -123,6 +123,8 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
               <option value="png">PNG</option>
               <option value="jpeg">JPEG</option>
               <option value="webp">WebP</option>
+              <option value="tga">TGA</option>
+              <option value="tiff">TIFF</option>
             </select>
           </div>
 
@@ -204,6 +206,30 @@ export function ExportDialog({ open, onConfirm, onCancel }: ExportDialogProps): 
                       for transparency
                     </span>
                   </div>
+                </div>
+              </>
+            )}
+
+            {format === 'tga' && (
+              <>
+                <p className={styles.sectionTitle}>TGA OPTIONS</p>
+                <div className={styles.fieldRow}>
+                  <label className={styles.fieldLabel}>Compression</label>
+                  <span className={styles.staticNote}>
+                    Lossless — uncompressed 32-bit RGBA
+                  </span>
+                </div>
+              </>
+            )}
+
+            {format === 'tiff' && (
+              <>
+                <p className={styles.sectionTitle}>TIFF OPTIONS</p>
+                <div className={styles.fieldRow}>
+                  <label className={styles.fieldLabel}>Compression</label>
+                  <span className={styles.staticNote}>
+                    Lossless — uncompressed 32-bit RGBA
+                  </span>
                 </div>
               </>
             )}
