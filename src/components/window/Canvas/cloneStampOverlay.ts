@@ -9,8 +9,6 @@
  * @param oc         The tool overlay canvas (toolOverlayRef)
  * @param sourceX/Y  Canvas-space source point position
  * @param brushX/Y   Canvas-space current brush position (pointer pos)
- * @param zoom       Current canvas zoom level
- * @param dpr        window.devicePixelRatio
  * @param showLine   Draw the dashed offset line
  */
 export function drawCloneStampOverlay(
@@ -19,8 +17,6 @@ export function drawCloneStampOverlay(
   sourceY: number,
   brushX: number,
   brushY: number,
-  zoom: number,
-  dpr: number,
   showLine: boolean,
 ): void {
   const ctx = oc.getContext('2d')
@@ -87,8 +83,4 @@ export function drawCloneStampOverlay(
   ctx.stroke()
 
   ctx.restore()
-
-  // Suppress unused-variable warning: zoom and dpr are passed for future
-  // use if the overlay ever needs physical-pixel-aware rendering.
-  void zoom; void dpr
 }

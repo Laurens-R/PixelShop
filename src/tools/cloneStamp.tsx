@@ -24,6 +24,7 @@ function createCloneStampHandler(): ToolHandler {
   let strokeOffsetDX = 0
   let strokeOffsetDY = 0
   let isStrokeReady = false
+  let strokeToken: symbol | null = null
 
   function paintSegment(
     x0: number, y0: number,
@@ -113,11 +114,15 @@ function createCloneStampHandler(): ToolHandler {
 
       if (cloneStampOptions.sampleAllLayers) {
         const capturedX = x, capturedY = y
+        const capturedCtx = ctx
+        const token = Symbol()
+        strokeToken = token
         ctx.renderer.readFlattenedPixels(ctx.layers).then(buf => {
+          if (strokeToken !== token) return
           sourceBuffer = buf
           sourceBounds = null
           isStrokeReady = true
-          paintSegment(capturedX, capturedY, capturedX, capturedY, ctx)
+          paintSegment(capturedX, capturedY, capturedX, capturedY, capturedCtx)
         })
       } else {
         const sourceLayer = ctx.layers.find(l => l.id === source.layerId)
@@ -147,6 +152,8 @@ function createCloneStampHandler(): ToolHandler {
       if (isStrokeReady && lastPos && sourceBuffer) {
         paintSegment(lastPos.x, lastPos.y, x, y, ctx)
       }
+      // Invalidate any pending async readback so it doesn't paint after stroke ends
+      strokeToken = null
       lastPos = null
       touched = null
       sourceBuffer = null

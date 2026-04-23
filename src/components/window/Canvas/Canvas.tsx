@@ -440,8 +440,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         cloneStampStore.source.y,
         cursorStore.x,
         cursorStore.y,
-        zoomRef.current,
-        window.devicePixelRatio,
         cloneStampOptions.aligned,
       )
     }
@@ -506,8 +504,11 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     }
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
     // Hide brush cursor when switching away from a circle-cursor tool
-    if (sel !== 'brush' && sel !== 'eraser' && sel !== 'clone-stamp' && brushCursorRef.current) {
-      brushCursorRef.current.style.display = 'none'
+    if (brushCursorRef.current) {
+      if (sel !== 'brush' && sel !== 'eraser' && sel !== 'clone-stamp') {
+        brushCursorRef.current.style.display = 'none'
+      }
+      // Always reset the class so brushCursorCrossHair doesn't linger when switching between circle-cursor tools
       brushCursorRef.current.className = styles.brushCursor
     }
   }, [state.activeTool, isActive])
@@ -715,7 +716,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             style={{
               width:  width  * state.canvas.zoom / window.devicePixelRatio,
               height: height * state.canvas.zoom / window.devicePixelRatio,
-              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser' || (state.activeTool === 'clone-stamp' && cloneStampStore.source !== null)) ? 'none' : (state.activeTool === 'clone-stamp' ? 'crosshair' : undefined),
+              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none' : undefined,
               // Bilinear when zoomed out (smooth downscale); nearest when at or above 100% (crisp pixel art)
               imageRendering: state.canvas.zoom < 1 ? 'auto' : 'pixelated',
             }}

@@ -101,12 +101,17 @@ function AppContent(): React.JSX.Element {
   const [cloneStampNotification,       setCloneStampNotification]       = useState<string | null>(null)
 
   // ── Clone stamp source deletion notification ─────────────────────
+  const cloneStampNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     cloneStampStore.onSourceDeleted = () => {
       setCloneStampNotification('⚠ Source layer was deleted — Alt+click to set a new source')
-      setTimeout(() => setCloneStampNotification(null), 4000)
+      if (cloneStampNotifTimerRef.current !== null) clearTimeout(cloneStampNotifTimerRef.current)
+      cloneStampNotifTimerRef.current = setTimeout(() => setCloneStampNotification(null), 4000)
     }
-    return () => { cloneStampStore.onSourceDeleted = null }
+    return () => {
+      cloneStampStore.onSourceDeleted = null
+      if (cloneStampNotifTimerRef.current !== null) clearTimeout(cloneStampNotifTimerRef.current)
+    }
   }, [])
 
   // ── Tab management ────────────────────────────────────────────────

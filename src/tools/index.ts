@@ -22,7 +22,9 @@ import { cloneStampTool } from './cloneStamp'
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   pencil:       pencilTool,
   brush:        brushTool,
-  eraser:       eraserTool,  'clone-stamp': cloneStampTool,  select:       selectTool,
+  eraser:         eraserTool,
+  'clone-stamp':  cloneStampTool,
+  select:         selectTool,
   lasso:        lassoTool,
   'magic-wand': magicWandTool,
   fill:         fillTool,
