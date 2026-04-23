@@ -1,22 +1,55 @@
 import type { TextLayerState } from '@/types'
 import type { GpuLayer } from '@/webgpu/WebGPURenderer'
 
-/** Break a single paragraph into lines that fit within maxWidth canvas pixels. */
+/** Break a single paragraph into lines that fit within maxWidth canvas pixels.
+ *  Matches CSS `white-space: pre-wrap; overflow-wrap: break-word` behaviour:
+ *  words break at spaces where possible; words wider than maxWidth are broken
+ *  at the character level. */
 function wrapLine(ctx2d: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   if (maxWidth <= 0) return [text]
-  const words = text.split(' ')
+
   const lines: string[] = []
+  const words = text.split(' ')
   let current = ''
+
   for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (ctx2d.measureText(test).width > maxWidth && current) {
-      lines.push(current)
+    const candidate = current.length > 0 ? `${current} ${word}` : word
+
+    if (ctx2d.measureText(candidate).width <= maxWidth) {
+      // Whole candidate fits — keep accumulating
+      current = candidate
+      continue
+    }
+
+    // Candidate overflows — flush current line first
+    if (current.length > 0) lines.push(current)
+    current = ''
+
+    // Does the word fit alone on a fresh line?
+    if (word.length === 0 || ctx2d.measureText(word).width <= maxWidth) {
       current = word
-    } else {
-      current = test
+      continue
+    }
+
+    // Word is wider than maxWidth — break it character by character
+    // (mirrors overflow-wrap: break-word)
+    let rem = word
+    while (rem.length > 0) {
+      // Find the longest prefix that fits
+      let n = 0
+      while (n < rem.length && ctx2d.measureText(rem.slice(0, n + 1)).width <= maxWidth) n++
+      if (n === 0) n = 1 // always advance at least one character
+      if (n >= rem.length) {
+        current = rem
+        rem = ''
+      } else {
+        lines.push(rem.slice(0, n))
+        rem = rem.slice(n)
+      }
     }
   }
-  if (current) lines.push(current)
+
+  if (current.length > 0) lines.push(current)
   return lines.length > 0 ? lines : ['']
 }
 

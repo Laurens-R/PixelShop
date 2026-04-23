@@ -563,6 +563,7 @@ function AppContent(): React.JSX.Element {
           onMergeDown={handleMergeDown}
           onFlattenImage={handleFlattenImage}
           onRasterizeLayer={handleRasterizeLayer}
+          onDuplicateLayer={handleDuplicateLayer}
           onOpenAdjustmentPanel={(id) => requireTransformDecision(() => adjustments.handleOpenAdjustmentPanel(id))}
           onGeneratePalette={() => setShowGeneratePaletteDialog(true)}
           onMergeGroup={handleMergeGroup}

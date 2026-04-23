@@ -129,6 +129,7 @@ interface LayerPanelProps {
   onMergeDown:         () => void
   onFlattenImage:      () => void
   onRasterizeLayer:    (layerId: string) => void
+  onDuplicateLayer:    () => void
   onOpenAdjustmentPanel?: (layerId: string) => void
   onMergeGroup:        (groupId: string) => void
   onGroupSelected:     (layerIds: string[]) => void
@@ -143,6 +144,7 @@ export function LayerPanel({
   onMergeDown,
   onFlattenImage,
   onRasterizeLayer,
+  onDuplicateLayer,
   onOpenAdjustmentPanel,
   onMergeGroup,
   onGroupSelected,
@@ -722,6 +724,13 @@ export function LayerPanel({
               onMouseDown={() => { closeContextMenu(); if (activeLayerId) onRasterizeLayer(activeLayerId) }}
             >
               Rasterize Layer
+            </button>
+            <button
+              className={styles.menuItem}
+              disabled={!activeLayerId}
+              onMouseDown={() => { closeContextMenu(); onDuplicateLayer() }}
+            >
+              Duplicate Layer
             </button>
             <button
               className={styles.menuItem}
