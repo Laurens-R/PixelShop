@@ -118,4 +118,10 @@ export interface ToolDefinition {
    * Should be set only for brush, pencil, fill, gradient (not move, eraser, dodge, burn, etc.).
    */
   paintsOntoPixelLayer?: boolean
+  /**
+   * True for tools that have their own handling for text/shape/group layers
+   * and must NOT be blocked by the parametric-layer guard in Canvas.tsx.
+   * The move tool is the canonical example.
+   */
+  worksOnAllLayers?: boolean
 }

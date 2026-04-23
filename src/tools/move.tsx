@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { selectionStore } from '@/store/selectionStore'
-import type { TextLayerState } from '@/types'
+import type { TextLayerState, ShapeLayerState } from '@/types'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Display store (live position/size for options bar) ───────────────────────
@@ -28,6 +28,13 @@ const moveDisplay = {
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
+function translateShapeLayer(ls: ShapeLayerState, dx: number, dy: number): ShapeLayerState {
+  if (ls.shapeType === 'line') {
+    return { ...ls, x1: ls.x1 + dx, y1: ls.y1 + dy, x2: ls.x2 + dx, y2: ls.y2 + dy }
+  }
+  return { ...ls, cx: ls.cx + dx, cy: ls.cy + dy }
+}
+
 function createMoveHandler(): ToolHandler {
   let startX = 0
   let startY = 0
@@ -43,6 +50,8 @@ function createMoveHandler(): ToolHandler {
   let textLayerSnapshot: TextLayerState | null = null
   let textLayerOrigX = 0
   let textLayerOrigY = 0
+  // For shape layer move: track original parametric coords
+  let shapeLayerSnapshot: ShapeLayerState | null = null
   let isDown = false
 
   function applySelectionMove(dx: number, dy: number, ctx: ToolContext): void {
@@ -113,6 +122,7 @@ function createMoveHandler(): ToolHandler {
       lastDy = 0
       isDown = true
       textLayerSnapshot = ctx.textLayers.find((t) => t.id === ctx.layer.id) ?? null
+      shapeLayerSnapshot = ctx.shapeLayers.find((s) => s.id === ctx.layer.id) ?? null
 
       if (selectionStore.mask) {
         // Selection move: pixel-copy approach (selection moves pixels, offset unchanged)
@@ -147,6 +157,10 @@ function createMoveHandler(): ToolHandler {
       } else if (textLayerSnapshot) {
         // Text layer: re-rasterize at preview position (no GL offset, no state update)
         ctx.previewTextAt(textLayerSnapshot, textLayerOrigX + dx, textLayerOrigY + dy)
+      } else if (shapeLayerSnapshot) {
+        // Shape layer: re-rasterize at translated parametric coords
+        const moved = translateShapeLayer(shapeLayerSnapshot, dx, dy)
+        ctx.previewShapeLayer(moved)
       } else {
         // Update offset in-place (no pixel data change)
         ctx.layer.offsetX = originalOffsetX + dx
@@ -172,6 +186,11 @@ function createMoveHandler(): ToolHandler {
         ctx.previewTextAt(textLayerSnapshot, textLayerOrigX + dx, textLayerOrigY + dy)
         ctx.updateTextLayer({ ...textLayerSnapshot, x: textLayerOrigX + dx, y: textLayerOrigY + dy })
         textLayerSnapshot = null
+      } else if (shapeLayerSnapshot) {
+        const moved = translateShapeLayer(shapeLayerSnapshot, dx, dy)
+        ctx.previewShapeLayer(moved)
+        ctx.updateShapeLayer(moved)
+        shapeLayerSnapshot = null
       } else {
         if (dx !== lastDx || dy !== lastDy) {
           ctx.layer.offsetX = originalOffsetX + dx
@@ -217,4 +236,5 @@ export const moveTool: ToolDefinition = {
   createHandler: createMoveHandler,
   Options: MoveOptions,
   modifiesPixels: true,
+  worksOnAllLayers: true,
 }

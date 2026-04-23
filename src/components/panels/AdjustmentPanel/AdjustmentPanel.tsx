@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer, DropShadowAdjustmentLayer, GlowAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer, DropShadowAdjustmentLayer, GlowAdjustmentLayer, OutlineAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
 import { BrightnessContrastPanel } from '../BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from '../HueSaturationPanel/HueSaturationPanel'
@@ -19,6 +19,7 @@ import { HalationOptions } from '../HalationOptions/HalationOptions'
 import { ColorKeyPanel } from '../ColorKeyPanel/ColorKeyPanel'
 import { DropShadowOptions } from '../DropShadowOptions/DropShadowOptions'
 import { GlowOptions } from '../GlowOptions/GlowOptions'
+import { OutlineOptions } from '../OutlineOptions/OutlineOptions'
 import { ToolWindow } from '@/components'
 import styles from './AdjustmentPanel.module.scss'
 
@@ -50,6 +51,7 @@ function adjustmentTitle(layer: AdjustmentLayerState): string {
     case 'color-key':            return 'Color Key'
     case 'drop-shadow':          return 'Drop Shadow'
     case 'glow':                 return 'Glow'
+    case 'outline':              return 'Outline'
   }
 }
 
@@ -180,6 +182,13 @@ const GlowHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const OutlineHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+    <rect x="3" y="3" width="6" height="6" />
+    <rect x="1" y="1" width="10" height="10" />
+  </svg>
+)
+
 const ColorKeyHeaderIcon = (): React.JSX.Element => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
     <rect x="1.5" y="2.5" width="9" height="7" rx="0.5" />
@@ -206,6 +215,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'color-key') return <ColorKeyHeaderIcon />
   if (type === 'drop-shadow') return <DropShadowHeaderIcon />
   if (type === 'glow') return <GlowHeaderIcon />
+  if (type === 'outline') return <OutlineHeaderIcon />
   return <ColorVibranceHeaderIcon />
 }
 
@@ -314,6 +324,12 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
         {adjLayer.adjustmentType === 'glow' && (
           <GlowOptions
             layer={adjLayer as GlowAdjustmentLayer}
+            parentLayerName={parentLayerName}
+          />
+        )}
+        {adjLayer.adjustmentType === 'outline' && (
+          <OutlineOptions
+            layer={adjLayer as OutlineAdjustmentLayer}
             parentLayerName={parentLayerName}
           />
         )}

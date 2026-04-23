@@ -180,4 +180,16 @@ export const ADJUSTMENT_REGISTRY = [
       knockout:  true,
     },
   },
+  {
+    adjustmentType: 'outline' as const,
+    label: 'Outline…',
+    group: 'real-time-effects',
+    defaultParams: {
+      color:     { r: 255, g: 0, b: 0, a: 255 },
+      opacity:   100,
+      thickness: 3,
+      position:  'outside',
+      softness:  0,
+    },
+  },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

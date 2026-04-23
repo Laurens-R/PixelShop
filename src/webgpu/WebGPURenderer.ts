@@ -37,6 +37,14 @@ import {
   DROP_SHADOW_BLUR_H_COMPUTE,
   DROP_SHADOW_BLUR_V_COMPUTE,
   DROP_SHADOW_COMPOSITE_COMPUTE,
+  OUTLINE_DILATE_H_COMPUTE,
+  OUTLINE_DILATE_V_COMPUTE,
+  OUTLINE_ERODE_H_COMPUTE,
+  OUTLINE_ERODE_V_COMPUTE,
+  OUTLINE_MASK_COMPUTE,
+  OUTLINE_BLUR_H_COMPUTE,
+  OUTLINE_BLUR_V_COMPUTE,
+  OUTLINE_COMPOSITE_COMPUTE,
 } from './shaders'
 import { initFilterCompute } from './filterCompute'
 import type { AdjustmentParamsMap } from '@/types'
@@ -167,6 +175,21 @@ export type AdjustmentRenderOp =
       visible:   boolean
       selMaskLayer?: GpuLayer
     }
+  | {
+      kind:      'outline'
+      layerId:   string
+      /** Stroke color components pre-normalised to 0..1. */
+      colorR:    number
+      colorG:    number
+      colorB:    number
+      colorA:    number    // 0..1 (color.a / 255)
+      opacity:   number    // 0..1 (pre-divided by 100)
+      thickness: number    // integer 1..100 px
+      position:  'outside' | 'inside' | 'center'
+      softness:  number    // 0..50 px
+      visible:   boolean
+      selMaskLayer?: GpuLayer
+    }
 
 export type RenderPlanEntry =
   | { kind: 'layer'; layer: GpuLayer; mask?: GpuLayer }
@@ -253,6 +276,17 @@ export class WebGPURenderer {
   private readonly shadowBlurVPipeline:     GPUComputePipeline
   private readonly shadowCompositePipeline: GPUComputePipeline
   private shadowTexCache: { tempA: GPUTexture; tempB: GPUTexture } | null = null
+
+  // Outline compute pipelines
+  private readonly outlineDilateHPipeline:   GPUComputePipeline
+  private readonly outlineDilateVPipeline:   GPUComputePipeline
+  private readonly outlineErodeHPipeline:    GPUComputePipeline
+  private readonly outlineErodeVPipeline:    GPUComputePipeline
+  private readonly outlineMaskPipeline:      GPUComputePipeline
+  private readonly outlineBlurHPipeline:     GPUComputePipeline
+  private readonly outlineBlurVPipeline:     GPUComputePipeline
+  private readonly outlineCompositePipeline: GPUComputePipeline
+  private outlineTexCache: { tempA: GPUTexture; tempB: GPUTexture; tempC: GPUTexture } | null = null
 
   // Bloom intermediate texture cache — invalidated when quality changes
   private bloomTexCache: {
@@ -410,6 +444,15 @@ export class WebGPURenderer {
     this.shadowBlurHPipeline     = this.createComputePipeline(DROP_SHADOW_BLUR_H_COMPUTE,     'cs_shadow_blur_h')
     this.shadowBlurVPipeline     = this.createComputePipeline(DROP_SHADOW_BLUR_V_COMPUTE,     'cs_shadow_blur_v')
     this.shadowCompositePipeline = this.createComputePipeline(DROP_SHADOW_COMPOSITE_COMPUTE,  'cs_shadow_composite')
+
+    this.outlineDilateHPipeline   = this.createComputePipeline(OUTLINE_DILATE_H_COMPUTE,   'cs_outline_dilate_h')
+    this.outlineDilateVPipeline   = this.createComputePipeline(OUTLINE_DILATE_V_COMPUTE,   'cs_outline_dilate_v')
+    this.outlineErodeHPipeline    = this.createComputePipeline(OUTLINE_ERODE_H_COMPUTE,    'cs_outline_erode_h')
+    this.outlineErodeVPipeline    = this.createComputePipeline(OUTLINE_ERODE_V_COMPUTE,    'cs_outline_erode_v')
+    this.outlineMaskPipeline      = this.createComputePipeline(OUTLINE_MASK_COMPUTE,       'cs_outline_mask')
+    this.outlineBlurHPipeline     = this.createComputePipeline(OUTLINE_BLUR_H_COMPUTE,     'cs_outline_blur_h')
+    this.outlineBlurVPipeline     = this.createComputePipeline(OUTLINE_BLUR_V_COMPUTE,     'cs_outline_blur_v')
+    this.outlineCompositePipeline = this.createComputePipeline(OUTLINE_COMPOSITE_COMPUTE,  'cs_outline_composite')
 
     initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
   }
@@ -1131,6 +1174,16 @@ export class WebGPURenderer {
       )
       return
     }
+    if (entry.kind === 'outline') {
+      this.encodeOutlinePass(
+        encoder, srcTex, dstTex,
+        entry.colorR, entry.colorG, entry.colorB, entry.colorA,
+        entry.opacity,
+        entry.thickness, entry.position, entry.softness,
+        entry.selMaskLayer,
+      )
+      return
+    }
     const _exhaustive: never = entry
     return _exhaustive
   }
@@ -1603,6 +1656,160 @@ export class WebGPURenderer {
     this.pendingDestroyBuffers.push(dilateParamsBuf, compParamsBuf, maskFlagsBuf)
   }
 
+  private ensureOutlineTextures(): { tempA: GPUTexture; tempB: GPUTexture; tempC: GPUTexture } {
+    if (this.outlineTexCache) return this.outlineTexCache
+    const { device, pixelWidth: w, pixelHeight: h } = this
+    const usage =
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.STORAGE_BINDING |
+      GPUTextureUsage.COPY_DST |
+      GPUTextureUsage.COPY_SRC
+    const make = (): GPUTexture =>
+      device.createTexture({ size: { width: w, height: h }, format: 'rgba8unorm', usage })
+    this.outlineTexCache = { tempA: make(), tempB: make(), tempC: make() }
+    return this.outlineTexCache
+  }
+
+  private encodeOutlinePass(
+    encoder:      GPUCommandEncoder,
+    srcTex:       GPUTexture,
+    dstTex:       GPUTexture,
+    colorR:       number,
+    colorG:       number,
+    colorB:       number,
+    colorA:       number,
+    opacity:      number,
+    thickness:    number,
+    position:     'outside' | 'inside' | 'center',
+    softness:     number,
+    selMaskLayer: GpuLayer | undefined,
+  ): void {
+    const { device, pixelWidth: w, pixelHeight: h } = this
+    const { tempA, tempB, tempC } = this.ensureOutlineTextures()
+
+    const T       = Math.max(1, Math.round(thickness))
+    const dilateR = position === 'center' ? Math.ceil(T / 2)  : T
+    const erodeR  = position === 'center' ? Math.floor(T / 2) : T
+    const blurR   = softness > 0 ? Math.max(1, Math.round(softness * 0.577)) : 0
+
+    const encodeSimpleMorphPass = (
+      pipeline: GPUComputePipeline,
+      src: GPUTexture, dst: GPUTexture,
+      paramsBuf: GPUBuffer,
+    ): void => {
+      const bg = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: src.createView() },
+          { binding: 1, resource: dst.createView() },
+          { binding: 2, resource: { buffer: paramsBuf } },
+        ],
+      })
+      const pass = encoder.beginComputePass()
+      pass.setPipeline(pipeline)
+      pass.setBindGroup(0, bg)
+      pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+      pass.end()
+    }
+
+    const dilateParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, dilateParamsBuf, new Uint32Array([dilateR, 0, 0, 0]))
+
+    if (position === 'outside') {
+      encodeSimpleMorphPass(this.outlineDilateHPipeline, srcTex, tempA, dilateParamsBuf)
+      encodeSimpleMorphPass(this.outlineDilateVPipeline, tempA,  tempB, dilateParamsBuf)
+    } else if (position === 'inside') {
+      encodeSimpleMorphPass(this.outlineErodeHPipeline, srcTex, tempA, dilateParamsBuf)
+      encodeSimpleMorphPass(this.outlineErodeVPipeline, tempA,  tempB, dilateParamsBuf)
+    } else {
+      const erodeParamsBuf = createUniformBuffer(device, 16)
+      writeUniformBuffer(device, erodeParamsBuf, new Uint32Array([erodeR, 0, 0, 0]))
+      encodeSimpleMorphPass(this.outlineDilateHPipeline, srcTex, tempA, dilateParamsBuf)
+      encodeSimpleMorphPass(this.outlineDilateVPipeline, tempA,  tempC, dilateParamsBuf)
+      encodeSimpleMorphPass(this.outlineErodeHPipeline,  srcTex, tempA, erodeParamsBuf)
+      encodeSimpleMorphPass(this.outlineErodeVPipeline,  tempA,  tempB, erodeParamsBuf)
+      this.pendingDestroyBuffers.push(erodeParamsBuf)
+    }
+
+    // Mask derivation pass — output goes into tempA
+    const MODE_MAP = { outside: 0, inside: 1, center: 2 } as const
+    const maskParamsBuf = createUniformBuffer(device, 16)
+    writeUniformBuffer(device, maskParamsBuf, new Uint32Array([MODE_MAP[position], 0, 0, 0]))
+
+    const morphATex = position === 'center' ? tempC : (position === 'outside' ? tempB : srcTex)
+    const morphBTex = position === 'center' ? tempB : (position === 'inside'  ? tempB : srcTex)
+
+    const maskBG = device.createBindGroup({
+      layout: this.outlineMaskPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView()    },
+        { binding: 1, resource: morphATex.createView() },
+        { binding: 2, resource: morphBTex.createView() },
+        { binding: 3, resource: tempA.createView()     },
+        { binding: 4, resource: { buffer: maskParamsBuf } },
+      ],
+    })
+    const maskPass = encoder.beginComputePass()
+    maskPass.setPipeline(this.outlineMaskPipeline)
+    maskPass.setBindGroup(0, maskBG)
+    maskPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    maskPass.end()
+
+    // Softness blur: 3× H+V box blur (ping-pong tempA ↔ tempB)
+    let strokeMaskTex: GPUTexture = tempA
+    if (softness > 0) {
+      const blurParamsBuf = createUniformBuffer(device, 16)
+      writeUniformBuffer(device, blurParamsBuf, new Uint32Array([blurR, 0, 0, 0]))
+
+      let workingSrc = tempA
+      let workingDst = tempB
+
+      for (let i = 0; i < 3; i++) {
+        encodeSimpleMorphPass(this.outlineBlurHPipeline, workingSrc, workingDst, blurParamsBuf)
+        ;[workingSrc, workingDst] = [workingDst, workingSrc]
+        encodeSimpleMorphPass(this.outlineBlurVPipeline, workingSrc, workingDst, blurParamsBuf)
+        ;[workingSrc, workingDst] = [workingDst, workingSrc]
+      }
+
+      strokeMaskTex = workingSrc
+      this.pendingDestroyBuffers.push(blurParamsBuf)
+    }
+
+    // Composite pass
+    const compBuf = new ArrayBuffer(32)
+    const cf = new Float32Array(compBuf)
+    cf[0] = colorR; cf[1] = colorG; cf[2] = colorB; cf[3] = colorA
+    cf[4] = opacity
+    // cf[5..7] = 0 (padding, already zeroed)
+    const compParamsBuf = createUniformBuffer(device, 32)
+    device.queue.writeBuffer(compParamsBuf, 0, compBuf)
+
+    const maskFlagsArr = new Uint32Array(8); maskFlagsArr[0] = selMaskLayer ? 1 : 0
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, maskFlagsBuf, maskFlagsArr)
+
+    const dummyMask = selMaskLayer?.texture ?? srcTex
+
+    const compBG = device.createBindGroup({
+      layout: this.outlineCompositePipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView()         },
+        { binding: 1, resource: strokeMaskTex.createView()  },
+        { binding: 2, resource: dstTex.createView()         },
+        { binding: 3, resource: { buffer: compParamsBuf }   },
+        { binding: 4, resource: dummyMask.createView()      },
+        { binding: 5, resource: { buffer: maskFlagsBuf }    },
+      ],
+    })
+    const compPass = encoder.beginComputePass()
+    compPass.setPipeline(this.outlineCompositePipeline)
+    compPass.setBindGroup(0, compBG)
+    compPass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    compPass.end()
+
+    this.pendingDestroyBuffers.push(dilateParamsBuf, maskParamsBuf, compParamsBuf, maskFlagsBuf)
+  }
+
   private flushPendingDestroys(): void {
     for (const buf of this.pendingDestroyBuffers) buf.destroy()
     this.pendingDestroyBuffers = []
@@ -1966,6 +2173,10 @@ export class WebGPURenderer {
     this.shadowTexCache?.tempA.destroy()
     this.shadowTexCache?.tempB.destroy()
     this.shadowTexCache = null
+    this.outlineTexCache?.tempA.destroy()
+    this.outlineTexCache?.tempB.destroy()
+    this.outlineTexCache?.tempC.destroy()
+    this.outlineTexCache = null
     this.device.destroy()
   }
 }

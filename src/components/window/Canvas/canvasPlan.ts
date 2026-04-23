@@ -1,4 +1,4 @@
-import type { AdjustmentLayerState, LayerState, RGBAColor } from '@/types'
+import type { AdjustmentLayerState, LayerState, RGBAColor, OutlineParams } from '@/types'
 import { isGroupLayer } from '@/types'
 import { buildCurvesLuts } from '@/adjustments/curves'
 import type { GpuLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
@@ -236,6 +236,23 @@ export function buildAdjustmentEntry(
       softness,
       blendMode,
       knockout,
+      visible:      ls.visible,
+      selMaskLayer: mask,
+    }
+  }
+  if (ls.adjustmentType === 'outline') {
+    const { color, opacity, thickness, position, softness } = ls.params as OutlineParams
+    return {
+      kind:      'outline',
+      layerId:   ls.id,
+      colorR:    color.r / 255,
+      colorG:    color.g / 255,
+      colorB:    color.b / 255,
+      colorA:    color.a / 255,
+      opacity:   opacity / 100,
+      thickness: Math.round(thickness),
+      position,
+      softness,
       visible:      ls.visible,
       selMaskLayer: mask,
     }

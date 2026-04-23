@@ -202,6 +202,7 @@ export type AdjustmentType =
   | 'color-key'
   | 'drop-shadow'
   | 'glow'
+  | 'outline'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -379,6 +380,18 @@ export interface AdjustmentParamsMap {
     /** When true, the glow is masked by the inverse of the source alpha (outer glow only). Default: true */
     knockout:  boolean
   }
+  'outline': {
+    /** Stroke color including alpha. r/g/b/a are 0–255. Default: { r:255, g:0, b:0, a:255 } */
+    color:     RGBAColor
+    /** Overall stroke opacity, 0–100 (%). Applied on top of color.a. Default: 100 */
+    opacity:   number
+    /** Stroke width in pixels, 1–100. Integer values only. Default: 3 */
+    thickness: number
+    /** Controls which side of the silhouette boundary the stroke occupies. Default: 'outside' */
+    position:  'outside' | 'inside' | 'center'
+    /** Gaussian-approximation blur radius for the stroke mask, 0–50 px. Default: 0 */
+    softness:  number
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -515,6 +528,12 @@ export interface GlowAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface OutlineAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'outline'
+  params: AdjustmentParamsMap['outline']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -533,6 +552,7 @@ export type AdjustmentLayerState =
   | ColorKeyAdjustmentLayer
   | DropShadowAdjustmentLayer
   | GlowAdjustmentLayer
+  | OutlineAdjustmentLayer
 
 export interface GroupLayerState {
   id:        string

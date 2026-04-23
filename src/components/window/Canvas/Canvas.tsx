@@ -480,7 +480,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       const stateMeta = state.layers.find((l) => l.id === activeId)
       if (stateMeta && 'locked' in stateMeta && stateMeta.locked) return null
       const isParametric = stateMeta && 'type' in stateMeta && stateMeta.type !== 'mask'
-      if (isParametric) return null
+      if (isParametric && !TOOL_REGISTRY[state.activeTool].worksOnAllLayers) return null
     }
     // Detect mask layer — constrain colors to grayscale
     const activeMeta = state.layers.find((l) => l.id === activeId)
