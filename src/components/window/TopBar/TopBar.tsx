@@ -28,8 +28,13 @@ interface TopBarProps {
   onToggleGrid?: () => void
   showGrid?: boolean
   onNewLayer?: () => void
+  onNewLayerGroup?: () => void
   onDuplicateLayer?: () => void
   onDeleteLayer?: () => void
+  onGroupLayers?: () => void
+  isGroupLayersEnabled?: boolean
+  onUngroupLayers?: () => void
+  isUngroupLayersEnabled?: boolean
   onMergeDown?: () => void
   onMergeVisible?: () => void
   onFlattenImage?: () => void
@@ -52,7 +57,7 @@ interface TopBarProps {
   onInvertSelection?: () => void
 }
 
-export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection }: TopBarProps): React.JSX.Element {
+export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onNewLayerGroup, onDuplicateLayer, onDeleteLayer, onGroupLayers, isGroupLayersEnabled, onUngroupLayers, isUngroupLayersEnabled, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection }: TopBarProps): React.JSX.Element {
   const menus = useMemo((): MenuDef[] => [
     {
       label: 'File',
@@ -94,10 +99,14 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
       label: 'Layer',
       items: [
         { label: 'New Layer',       shortcut: 'Ctrl+Shift+N', action: onNewLayer },
+        { label: 'New Layer Group',                           action: onNewLayerGroup },
         { label: 'Duplicate Layer',                           action: onDuplicateLayer },
         { label: 'Delete Layer',                              action: onDeleteLayer },
         { separator: true, label: '' },
         { label: 'Rasterize Layer', disabled: !isRasterizeEnabled, action: onRasterizeLayer },
+        { separator: true, label: '' },
+        { label: 'Group Layers',   shortcut: 'Ctrl+G',       disabled: !isGroupLayersEnabled,   action: onGroupLayers },
+        { label: 'Ungroup Layers', shortcut: 'Ctrl+Shift+G', disabled: !isUngroupLayersEnabled, action: onUngroupLayers },
         { separator: true, label: '' },
         { label: 'Merge Selected',  disabled: !isMergeSelectedEnabled, action: onMergeSelected },
         { label: 'Merge Down',    action: onMergeDown },
@@ -171,7 +180,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Zoom Out',      shortcut: 'Ctrl+-', action: onZoomOut },
         { label: 'Fit to Window', shortcut: 'Ctrl+0', action: onFitToWindow },
         { separator: true, label: '' },
-        { label: 'Show Grid', shortcut: 'Ctrl+G', action: onToggleGrid, checked: showGrid }
+        { label: 'Show Grid', action: onToggleGrid, checked: showGrid }
       ]
     },
     {
@@ -181,7 +190,7 @@ export function TopBar({ onDebug, onNew, onOpen, onSave, onSaveAs, onExport, onU
         { label: 'Keyboard Shortcuts', shortcut: '?', action: onKeyboardShortcuts },
       ]
     }
-  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onDuplicateLayer, onDeleteLayer, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection])
+  ], [onNew, onOpen, onSave, onSaveAs, onExport, onUndo, onRedo, onCut, onCopy, onPaste, onDelete, onResizeImage, onResizeCanvas, onZoomIn, onZoomOut, onFitToWindow, onToggleGrid, showGrid, onNewLayer, onNewLayerGroup, onDuplicateLayer, onDeleteLayer, onGroupLayers, isGroupLayersEnabled, onUngroupLayers, isUngroupLayersEnabled, onMergeDown, onMergeVisible, onFlattenImage, onRasterizeLayer, isRasterizeEnabled, onMergeSelected, isMergeSelectedEnabled, onAbout, onKeyboardShortcuts, onCreateAdjustmentLayer, isAdjustmentMenuEnabled, adjustmentMenuItems, effectsMenuItems, onOpenFilterDialog, onInstantFilter, isFiltersMenuEnabled, filterMenuItems, onFreeTransform, isFreeTransformEnabled, onInvertSelection])
 
   return (
     <div className={styles.topBar}>

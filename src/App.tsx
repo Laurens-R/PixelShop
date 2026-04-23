@@ -40,6 +40,7 @@ import { useFileOps } from '@/hooks/useFileOps'
 import { useExportOps } from '@/hooks/useExportOps'
 import { useClipboard } from '@/hooks/useClipboard'
 import { useLayers } from '@/hooks/useLayers'
+import { useLayerGroups } from '@/hooks/useLayerGroups'
 import { useCanvasTransforms } from '@/hooks/useCanvasTransforms'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
@@ -135,6 +136,11 @@ function AppContent(): React.JSX.Element {
     handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer,
     handleFlattenImage, handleRasterizeLayer,
   } = useLayers({ canvasHandleRef, stateRef, captureHistory, dispatch, pendingLayerLabelRef })
+
+  // ── Layer groups ──────────────────────────────────────────────────
+  const {
+    handleMergeGroup, handleGroupLayers, handleUngroupLayers,
+  } = useLayerGroups({ canvasHandleRef, stateRef, captureHistory, dispatch })
 
   // ── Canvas transforms ─────────────────────────────────────────────
   const { handleResizeImage, handleResizeCanvas } = useCanvasTransforms({
@@ -379,6 +385,9 @@ function AppContent(): React.JSX.Element {
           onRasterizeLayer={handleRasterizeLayer}
           onOpenAdjustmentPanel={(id) => requireTransformDecision(() => adjustments.handleOpenAdjustmentPanel(id))}
           onGeneratePalette={() => setShowGeneratePaletteDialog(true)}
+          onMergeGroup={handleMergeGroup}
+          onGroupSelected={handleGroupLayers}
+          onUngroup={handleUngroupLayers}
         />
       </div>
 

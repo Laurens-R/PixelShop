@@ -138,6 +138,14 @@ export type RenderPlanEntry =
       baseMask?: GpuLayer
       adjustments: AdjustmentRenderOp[]
     }
+  | {
+      kind: 'layer-group'
+      groupId:   string
+      opacity:   number
+      blendMode: string
+      visible:   boolean
+      children:  RenderPlanEntry[]
+    }
   | AdjustmentRenderOp
 
 // ─── Error ────────────────────────────────────────────────────────────────────
@@ -228,6 +236,8 @@ export class WebGPURenderer {
 
   // Temporary GPU buffers accumulated during command encoding; flushed after submit.
   private pendingDestroyBuffers: GPUBuffer[] = []
+  // Temporary GPU textures for isolated group compositing; flushed after submit.
+  private pendingDestroyTextures: GPUTexture[] = []
 
   readonly pixelWidth: number
   readonly pixelHeight: number
@@ -700,26 +710,65 @@ export class WebGPURenderer {
   ): GPUTexture {
     this.encodeClearTexture(encoder, this.pingTex)
     this.encodeClearTexture(encoder, this.pongTex)
+    const { src } = this.encodeSubPlan(encoder, plan, this.pongTex, this.pingTex)
+    return src
+  }
 
-    let src = this.pongTex
-    let dst = this.pingTex
-
+  private encodeSubPlan(
+    encoder: GPUCommandEncoder,
+    plan: RenderPlanEntry[],
+    src: GPUTexture,
+    dst: GPUTexture,
+  ): { src: GPUTexture; dst: GPUTexture } {
     for (const entry of plan) {
       if (entry.kind === 'layer') {
         if (!entry.layer.visible || entry.layer.opacity === 0) continue
         this.encodeCompositeLayer(encoder, entry.layer, src, dst, entry.mask)
+        ;[src, dst] = [dst, src]
+
+      } else if (entry.kind === 'layer-group') {
+        if (!entry.visible) continue
+        if (entry.blendMode === 'pass-through') {
+          // Pass-through: inline children into the parent ping-pong pair.
+          ;({ src, dst } = this.encodeSubPlan(encoder, entry.children, src, dst))
+        } else {
+          // Isolated: allocate a fresh ping-pong pair for this group.
+          const iso1 = this.allocateTempGroupTex()
+          const iso2 = this.allocateTempGroupTex()
+          this.encodeClearTexture(encoder, iso1)
+          this.encodeClearTexture(encoder, iso2)
+          const { src: isoResult } = this.encodeSubPlan(encoder, entry.children, iso2, iso1)
+          // Composite the isolated result into the parent context.
+          this.encodeCompositeTexture(encoder, isoResult, src, dst, entry.opacity, entry.blendMode)
+          ;[src, dst] = [dst, src]
+        }
+
       } else if (entry.kind === 'adjustment-group') {
         if (!entry.baseLayer.visible || entry.baseLayer.opacity === 0) continue
         const groupResult = this.encodeAdjustmentGroup(encoder, entry)
         this.encodeCompositeTexture(encoder, groupResult, src, dst, entry.baseLayer.opacity, entry.baseLayer.blendMode)
+        ;[src, dst] = [dst, src]
+
       } else {
+        // AdjustmentRenderOp
         if (!entry.visible) continue
         this.encodeAdjustmentOp(encoder, entry, src, dst)
+        ;[src, dst] = [dst, src]
       }
-      ;[src, dst] = [dst, src]
     }
+    return { src, dst }
+  }
 
-    return src
+  private allocateTempGroupTex(): GPUTexture {
+    const texUsage =
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.COPY_DST |
+      GPUTextureUsage.COPY_SRC |
+      GPUTextureUsage.STORAGE_BINDING |
+      GPUTextureUsage.RENDER_ATTACHMENT
+    const tex = this.createPingPongTex(this.pixelWidth, this.pixelHeight, texUsage)
+    this.pendingDestroyTextures.push(tex)
+    return tex
   }
 
   private encodeClearTexture(encoder: GPUCommandEncoder, texture: GPUTexture): void {
@@ -1319,6 +1368,8 @@ export class WebGPURenderer {
   private flushPendingDestroys(): void {
     for (const buf of this.pendingDestroyBuffers) buf.destroy()
     this.pendingDestroyBuffers = []
+    for (const tex of this.pendingDestroyTextures) tex.destroy()
+    this.pendingDestroyTextures = []
   }
 
   private ensureBloomTextures(quality: 'full' | 'half' | 'quarter'): {

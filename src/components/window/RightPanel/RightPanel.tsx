@@ -18,9 +18,12 @@ interface RightPanelProps {
   onRasterizeLayer: (layerId: string) => void
   onOpenAdjustmentPanel?: (layerId: string) => void
   onGeneratePalette?: () => void
+  onMergeGroup: (groupId: string) => void
+  onGroupSelected: (layerIds: string[]) => void
+  onUngroup: (groupId: string) => void
 }
 
-export function RightPanel({ activeTabId, onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onOpenAdjustmentPanel, onGeneratePalette }: RightPanelProps): React.JSX.Element {
+export function RightPanel({ activeTabId, onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onOpenAdjustmentPanel, onGeneratePalette, onMergeGroup, onGroupSelected, onUngroup }: RightPanelProps): React.JSX.Element {
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
   const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
@@ -141,6 +144,9 @@ export function RightPanel({ activeTabId, onMergeSelected, onMergeVisible, onMer
             onFlattenImage={onFlattenImage}
             onRasterizeLayer={onRasterizeLayer}
             onOpenAdjustmentPanel={onOpenAdjustmentPanel}
+            onMergeGroup={onMergeGroup}
+            onGroupSelected={onGroupSelected}
+            onUngroup={onUngroup}
           />
         )}
         {layerTab === 'History' && (

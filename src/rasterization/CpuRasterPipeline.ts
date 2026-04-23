@@ -32,6 +32,12 @@ export class CpuRasterPipeline {
         continue
       }
 
+      if (entry.kind === 'layer-group') {
+        // CPU pipeline does not support layer groups — skip silently.
+        // Groups are only used in GPU compositing.
+        continue
+      }
+
       if (entry.kind === 'adjustment-group') {
         if (!entry.baseLayer.visible || entry.baseLayer.opacity <= 0) continue
         const scoped = new Uint8Array(width * height * 4)

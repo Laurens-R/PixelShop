@@ -2,7 +2,8 @@ import { useImperativeHandle, useRef } from 'react'
 import type React from 'react'
 import type { GpuLayer, WebGPURenderer, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
 import type { LayerState, RGBAColor } from '@/types'
-import { buildRenderPlan as buildCanvasRenderPlan } from './canvasPlan'
+import { isGroupLayer } from '@/types'
+import { buildRenderPlan as buildCanvasRenderPlan, buildSubPlan } from './canvasPlan'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import { encodePng } from './pngHelpers'
 import { rasterizeDocument, type RasterBackend, type RasterReason } from '@/rasterization'
@@ -47,6 +48,8 @@ export interface CanvasHandle {
   readAdjustmentInputPixels: (adjustmentLayerId: string) => Promise<Uint8Array | null>
   /** Return a copy of a baked adjustment selection mask by adjustment layer ID. */
   getAdjustmentMaskPixels: (adjustmentLayerId: string) => Uint8Array | null
+  /** Rasterize only the children of a group layer, against a transparent background. Used by Merge Group. */
+  rasterizeGroupChildren: (groupId: string, layers: readonly LayerState[], swatches: readonly RGBAColor[], reason: RasterReason) => Promise<{ data: Uint8Array; width: number; height: number; backendUsed: RasterBackend }>
   /** Zoom to fit the whole canvas inside the current viewport with a small margin. */
   fitToWindow: () => void
   /**
@@ -183,6 +186,36 @@ export function useCanvasHandle({
         height: result.height,
         backendUsed: result.backendUsed,
       }
+    },
+
+    rasterizeGroupChildren: async (groupId, layers, swatches, reason) => {
+      const renderer = requireRenderer()
+      const group = layers.find(l => l.id === groupId)
+      if (!group || !isGroupLayer(group)) throw new Error(`Group ${groupId} not found`)
+      const maskMap = new Map<string, GpuLayer>()
+      for (const layer of layers) {
+        if ('type' in layer && layer.type === 'mask' && layer.visible) {
+          const gl = glLayersRef.current.get(layer.id)
+          if (gl) maskMap.set((layer as { parentId: string }).parentId, gl)
+        }
+      }
+      const plan = buildSubPlan(
+        group.childIds,
+        layers,
+        glLayersRef.current,
+        maskMap,
+        adjustmentMaskMap.current,
+        new Set(),
+        swatches as RGBAColor[],
+      )
+      const result = await rasterizeDocument({
+        plan,
+        width: renderer.pixelWidth,
+        height: renderer.pixelHeight,
+        reason,
+        renderer,
+      })
+      return { data: result.data, width: result.width, height: result.height, backendUsed: result.backendUsed }
     },
 
     getLayerPixels: (layerId) => {

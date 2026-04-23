@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, BlendMode, BackgroundFill, GridType, SwatchGroup } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, GroupLayerState, BlendMode, BackgroundFill, GridType, SwatchGroup } from '@/types'
+import { isGroupLayer } from '@/types'
+import { getDescendantIds, getParentGroup } from '@/utils/layerTree'
 import { DEFAULT_SWATCHES } from './tabTypes'
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -48,6 +50,12 @@ export type AppAction =
   | { type: 'ADD_SWATCHES_TO_GROUP'; payload: { id: string; swatchIndices: number[] } }
   | { type: 'REMOVE_SWATCH_GROUP'; payload: string }
   | { type: 'RENAME_SWATCH_GROUP'; payload: { id: string; name: string } }
+  | { type: 'ADD_LAYER_GROUP'; payload: { id: string; name: string; aboveLayerId?: string } }
+  | { type: 'GROUP_LAYERS'; payload: { groupId: string; groupName: string; layerIds: string[] } }
+  | { type: 'UNGROUP_LAYERS'; payload: { groupId: string } }
+  | { type: 'TOGGLE_GROUP_COLLAPSE'; payload: string }
+  | { type: 'MOVE_LAYER_INTO_GROUP'; payload: { layerId: string; targetGroupId: string; insertIndex?: number } }
+  | { type: 'MOVE_LAYER_OUT_OF_GROUP'; payload: { layerId: string; targetParentGroupId: string | null; insertIndex: number } }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -164,15 +172,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'REMOVE_LAYER': {
       if (state.layers.length <= 1) return state
-      // Also remove any mask or adjustment child whose parent is being removed
-      const remaining = state.layers.filter((l) =>
-        l.id !== action.payload &&
-        !(
-          'type' in l &&
-          (l.type === 'mask' || l.type === 'adjustment') &&
-          (l as MaskLayerState | AdjustmentLayerState).parentId === action.payload
+      const target = state.layers.find(l => l.id === action.payload)
+      if (!target) return state
+      // Collect all IDs to remove: the target + its descendants (for groups) + per-layer children.
+      const toRemove = new Set<string>([action.payload])
+      if (isGroupLayer(target)) {
+        for (const id of getDescendantIds(state.layers, action.payload)) toRemove.add(id)
+      }
+      // Also remove per-layer mask/adjustment children.
+      for (const l of state.layers) {
+        if ('type' in l && (l.type === 'mask' || l.type === 'adjustment') &&
+            toRemove.has((l as MaskLayerState | AdjustmentLayerState).parentId)) {
+          toRemove.add(l.id)
+        }
+      }
+      const remaining = state.layers
+        .filter(l => !toRemove.has(l.id))
+        .map(l => isGroupLayer(l)
+          ? { ...l, childIds: l.childIds.filter(id => !toRemove.has(id)) }
+          : l,
         )
-      )
       if (remaining.length === 0) return state
       const newOpenAdjId =
         state.openAdjustmentLayerId !== null && remaining.some(l => l.id === state.openAdjustmentLayerId)
@@ -182,7 +201,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: remaining,
         activeLayerId:
-          state.activeLayerId === action.payload ? (remaining[remaining.length - 1]?.id ?? null) : state.activeLayerId,
+          state.activeLayerId !== null && toRemove.has(state.activeLayerId)
+            ? (remaining[remaining.length - 1]?.id ?? null)
+            : state.activeLayerId,
         openAdjustmentLayerId: newOpenAdjId,
       }
     }
@@ -222,13 +243,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_SELECTED_LAYERS':
       return { ...state, selectedLayerIds: action.payload }
 
-    case 'TOGGLE_LAYER_VISIBILITY':
+    case 'TOGGLE_LAYER_VISIBILITY': {
+      const target = state.layers.find(l => l.id === action.payload)
+      const newVisible = target ? !target.visible : false
+      const affected = target && isGroupLayer(target)
+        ? new Set([action.payload, ...getDescendantIds(state.layers, action.payload)])
+        : new Set([action.payload])
       return {
         ...state,
-        layers: state.layers.map((l) =>
-          l.id === action.payload ? { ...l, visible: !l.visible } : l
-        )
+        layers: state.layers.map(l =>
+          affected.has(l.id) ? { ...l, visible: newVisible } : l,
+        ),
       }
+    }
 
     case 'TOGGLE_LAYER_LOCK':
       return {
@@ -402,6 +429,154 @@ function appReducer(state: AppState, action: AppAction): AppState {
           zoom: action.payload.zoom,
         },
       }
+
+    case 'ADD_LAYER_GROUP': {
+      const { id, name, aboveLayerId } = action.payload
+      const newGroup: GroupLayerState = {
+        id, name, visible: true, opacity: 1, locked: false,
+        blendMode: 'pass-through', type: 'group', collapsed: false, childIds: [],
+      }
+      if (!aboveLayerId) {
+        return { ...state, layers: [...state.layers, newGroup], activeLayerId: id }
+      }
+      const idx = state.layers.findIndex(l => l.id === aboveLayerId)
+      const insertAt = idx >= 0 ? idx + 1 : state.layers.length
+      const next = [...state.layers]
+      next.splice(insertAt, 0, newGroup)
+      return { ...state, layers: next, activeLayerId: id }
+    }
+
+    case 'GROUP_LAYERS': {
+      const { groupId, groupName, layerIds } = action.payload
+      if (layerIds.length === 0) return state
+      const layerIdSet = new Set(layerIds)
+
+      // Determine parent context (they must all share one parent; enforced by UI).
+      const parentGroup = getParentGroup(state.layers, layerIds[0])
+
+      // Remove the layers from their current parent's childIds (if in a group).
+      let nextLayers = state.layers.map(l =>
+        isGroupLayer(l) ? { ...l, childIds: l.childIds.filter(id => !layerIdSet.has(id)) } : l,
+      )
+
+      // Create the new group with childIds in the caller's supplied order.
+      const newGroup: GroupLayerState = {
+        id: groupId, name: groupName, visible: true, opacity: 1, locked: false,
+        blendMode: 'pass-through', type: 'group', collapsed: false, childIds: layerIds,
+      }
+
+      if (parentGroup) {
+        // Insert group into parent's childIds at the position of the topmost selected layer.
+        const topmostIdx = parentGroup.childIds.findIndex(id => layerIdSet.has(id))
+        const insertPos = topmostIdx >= 0 ? topmostIdx : parentGroup.childIds.length
+
+        // Insert the group layer into the flat array at the position of the first selected layer in flat order.
+        const firstFlatIdx = nextLayers.findIndex(l => l.id === layerIds[0])
+        nextLayers.splice(firstFlatIdx, 0, newGroup)
+
+        // Update the parent's childIds to include the new group.
+        nextLayers = nextLayers.map(l =>
+          l.id === parentGroup.id && isGroupLayer(l)
+            ? { ...l, childIds: [...l.childIds.slice(0, insertPos), groupId, ...l.childIds.slice(insertPos)] }
+            : l,
+        )
+      } else {
+        // Root-level insertion: place the group in the flat array above the topmost selected layer.
+        const topmostFlatIdx = Math.max(...layerIds.map(id => nextLayers.findIndex(l => l.id === id)))
+        nextLayers.splice(topmostFlatIdx + 1, 0, newGroup)
+      }
+
+      return { ...state, layers: nextLayers, activeLayerId: groupId, selectedLayerIds: [] }
+    }
+
+    case 'UNGROUP_LAYERS': {
+      const { groupId } = action.payload
+      const group = state.layers.find(l => l.id === groupId)
+      if (!group || !isGroupLayer(group)) return state
+
+      const parentGroup = getParentGroup(state.layers, groupId)
+      let nextLayers: LayerState[]
+
+      if (parentGroup) {
+        // Insert children into parent's childIds at group's former position.
+        const groupPosInParent = parentGroup.childIds.indexOf(groupId)
+        nextLayers = state.layers
+          .filter(l => l.id !== groupId)
+          .map(l =>
+            l.id === parentGroup.id && isGroupLayer(l)
+              ? {
+                  ...l,
+                  childIds: [
+                    ...l.childIds.slice(0, groupPosInParent),
+                    ...group.childIds,
+                    ...l.childIds.slice(groupPosInParent + 1),
+                  ],
+                }
+              : l,
+          )
+      } else {
+        // Root level: remove group from flat array; children remain in flat array as root layers.
+        nextLayers = state.layers.filter(l => l.id !== groupId)
+      }
+
+      const topmostChild = group.childIds[group.childIds.length - 1] ?? null
+      return {
+        ...state,
+        layers: nextLayers,
+        activeLayerId: topmostChild,
+        selectedLayerIds: [],
+      }
+    }
+
+    case 'TOGGLE_GROUP_COLLAPSE': {
+      return {
+        ...state,
+        layers: state.layers.map(l =>
+          l.id === action.payload && isGroupLayer(l)
+            ? { ...l, collapsed: !l.collapsed }
+            : l,
+        ),
+      }
+    }
+
+    case 'MOVE_LAYER_INTO_GROUP': {
+      const { layerId, targetGroupId, insertIndex } = action.payload
+      // Remove from current parent's childIds (if any).
+      let nextLayers = state.layers.map(l =>
+        isGroupLayer(l) && l.id !== targetGroupId
+          ? { ...l, childIds: l.childIds.filter(id => id !== layerId) }
+          : l,
+      )
+      // Insert into target group's childIds.
+      nextLayers = nextLayers.map(l => {
+        if (!isGroupLayer(l) || l.id !== targetGroupId) return l
+        const idx = insertIndex !== undefined ? insertIndex : 0
+        const next = [...l.childIds.filter(id => id !== layerId)]
+        next.splice(Math.max(0, Math.min(idx, next.length)), 0, layerId)
+        return { ...l, childIds: next }
+      })
+      return { ...state, layers: nextLayers }
+    }
+
+    case 'MOVE_LAYER_OUT_OF_GROUP': {
+      const { layerId, targetParentGroupId, insertIndex } = action.payload
+      // Remove from all groups' childIds.
+      let nextLayers = state.layers.map(l =>
+        isGroupLayer(l) ? { ...l, childIds: l.childIds.filter(id => id !== layerId) } : l,
+      )
+      if (targetParentGroupId !== null) {
+        // Insert into target group at insertIndex.
+        nextLayers = nextLayers.map(l => {
+          if (!isGroupLayer(l) || l.id !== targetParentGroupId) return l
+          const next = [...l.childIds]
+          next.splice(Math.max(0, Math.min(insertIndex, next.length)), 0, layerId)
+          return { ...l, childIds: next }
+        })
+      }
+      // If targetParentGroupId === null, the layer becomes root.
+      // Its flat array position already determines root render order.
+      return { ...state, layers: nextLayers }
+    }
 
     default:
       return state

@@ -88,6 +88,7 @@ export type BlendMode =
   | 'exclusion'
   | 'color-dodge'
   | 'color-burn'
+  | 'pass-through'
 
 export interface PixelLayerState {
   id: string
@@ -485,7 +486,23 @@ export type AdjustmentLayerState =
   | HalationAdjustmentLayer
   | ColorKeyAdjustmentLayer
 
-export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState
+export interface GroupLayerState {
+  id:        string
+  name:      string
+  visible:   boolean
+  opacity:   number
+  locked:    boolean
+  blendMode: BlendMode
+  type:      'group'
+  collapsed: boolean
+  childIds:  string[]
+}
+
+export type LayerState = PixelLayerState | TextLayerState | ShapeLayerState | MaskLayerState | AdjustmentLayerState | GroupLayerState
+
+export function isGroupLayer(l: LayerState): l is GroupLayerState {
+  return 'type' in l && l.type === 'group'
+}
 
 export function isPixelLayer(l: LayerState): l is PixelLayerState {
   return !('type' in l)

@@ -1,7 +1,8 @@
-import type { AdjustmentLayerState, LayerState, MaskLayerState, RGBAColor } from '@/types'
-import { isPixelLayer } from '@/types'
+import type { AdjustmentLayerState, LayerState, RGBAColor } from '@/types'
+import { isGroupLayer } from '@/types'
 import { buildCurvesLuts } from '@/adjustments/curves'
 import type { GpuLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
+import { buildRootLayerIds } from '@/utils/layerTree'
 
 function srgbByteToLinear(r: number, g: number, b: number): { r: number; g: number; b: number } {
   const toLinear = (c: number): number => {
@@ -205,7 +206,8 @@ export function buildAdjustmentEntry(
   return _exhaustive
 }
 
-export function buildRenderPlan(
+export function buildSubPlan(
+  orderedIds: readonly string[],
   layers: readonly LayerState[],
   glLayers: Map<string, GpuLayer>,
   maskMap: Map<string, GpuLayer>,
@@ -213,45 +215,59 @@ export function buildRenderPlan(
   bypassedAdjustmentIds: ReadonlySet<string>,
   swatches: RGBAColor[],
 ): RenderPlanEntry[] {
+  const layersById = new Map(layers.map(l => [l.id, l]))
   const plan: RenderPlanEntry[] = []
 
-  for (let i = 0; i < layers.length; i++) {
-    const ls = layers[i]
+  for (const id of orderedIds) {
+    const ls = layersById.get(id)
+    if (!ls) continue
+
+    // Skip mask layers — handled via their pixel parent
     if ('type' in ls && ls.type === 'mask') continue
 
+    // Adjustment layers
     if ('type' in ls && ls.type === 'adjustment') {
+      const adjLs = ls as AdjustmentLayerState
+      const parent = layersById.get(adjLs.parentId)
+      // Per-layer attachment (parentId → non-group layer): skip, bundled with pixel parent
+      if (parent && !isGroupLayer(parent)) continue
+      // Group-scoped adjustment: treat as standalone
       if (bypassedAdjustmentIds.has(ls.id)) continue
-      const entry = buildAdjustmentEntry(ls, adjustmentMaskMap.get(ls.id), swatches)
+      const entry = buildAdjustmentEntry(adjLs, adjustmentMaskMap.get(ls.id), swatches)
       if (entry) plan.push(entry)
       continue
     }
 
-    const baseLayer = glLayers.get(ls.id)
-    if (!baseLayer) continue
-
-    if (!isPixelLayer(ls)) {
-      const id = (ls as { id: string }).id
-      plan.push({ kind: 'layer', layer: baseLayer, mask: maskMap.get(id) })
+    // Group layer → recurse
+    if (isGroupLayer(ls)) {
+      plan.push({
+        kind: 'layer-group',
+        groupId: ls.id,
+        opacity: ls.opacity,
+        blendMode: ls.blendMode,
+        visible: ls.visible,
+        children: buildSubPlan(
+          ls.childIds, layers, glLayers, maskMap, adjustmentMaskMap, bypassedAdjustmentIds, swatches,
+        ),
+      })
       continue
     }
 
+    // Pixel, text, or shape layer — collect attached per-layer adjustments
+    const baseLayer = glLayers.get(ls.id)
+    if (!baseLayer) continue
+
     const adjustments: AdjustmentRenderOp[] = []
-    let cursor = i + 1
-    while (cursor < layers.length) {
-      const child = layers[cursor]
+    for (const adj of layers) {
       if (
-        'type' in child &&
-        (child.type === 'mask' || child.type === 'adjustment') &&
-        (child as MaskLayerState | AdjustmentLayerState).parentId === ls.id
+        'type' in adj &&
+        adj.type === 'adjustment' &&
+        (adj as AdjustmentLayerState).parentId === ls.id &&
+        !bypassedAdjustmentIds.has(adj.id)
       ) {
-        if ('type' in child && child.type === 'adjustment' && !bypassedAdjustmentIds.has(child.id)) {
-          const op = buildAdjustmentEntry(child, adjustmentMaskMap.get(child.id), swatches)
-          if (op) adjustments.push(op)
-        }
-        cursor++
-        continue
+        const op = buildAdjustmentEntry(adj as AdjustmentLayerState, adjustmentMaskMap.get(adj.id), swatches)
+        if (op) adjustments.push(op)
       }
-      break
     }
 
     if (adjustments.length > 0) {
@@ -262,12 +278,24 @@ export function buildRenderPlan(
         baseMask: maskMap.get(ls.id),
         adjustments,
       })
-      i = cursor - 1
-      continue
+    } else {
+      plan.push({ kind: 'layer', layer: baseLayer, mask: maskMap.get(ls.id) })
     }
-
-    plan.push({ kind: 'layer', layer: baseLayer, mask: maskMap.get(ls.id) })
   }
 
   return plan
+}
+
+export function buildRenderPlan(
+  layers: readonly LayerState[],
+  glLayers: Map<string, GpuLayer>,
+  maskMap: Map<string, GpuLayer>,
+  adjustmentMaskMap: Map<string, GpuLayer>,
+  bypassedAdjustmentIds: ReadonlySet<string>,
+  swatches: RGBAColor[],
+): RenderPlanEntry[] {
+  return buildSubPlan(
+    buildRootLayerIds(layers),
+    layers, glLayers, maskMap, adjustmentMaskMap, bypassedAdjustmentIds, swatches,
+  )
 }

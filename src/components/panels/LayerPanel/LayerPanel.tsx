@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react'
-import type { LayerState, BlendMode } from '@/types'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import type { LayerState, BlendMode, MaskLayerState, AdjustmentLayerState, GroupLayerState } from '@/types'
+import { isGroupLayer } from '@/types'
 import { useAppContext } from '@/store/AppContext'
+import { buildRootLayerIds, getParentGroup, isDescendantOf, reorderRootLayers } from '@/utils/layerTree'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './LayerPanel.module.scss'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const BLEND_MODES: { value: BlendMode; label: string }[] = [
+const BLEND_MODES_BASE: { value: BlendMode; label: string }[] = [
   { value: 'normal',      label: 'Normal' },
   { value: 'multiply',    label: 'Multiply' },
   { value: 'screen',      label: 'Screen' },
@@ -20,6 +22,25 @@ const BLEND_MODES: { value: BlendMode; label: string }[] = [
   { value: 'color-dodge', label: 'Color Dodge' },
   { value: 'color-burn',  label: 'Color Burn' },
 ]
+
+const BLEND_MODES_GROUP: { value: BlendMode; label: string }[] = [
+  { value: 'pass-through', label: 'Pass Through' },
+  ...BLEND_MODES_BASE,
+]
+
+// ─── Drop target ──────────────────────────────────────────────────────────────
+
+type DropTarget =
+  | { kind: 'before'; layerId: string }
+  | { kind: 'after';  layerId: string }
+  | { kind: 'into';   groupId: string }
+
+// ─── Tree row ─────────────────────────────────────────────────────────────────
+
+interface TreeRow {
+  layer: LayerState
+  depth: number
+}
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -56,6 +77,14 @@ const AddLayerIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const AddGroupIcon = (): React.JSX.Element => (
+  <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" width="12" height="12">
+    <path d="M1 4h12v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4z" />
+    <path d="M1 4V3a1 1 0 011-1h3l1.5 2H1z" />
+    <path d="M7 8h3M8.5 6.5v3" strokeLinecap="round" />
+  </svg>
+)
+
 const MaskIcon = ({ active }: { active: boolean }): React.JSX.Element => (
   <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" width="12" height="12">
     <circle cx="7" cy="7" r="5" />
@@ -83,15 +112,25 @@ const DeleteLayerIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const FolderIcon = (): React.JSX.Element => (
+  <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" width="13" height="13">
+    <path d="M1 4h12v7a1 1 0 01-1 1H2a1 1 0 01-1-1V4z" />
+    <path d="M1 4V3a1 1 0 011-1h3l1.5 2H1z" />
+  </svg>
+)
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface LayerPanelProps {
-  onMergeSelected: (ids: string[]) => void
-  onMergeVisible: () => void
-  onMergeDown: () => void
-  onFlattenImage: () => void
-  onRasterizeLayer: (layerId: string) => void
+  onMergeSelected:     (ids: string[]) => void
+  onMergeVisible:      () => void
+  onMergeDown:         () => void
+  onFlattenImage:      () => void
+  onRasterizeLayer:    (layerId: string) => void
   onOpenAdjustmentPanel?: (layerId: string) => void
+  onMergeGroup:        (groupId: string) => void
+  onGroupSelected:     (layerIds: string[]) => void
+  onUngroup:           (groupId: string) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -103,6 +142,9 @@ export function LayerPanel({
   onFlattenImage,
   onRasterizeLayer,
   onOpenAdjustmentPanel,
+  onMergeGroup,
+  onGroupSelected,
+  onUngroup,
 }: LayerPanelProps): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const layers = state.layers
@@ -122,26 +164,83 @@ export function LayerPanel({
   const onLayerOpacityChange = (id: string, opacity: number): void => { dispatch({ type: 'SET_LAYER_OPACITY', payload: { id, opacity } }) }
   const onLayerBlendChange = (id: string, blendMode: BlendMode): void => { dispatch({ type: 'SET_LAYER_BLEND', payload: { id, blendMode } }) }
   const onLayerRename = (id: string, name: string): void => { dispatch({ type: 'RENAME_LAYER', payload: { id, name } }) }
-  const onLayersReorder = (reordered: LayerState[]): void => { dispatch({ type: 'REORDER_LAYERS', payload: reordered }) }
   const onAddMaskLayer = (parentId: string): void => {
     const hasMask = layers.some(l => 'type' in l && l.type === 'mask' && (l as { parentId: string }).parentId === parentId)
     if (hasMask) return
     dispatch({ type: 'ADD_MASK_LAYER', payload: { id: `mask-${Date.now()}`, name: 'Layer Mask', visible: true, type: 'mask', parentId } })
   }
+
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState('')
   const selectedIds = new Set(state.selectedLayerIds)
   const setSelectedIds = (next: Set<string>): void => { dispatch({ type: 'SET_SELECTED_LAYERS', payload: [...next] }) }
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flipX: boolean } | null>(null)
-  const dragSrcIdx = useRef<number | null>(null)
+  const dragSrcLayerIdRef = useRef<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
 
-  // Close context menu when pressing Escape
   useEffect(() => {
     if (!contextMenu) return
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') setContextMenu(null) }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [contextMenu])
+
+  // ── Tree rows ────────────────────────────────────────────────────────────────
+
+  const treeRows: TreeRow[] = useMemo(() => {
+    const result: TreeRow[] = []
+    const layersById = new Map(layers.map(l => [l.id, l]))
+    const rootIds = buildRootLayerIds(layers)
+
+    function walk(ids: readonly string[], depth: number, parentCollapsed: boolean): void {
+      if (parentCollapsed) return
+      for (let i = ids.length - 1; i >= 0; i--) {
+        const id = ids[i]
+        const layer = layersById.get(id)
+        if (!layer) continue
+        // Skip per-layer mask/adjustment: yielded after their pixel parent
+        if ('type' in layer && (layer.type === 'mask' || layer.type === 'adjustment')) {
+          const parent = layersById.get((layer as MaskLayerState | AdjustmentLayerState).parentId)
+          if (parent && !isGroupLayer(parent)) continue
+        }
+        result.push({ layer, depth })
+        if (isGroupLayer(layer)) {
+          walk(layer.childIds, depth + 1, layer.collapsed)
+        } else if (!('type' in layer) || (layer.type !== 'mask' && layer.type !== 'adjustment')) {
+          // Pixel/text/shape: append attached children
+          for (const child of layers) {
+            if (
+              'type' in child &&
+              (child.type === 'mask' || child.type === 'adjustment') &&
+              (child as MaskLayerState | AdjustmentLayerState).parentId === layer.id
+            ) {
+              result.push({ layer: child, depth: depth + 1 })
+            }
+          }
+        }
+      }
+    }
+
+    walk(rootIds, 0, false)
+    return result
+  }, [layers])
+
+  // Determine which row to highlight as "active" — if the active layer is hidden
+  // inside a collapsed group, highlight the collapsed group row instead.
+  const displayActiveId = useMemo((): string | null => {
+    if (!activeLayerId) return null
+    if (treeRows.some(r => r.layer.id === activeLayerId)) return activeLayerId
+    // Active layer is inside a collapsed group — walk up the parent chain
+    let current = activeLayerId
+    for (;;) {
+      const parent = getParentGroup(layers, current)
+      if (!parent) return current
+      if (treeRows.some(r => r.layer.id === parent.id)) return parent.id
+      current = parent.id
+    }
+  }, [activeLayerId, layers, treeRows])
+
+  // ── Interaction ──────────────────────────────────────────────────────────────
 
   const handleLayerClick = (layer: LayerState, e: React.MouseEvent): void => {
     if (e.ctrlKey || e.metaKey) {
@@ -169,7 +268,6 @@ export function LayerPanel({
 
   const execMergeSelected = (): void => {
     closeContextMenu()
-    // Always include the active layer so active + 1 Ctrl-click = 2 layers
     const effective = new Set(selectedIds)
     if (activeLayerId) effective.add(activeLayerId)
     onMergeSelected([...effective])
@@ -194,36 +292,34 @@ export function LayerPanel({
     setSelectedIds(new Set())
   }
 
+  // ── Layer panel header state ──────────────────────────────────────────────────
+
   const activeLayer = layers.find((l) => l.id === activeLayerId)
   const canDelete = layers.length > 1
   const isChildLayer = (l: LayerState): boolean =>
     'type' in l && (l.type === 'mask' || l.type === 'adjustment')
 
-  // Rasterize is available for: text layers, shape layers, or pixel layers that have adjustment children
-  const canRasterize = !!activeLayerId && !!activeLayer && !isChildLayer(activeLayer) && (
+  const isActiveGroup = activeLayer !== undefined && isGroupLayer(activeLayer)
+
+  const canRasterize = !!activeLayerId && !!activeLayer && !isChildLayer(activeLayer) && !isActiveGroup && (
     ('type' in activeLayer && (activeLayer.type === 'text' || activeLayer.type === 'shape')) ||
     (!('type' in activeLayer) && layers.some(
       l => 'type' in l && l.type === 'adjustment' && (l as { parentId: string }).parentId === activeLayerId
     ))
   )
 
-  const displayLayers = layers
-    .filter(l => !isChildLayer(l))
-    .reverse()
-    .flatMap(parent => {
-      const children = layers.filter(
-        l => isChildLayer(l) && (l as { parentId: string }).parentId === parent.id
-      )
-      return [parent, ...children]
-    })
-  const isChildActive = activeLayer && 'type' in activeLayer && (activeLayer.type === 'mask' || activeLayer.type === 'adjustment')
+  const isChildActive = activeLayer !== undefined && 'type' in activeLayer &&
+    (activeLayer.type === 'mask' || activeLayer.type === 'adjustment')
 
   const opacityValue = (!isChildActive && activeLayer) ? Math.round((activeLayer as { opacity: number }).opacity * 100) : 100
   const blendValue: BlendMode = (!isChildActive && activeLayer) ? (activeLayer as { blendMode: BlendMode }).blendMode : 'normal'
 
-  // Whether "Add Layer Mask" is available for the active layer
-  const canAddMask = activeLayerId && !isChildActive &&
+  const activeBlendModes = isActiveGroup ? BLEND_MODES_GROUP : BLEND_MODES_BASE
+
+  const canAddMask = activeLayerId && !isChildActive && !isActiveGroup &&
     !layers.some(l => 'type' in l && l.type === 'mask' && (l as { parentId: string }).parentId === activeLayerId)
+
+  // ── Editing ──────────────────────────────────────────────────────────────────
 
   const startEdit = (layer: LayerState, e: React.MouseEvent): void => {
     e.stopPropagation()
@@ -241,25 +337,106 @@ export function LayerPanel({
     else if (e.key === 'Escape') setEditingId(null)
   }
 
-  const handleDragStart = (displayIdx: number, e: React.DragEvent): void => {
-    dragSrcIdx.current = displayIdx
+  // ── Footer group button ───────────────────────────────────────────────────────
+
+  const onAddGroup = (): void => {
+    const effective = [...new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])])]
+    if (effective.length >= 2) {
+      onGroupSelected(effective)
+    } else {
+      const id = `group-${Date.now()}`
+      dispatch({ type: 'ADD_LAYER_GROUP', payload: { id, name: 'Group', aboveLayerId: activeLayerId ?? undefined } })
+    }
+  }
+
+  // ── Drag and drop ─────────────────────────────────────────────────────────────
+
+  const handleDragStart = (layerId: string, e: React.DragEvent): void => {
+    dragSrcLayerIdRef.current = layerId
     e.dataTransfer.effectAllowed = 'move'
   }
 
-  const handleDragOver = (e: React.DragEvent): void => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+  const handleDragEnd = (): void => {
+    dragSrcLayerIdRef.current = null
+    setDropTarget(null)
   }
 
-  const handleDrop = (displayIdx: number, e: React.DragEvent): void => {
+  const handleDragOver = (e: React.DragEvent, layerId: string, isGroup: boolean): void => {
     e.preventDefault()
-    const src = dragSrcIdx.current
-    if (src === null || src === displayIdx) return
-    const reordered = [...displayLayers]
-    const [moved] = reordered.splice(src, 1)
-    reordered.splice(displayIdx, 0, moved)
-    onLayersReorder([...reordered].reverse())
-    dragSrcIdx.current = null
+    const srcId = dragSrcLayerIdRef.current
+    if (!srcId) return
+    if (layerId === srcId) { e.dataTransfer.dropEffect = 'none'; return }
+    if (isDescendantOf(layers, layerId, srcId)) { e.dataTransfer.dropEffect = 'none'; return }
+    e.dataTransfer.dropEffect = 'move'
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const relY = (e.clientY - rect.top) / rect.height
+    if (isGroup && relY >= 0.25 && relY <= 0.75) {
+      setDropTarget({ kind: 'into', groupId: layerId })
+    } else if (relY < 0.5) {
+      setDropTarget({ kind: 'before', layerId })
+    } else {
+      setDropTarget({ kind: 'after', layerId })
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent): void => {
+    // Only clear if leaving the list entirely
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDropTarget(null)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent): void => {
+    e.preventDefault()
+    const srcId = dragSrcLayerIdRef.current
+    if (!srcId || !dropTarget) { dragSrcLayerIdRef.current = null; setDropTarget(null); return }
+    dragSrcLayerIdRef.current = null
+    setDropTarget(null)
+
+    if (dropTarget.kind === 'into') {
+      if (srcId === dropTarget.groupId) return
+      if (isDescendantOf(layers, dropTarget.groupId, srcId)) return
+      dispatch({ type: 'MOVE_LAYER_INTO_GROUP', payload: { layerId: srcId, targetGroupId: dropTarget.groupId, insertIndex: 0 } })
+      return
+    }
+
+    const targetId = dropTarget.layerId
+    if (targetId === srcId) return
+    if (isDescendantOf(layers, targetId, srcId)) return
+
+    const targetParent = getParentGroup(layers, targetId)
+    const srcParent = getParentGroup(layers, srcId)
+
+    if (targetParent) {
+      // Target is inside a group
+      const targetIdx = targetParent.childIds.indexOf(targetId)
+      const insertIndex = dropTarget.kind === 'before' ? targetIdx : targetIdx + 1
+      if (srcParent && srcParent.id === targetParent.id) {
+        // Reorder within same group
+        dispatch({ type: 'MOVE_LAYER_INTO_GROUP', payload: { layerId: srcId, targetGroupId: targetParent.id, insertIndex } })
+      } else {
+        // Move into (or between groups) — MOVE_LAYER_INTO_GROUP handles removing from old group
+        dispatch({ type: 'MOVE_LAYER_INTO_GROUP', payload: { layerId: srcId, targetGroupId: targetParent.id, insertIndex } })
+      }
+    } else {
+      // Target is at root
+      if (srcParent) {
+        // Moving from group to root — just remove from group; flat position stays
+        dispatch({ type: 'MOVE_LAYER_OUT_OF_GROUP', payload: { layerId: srcId, targetParentGroupId: null, insertIndex: 0 } })
+      } else {
+        // Both at root — reorder
+        const rootDisplayIds = buildRootLayerIds(layers)
+          .filter(id => {
+            const l = layers.find(x => x.id === id)
+            return l !== undefined && !('type' in l && (l.type === 'mask' || l.type === 'adjustment'))
+          })
+          .reverse() // reverse to get top-first display order
+        const targetDisplayIdx = rootDisplayIds.indexOf(targetId)
+        const dstDisplayIdx = dropTarget.kind === 'before' ? targetDisplayIdx : targetDisplayIdx + 1
+        const newLayers = reorderRootLayers(layers, srcId, dstDisplayIdx)
+        dispatch({ type: 'REORDER_LAYERS', payload: newLayers })
+      }
+    }
   }
 
   return (
@@ -272,7 +449,7 @@ export function LayerPanel({
           disabled={!activeLayer || !!isChildActive}
           onChange={(e) => activeLayer && onLayerBlendChange(activeLayer.id, e.target.value as BlendMode)}
         >
-          {BLEND_MODES.map((bm) => (
+          {activeBlendModes.map((bm) => (
             <option key={bm.value} value={bm.value}>{bm.label}</option>
           ))}
         </select>
@@ -306,13 +483,25 @@ export function LayerPanel({
       )}
 
       {/* ── Layer list ────────────────────────────────────────────────── */}
-      <ul className={styles.list} role="listbox" aria-label="Layers" onContextMenu={handleContextMenu}>
-        {displayLayers.map((layer, displayIdx) => {
+      <ul
+        className={styles.list}
+        role="listbox"
+        aria-label="Layers"
+        onContextMenu={handleContextMenu}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {treeRows.map(({ layer, depth }) => {
           const isMask = 'type' in layer && layer.type === 'mask'
           const isAdjustment = 'type' in layer && layer.type === 'adjustment'
+          const isGroup = isGroupLayer(layer)
           const isChild = isMask || isAdjustment
-          const isActive = layer.id === activeLayerId
+          const isActive = layer.id === displayActiveId
           const isSelected = selectedIds.has(layer.id)
+          const isDropBefore = dropTarget?.kind === 'before' && dropTarget.layerId === layer.id
+          const isDropAfter  = dropTarget?.kind === 'after'  && dropTarget.layerId === layer.id
+          const isDropInto   = dropTarget?.kind === 'into'   && dropTarget.groupId === layer.id
+
           return (
             <li
               key={layer.id}
@@ -321,16 +510,38 @@ export function LayerPanel({
                 isChild   ? styles.maskItem    : '',
                 isActive    ? styles.itemActive   : '',
                 isSelected && !isActive ? styles.itemSelected : '',
+                isDropBefore ? styles.dropIndicatorBefore : '',
+                isDropAfter  ? styles.dropIndicatorAfter  : '',
+                isDropInto   ? styles.dropTargetGroup     : '',
               ].join(' ')}
+              style={{ paddingLeft: `${5 + depth * 16}px` }}
               role="option"
               aria-selected={isActive}
               draggable={!isChild}
-              onDragStart={(e) => !isChild && handleDragStart(displayIdx, e)}
-              onDragOver={handleDragOver}
-              onDrop={(e) => !isChild && handleDrop(displayIdx, e)}
+              onDragStart={(e) => !isChild && handleDragStart(layer.id, e)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => !isChild && handleDragOver(e, layer.id, isGroup)}
               onClick={(e) => handleLayerClick(layer, e)}
             >
+              {/* Disclosure triangle for groups; spacer for others */}
+              {isGroup ? (
+                <button
+                  className={styles.disclosureBtn}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    dispatch({ type: 'TOGGLE_GROUP_COLLAPSE', payload: layer.id })
+                  }}
+                  aria-label={(layer as GroupLayerState).collapsed ? 'Expand group' : 'Collapse group'}
+                  title={(layer as GroupLayerState).collapsed ? 'Expand group' : 'Collapse group'}
+                >
+                  {(layer as GroupLayerState).collapsed ? '▶' : '▼'}
+                </button>
+              ) : (
+                !isChild && <div className={styles.disclosureSpacer} />
+              )}
+
               {isChild && <div className={styles.childConnector} />}
+
               <button
                 className={styles.eyeBtn}
                 onClick={(e) => { e.stopPropagation(); onLayerToggleVisibility(layer.id) }}
@@ -346,7 +557,10 @@ export function LayerPanel({
 
               {isAdjustment
                 ? <div className={styles.adjThumb} aria-hidden="true"><AdjustmentIcon /></div>
-                : <div className={`${styles.thumb} ${isMask ? styles.maskThumb : ''}`} aria-hidden="true" />}
+                : isGroup
+                  ? <div className={styles.groupThumb} aria-hidden="true"><FolderIcon /></div>
+                  : <div className={`${styles.thumb} ${isMask ? styles.maskThumb : ''}`} aria-hidden="true" />
+              }
 
               {editingId === layer.id ? (
                 <input
@@ -380,6 +594,9 @@ export function LayerPanel({
       <div className={styles.footer}>
         <button className={styles.footerBtn} onClick={onLayerAdd} aria-label="New layer" title="New layer">
           <AddLayerIcon />
+        </button>
+        <button className={styles.footerBtn} onClick={onAddGroup} aria-label="New group" title="New layer group">
+          <AddGroupIcon />
         </button>
         <button
           className={styles.footerBtn}
@@ -428,6 +645,39 @@ export function LayerPanel({
               Delete Layer
             </button>
             <div className={styles.menuDivider} />
+            {/* Group operations */}
+            {new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])]).size >= 2 && (
+              <button
+                className={styles.menuItem}
+                onMouseDown={() => {
+                  closeContextMenu()
+                  const effective = [...new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])])]
+                  onGroupSelected(effective)
+                  setSelectedIds(new Set())
+                }}
+              >
+                New Group from Selection
+              </button>
+            )}
+            {isActiveGroup && (
+              <button
+                className={styles.menuItem}
+                onMouseDown={() => { closeContextMenu(); if (activeLayerId) onUngroup(activeLayerId) }}
+              >
+                Ungroup
+              </button>
+            )}
+            {isActiveGroup && (
+              <button
+                className={styles.menuItem}
+                onMouseDown={() => { closeContextMenu(); if (activeLayerId) onMergeGroup(activeLayerId) }}
+              >
+                Merge Group
+              </button>
+            )}
+            {(new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])]).size >= 2 || isActiveGroup) && (
+              <div className={styles.menuDivider} />
+            )}
             <button
               className={styles.menuItem}
               disabled={new Set([...selectedIds, ...(activeLayerId ? [activeLayerId] : [])]).size < 2}
