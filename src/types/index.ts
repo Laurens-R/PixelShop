@@ -395,6 +395,8 @@ export interface AdjustmentParamsMap {
   }
 }
 
+export type OutlineParams = AdjustmentParamsMap['outline']
+
 export interface ColorGradingWheelParams {
   r:      number
   g:      number
