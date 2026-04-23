@@ -40,6 +40,8 @@ type DropTarget =
 interface TreeRow {
   layer: LayerState
   depth: number
+  /** Pixel/text/shape layers that have at least one attached child (mask/adjustment) */
+  hasChildren: boolean
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -177,6 +179,10 @@ export function LayerPanel({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flipX: boolean } | null>(null)
   const dragSrcLayerIdRef = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  // Local-only collapse state for pixel/text/shape layers that own mask/adjustment children
+  const [collapsedPixelLayers, setCollapsedPixelLayers] = useState<Set<string>>(new Set())
+  const togglePixelLayerCollapse = (id: string): void =>
+    setCollapsedPixelLayers(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
 
   useEffect(() => {
     if (!contextMenu) return
@@ -203,33 +209,43 @@ export function LayerPanel({
           const parent = layersById.get((layer as MaskLayerState | AdjustmentLayerState).parentId)
           if (parent && !isGroupLayer(parent)) continue
         }
-        result.push({ layer, depth })
         if (isGroupLayer(layer)) {
+          result.push({ layer, depth, hasChildren: false })
           walk(layer.childIds, depth + 1, layer.collapsed)
         } else if (!('type' in layer) || (layer.type !== 'mask' && layer.type !== 'adjustment')) {
-          // Pixel/text/shape: append attached children
-          for (const child of layers) {
-            if (
-              'type' in child &&
-              (child.type === 'mask' || child.type === 'adjustment') &&
-              (child as MaskLayerState | AdjustmentLayerState).parentId === layer.id
-            ) {
-              result.push({ layer: child, depth: depth + 1 })
+          // Pixel/text/shape: collect attached children
+          const children = layers.filter(
+            l => 'type' in l && (l.type === 'mask' || l.type === 'adjustment') &&
+              (l as MaskLayerState | AdjustmentLayerState).parentId === layer.id
+          )
+          const isCollapsed = collapsedPixelLayers.has(layer.id)
+          result.push({ layer, depth, hasChildren: children.length > 0 })
+          if (!isCollapsed) {
+            for (const child of children) {
+              result.push({ layer: child, depth: depth + 1, hasChildren: false })
             }
           }
+        } else {
+          result.push({ layer, depth, hasChildren: false })
         }
       }
     }
 
     walk(rootIds, 0, false)
     return result
-  }, [layers])
+  }, [layers, collapsedPixelLayers])
 
   // Determine which row to highlight as "active" — if the active layer is hidden
   // inside a collapsed group, highlight the collapsed group row instead.
   const displayActiveId = useMemo((): string | null => {
     if (!activeLayerId) return null
     if (treeRows.some(r => r.layer.id === activeLayerId)) return activeLayerId
+    // Active layer might be a mask/adjustment whose pixel parent is collapsed
+    const activeLayer_ = layers.find(l => l.id === activeLayerId)
+    if (activeLayer_ && 'type' in activeLayer_ && (activeLayer_.type === 'mask' || activeLayer_.type === 'adjustment')) {
+      const parentId = (activeLayer_ as MaskLayerState | AdjustmentLayerState).parentId
+      if (collapsedPixelLayers.has(parentId)) return parentId
+    }
     // Active layer is inside a collapsed group — walk up the parent chain
     let current = activeLayerId
     for (;;) {
@@ -238,7 +254,7 @@ export function LayerPanel({
       if (treeRows.some(r => r.layer.id === parent.id)) return parent.id
       current = parent.id
     }
-  }, [activeLayerId, layers, treeRows])
+  }, [activeLayerId, layers, treeRows, collapsedPixelLayers])
 
   // ── Interaction ──────────────────────────────────────────────────────────────
 
@@ -491,7 +507,7 @@ export function LayerPanel({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {treeRows.map(({ layer, depth }) => {
+        {treeRows.map(({ layer, depth, hasChildren }) => {
           const isMask = 'type' in layer && layer.type === 'mask'
           const isAdjustment = 'type' in layer && layer.type === 'adjustment'
           const isGroup = isGroupLayer(layer)
@@ -501,6 +517,8 @@ export function LayerPanel({
           const isDropBefore = dropTarget?.kind === 'before' && dropTarget.layerId === layer.id
           const isDropAfter  = dropTarget?.kind === 'after'  && dropTarget.layerId === layer.id
           const isDropInto   = dropTarget?.kind === 'into'   && dropTarget.groupId === layer.id
+
+          const isPixelCollapsed = !isGroup && !isChild && hasChildren && collapsedPixelLayers.has(layer.id)
 
           return (
             <li
@@ -523,7 +541,7 @@ export function LayerPanel({
               onDragOver={(e) => !isChild && handleDragOver(e, layer.id, isGroup)}
               onClick={(e) => handleLayerClick(layer, e)}
             >
-              {/* Disclosure triangle for groups; spacer for others */}
+              {/* Disclosure triangle for groups and pixel layers with children; spacer otherwise */}
               {isGroup ? (
                 <button
                   className={styles.disclosureBtn}
@@ -535,6 +553,18 @@ export function LayerPanel({
                   title={(layer as GroupLayerState).collapsed ? 'Expand group' : 'Collapse group'}
                 >
                   {(layer as GroupLayerState).collapsed ? '▶' : '▼'}
+                </button>
+              ) : !isChild && hasChildren ? (
+                <button
+                  className={styles.disclosureBtn}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    togglePixelLayerCollapse(layer.id)
+                  }}
+                  aria-label={isPixelCollapsed ? 'Show adjustments' : 'Hide adjustments'}
+                  title={isPixelCollapsed ? 'Show adjustments' : 'Hide adjustments'}
+                >
+                  {isPixelCollapsed ? '▶' : '▼'}
                 </button>
               ) : (
                 !isChild && <div className={styles.disclosureSpacer} />
