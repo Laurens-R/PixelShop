@@ -25,3 +25,10 @@ export {
 export { CHROMATIC_ABERRATION_COMPUTE } from './shaders/adjustments/chromatic-aberration'
 export { HALATION_EXTRACT_COMPUTE } from './shaders/adjustments/halation'
 export { CK_COMPUTE } from './shaders/adjustments/color-key'
+export {
+  DROP_SHADOW_DILATE_H_COMPUTE,
+  DROP_SHADOW_DILATE_V_COMPUTE,
+  DROP_SHADOW_BLUR_H_COMPUTE,
+  DROP_SHADOW_BLUR_V_COMPUTE,
+  DROP_SHADOW_COMPOSITE_COMPUTE,
+} from './shaders/adjustments/drop-shadow'

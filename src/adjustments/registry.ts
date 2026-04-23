@@ -152,4 +152,19 @@ export const ADJUSTMENT_REGISTRY = [
     defaultParams: { keyColor: { r: 0, g: 255, b: 0 }, tolerance: 0, softness: 0, dilation: 0 },
     group: 'real-time-effects',
   },
+  {
+    adjustmentType: 'drop-shadow' as const,
+    label: 'Drop Shadow…',
+    group: 'real-time-effects',
+    defaultParams: {
+      color:     { r: 0, g: 0, b: 0, a: 255 },
+      opacity:   75,
+      offsetX:   5,
+      offsetY:   5,
+      spread:    0,
+      softness:  10,
+      blendMode: 'multiply',
+      knockout:  true,
+    },
+  },
 ] as const satisfies readonly AdjustmentRegistrationEntry[]

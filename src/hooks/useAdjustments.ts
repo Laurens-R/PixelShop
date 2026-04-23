@@ -27,6 +27,12 @@ export interface UseAdjustmentsReturn {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+/** Returns true for layer types that can own adjustment/effect children. */
+function isEffectEligibleLayer(layer: LayerState): boolean {
+  return isPixelLayer(layer) ||
+    ('type' in layer && (layer.type === 'text' || layer.type === 'shape'))
+}
+
 export function useAdjustments({
   stateRef,
   captureHistory,
@@ -39,11 +45,11 @@ export function useAdjustments({
   const isAdjustmentMenuEnabled = useMemo(() => {
     const active = layers.find(l => l.id === activeLayerId)
     if (active == null) return false
-    if (isPixelLayer(active)) return true
+    if (isEffectEligibleLayer(active)) return true
     // Also allow when an adjustment child layer is active — will use its parent
     if ('type' in active && active.type === 'adjustment') {
       const parent = layers.find(l => l.id === (active as { parentId: string }).parentId)
-      return parent != null && isPixelLayer(parent)
+      return parent != null && isEffectEligibleLayer(parent)
     }
     return false
   }, [layers, activeLayerId])
@@ -69,12 +75,12 @@ export function useAdjustments({
 
     // If the active layer is itself an adjustment child, use its parent pixel layer instead
     let effectiveParentId: string
-    if (isPixelLayer(activeLayer)) {
+    if (isEffectEligibleLayer(activeLayer)) {
       effectiveParentId = activeLayerId!
     } else if ('type' in activeLayer && activeLayer.type === 'adjustment') {
       const parentId = (activeLayer as { parentId: string }).parentId
       const parentLayer = layers.find(l => l.id === parentId)
-      if (!parentLayer || !isPixelLayer(parentLayer)) return
+      if (!parentLayer || !isEffectEligibleLayer(parentLayer)) return
       effectiveParentId = parentId
     } else {
       return

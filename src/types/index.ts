@@ -200,6 +200,7 @@ export type AdjustmentType =
   | 'chromatic-aberration'
   | 'halation'
   | 'color-key'
+  | 'drop-shadow'
 
 export type FilterKey =
   | 'gaussian-blur'
@@ -345,6 +346,24 @@ export interface AdjustmentParamsMap {
     /** Expand the keyed-out region by this many pixels. Range 0–20. */
     dilation:  number
   }
+  'drop-shadow': {
+    /** Shadow color including alpha channel. r/g/b/a are 0–255. Default: { r:0, g:0, b:0, a:255 } */
+    color:     RGBAColor
+    /** Overall shadow opacity, 0–100 (%). Applied on top of color.a. Default: 75 */
+    opacity:   number
+    /** Horizontal offset in canvas pixels, −200 to +200. Default: 5 */
+    offsetX:   number
+    /** Vertical offset in canvas pixels, −200 to +200. Default: 5 */
+    offsetY:   number
+    /** Morphological dilation radius in pixels, 0–100. Default: 0 */
+    spread:    number
+    /** Gaussian blur radius in pixels, 0–100. Default: 10 */
+    softness:  number
+    /** How the shadow composites with layers beneath it. Default: 'multiply' */
+    blendMode: 'normal' | 'multiply' | 'screen'
+    /** When true, the shadow is masked by the inverse of the source alpha. Default: true */
+    knockout:  boolean
+  }
 }
 
 export interface ColorGradingWheelParams {
@@ -469,6 +488,12 @@ export interface ColorKeyAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface DropShadowAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'drop-shadow'
+  params: AdjustmentParamsMap['drop-shadow']
+  hasMask: boolean
+}
+
 export type AdjustmentLayerState =
   | BrightnessContrastAdjustmentLayer
   | HueSaturationAdjustmentLayer
@@ -485,6 +510,7 @@ export type AdjustmentLayerState =
   | ChromaticAberrationAdjustmentLayer
   | HalationAdjustmentLayer
   | ColorKeyAdjustmentLayer
+  | DropShadowAdjustmentLayer
 
 export interface GroupLayerState {
   id:        string
