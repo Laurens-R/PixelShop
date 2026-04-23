@@ -179,6 +179,9 @@ export function LayerPanel({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; flipX: boolean } | null>(null)
   const dragSrcLayerIdRef = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null)
+  // Separate drag state for reordering adjustment children within a parent
+  const adjDragSrcIdRef = useRef<string | null>(null)
+  const [adjDropTarget, setAdjDropTarget] = useState<{ beforeId: string } | { afterId: string } | null>(null)
   // Local-only collapse state for pixel/text/shape layers that own mask/adjustment children
   const [collapsedPixelLayers, setCollapsedPixelLayers] = useState<Set<string>>(new Set())
   const togglePixelLayerCollapse = (id: string): void =>
@@ -377,6 +380,54 @@ export function LayerPanel({
     setDropTarget(null)
   }
 
+  // ── Adjustment-child drag handlers ────────────────────────────────────────
+
+  const handleAdjDragStart = (layerId: string, e: React.DragEvent): void => {
+    adjDragSrcIdRef.current = layerId
+    e.dataTransfer.effectAllowed = 'move'
+    e.stopPropagation()
+  }
+
+  const handleAdjDragEnd = (): void => {
+    adjDragSrcIdRef.current = null
+    setAdjDropTarget(null)
+  }
+
+  const handleAdjDragOver = (e: React.DragEvent, layerId: string): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    const srcId = adjDragSrcIdRef.current
+    if (!srcId || srcId === layerId) { e.dataTransfer.dropEffect = 'none'; return }
+    e.dataTransfer.dropEffect = 'move'
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const relY = (e.clientY - rect.top) / rect.height
+    setAdjDropTarget(relY < 0.5 ? { beforeId: layerId } : { afterId: layerId })
+  }
+
+  const handleAdjDrop = (e: React.DragEvent, parentId: string): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    const srcId = adjDragSrcIdRef.current
+    adjDragSrcIdRef.current = null
+    setAdjDropTarget(null)
+    if (!srcId || !adjDropTarget) return
+    // Collect all sibling adj/mask children of this parent in current display order
+    const siblings = treeRows
+      .filter(r => 'type' in r.layer && (r.layer.type === 'adjustment' || r.layer.type === 'mask') &&
+        (r.layer as AdjustmentLayerState).parentId === parentId)
+      .map(r => r.layer.id)
+    if (!siblings.includes(srcId)) return
+    const targetId = 'beforeId' in adjDropTarget ? adjDropTarget.beforeId : adjDropTarget.afterId
+    if (targetId === srcId) return
+    // Build new order
+    const without = siblings.filter(id => id !== srcId)
+    const targetIdx = without.indexOf(targetId)
+    if (targetIdx < 0) return
+    const insertIdx = 'beforeId' in adjDropTarget ? targetIdx : targetIdx + 1
+    without.splice(insertIdx, 0, srcId)
+    dispatch({ type: 'REORDER_ADJUSTMENT_LAYERS', payload: { parentId, orderedChildIds: without } })
+  }
+
   const handleDragOver = (e: React.DragEvent, layerId: string, isGroup: boolean): void => {
     e.preventDefault()
     const srcId = dragSrcLayerIdRef.current
@@ -518,7 +569,14 @@ export function LayerPanel({
           const isDropAfter  = dropTarget?.kind === 'after'  && dropTarget.layerId === layer.id
           const isDropInto   = dropTarget?.kind === 'into'   && dropTarget.groupId === layer.id
 
+          // Adjustment/mask child reorder indicators
+          const isAdjDropBefore = isChild && adjDropTarget && 'beforeId' in adjDropTarget && adjDropTarget.beforeId === layer.id
+          const isAdjDropAfter  = isChild && adjDropTarget && 'afterId'  in adjDropTarget && adjDropTarget.afterId  === layer.id
+
           const isPixelCollapsed = !isGroup && !isChild && hasChildren && collapsedPixelLayers.has(layer.id)
+
+          // Parent id for adjustment reorder drops
+          const adjParentId = isChild ? (layer as AdjustmentLayerState).parentId : null
 
           return (
             <li
@@ -528,17 +586,18 @@ export function LayerPanel({
                 isChild   ? styles.maskItem    : '',
                 isActive    ? styles.itemActive   : '',
                 isSelected && !isActive ? styles.itemSelected : '',
-                isDropBefore ? styles.dropIndicatorBefore : '',
-                isDropAfter  ? styles.dropIndicatorAfter  : '',
+                isDropBefore || isAdjDropBefore ? styles.dropIndicatorBefore : '',
+                isDropAfter  || isAdjDropAfter  ? styles.dropIndicatorAfter  : '',
                 isDropInto   ? styles.dropTargetGroup     : '',
               ].join(' ')}
               style={{ paddingLeft: `${5 + depth * 16}px` }}
               role="option"
               aria-selected={isActive}
-              draggable={!isChild}
-              onDragStart={(e) => !isChild && handleDragStart(layer.id, e)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => !isChild && handleDragOver(e, layer.id, isGroup)}
+              draggable={true}
+              onDragStart={(e) => isChild ? handleAdjDragStart(layer.id, e) : handleDragStart(layer.id, e)}
+              onDragEnd={isChild ? handleAdjDragEnd : handleDragEnd}
+              onDragOver={(e) => isChild && adjParentId ? handleAdjDragOver(e, layer.id) : (!isChild && handleDragOver(e, layer.id, isGroup))}
+              onDrop={(e) => isChild && adjParentId ? handleAdjDrop(e, adjParentId) : undefined}
               onClick={(e) => handleLayerClick(layer, e)}
             >
               {/* Disclosure triangle for groups and pixel layers with children; spacer otherwise */}

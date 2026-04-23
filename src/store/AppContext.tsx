@@ -56,6 +56,7 @@ export type AppAction =
   | { type: 'TOGGLE_GROUP_COLLAPSE'; payload: string }
   | { type: 'MOVE_LAYER_INTO_GROUP'; payload: { layerId: string; targetGroupId: string; insertIndex?: number } }
   | { type: 'MOVE_LAYER_OUT_OF_GROUP'; payload: { layerId: string; targetParentGroupId: string | null; insertIndex: number } }
+  | { type: 'REORDER_ADJUSTMENT_LAYERS'; payload: { parentId: string; orderedChildIds: string[] } }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
 
@@ -234,6 +235,23 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         layers: state.layers.map((l) => l.id === action.payload.id ? action.payload : l),
       }
+
+    case 'REORDER_ADJUSTMENT_LAYERS': {
+      const { parentId, orderedChildIds } = action.payload
+      // Build new layers array: keep everything except the children of this parent,
+      // then re-insert them in the new order immediately after the parent.
+      const childSet = new Set(orderedChildIds)
+      const withoutChildren = state.layers.filter(l => !childSet.has(l.id))
+      const parentIdx = withoutChildren.findIndex(l => l.id === parentId)
+      if (parentIdx < 0) return state
+      // Re-order child layers according to orderedChildIds
+      const childLayersOrdered = orderedChildIds
+        .map(id => state.layers.find(l => l.id === id))
+        .filter((l): l is LayerState => l !== undefined)
+      const next = [...withoutChildren]
+      next.splice(parentIdx + 1, 0, ...childLayersOrdered)
+      return { ...state, layers: next }
+    }
 
     case 'SET_OPEN_ADJUSTMENT':
       return { ...state, openAdjustmentLayerId: action.payload }
