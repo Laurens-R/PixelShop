@@ -17,12 +17,12 @@ import { textTool } from './text'
 import { shapeTool } from './shape'
 import { noopTool } from './noop'
 import { transformTool } from './transform'
+import { cloneStampTool } from './cloneStamp'
 
 export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   pencil:       pencilTool,
   brush:        brushTool,
-  eraser:       eraserTool,
-  select:       selectTool,
+  eraser:       eraserTool,  'clone-stamp': cloneStampTool,  select:       selectTool,
   lasso:        lassoTool,
   'magic-wand': magicWandTool,
   fill:         fillTool,

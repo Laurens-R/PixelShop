@@ -1,0 +1,220 @@
+import { Menu, BrowserWindow, app } from 'electron'
+import type { MenuItemConstructorOptions, MenuItem } from 'electron'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface MenuBuildPayload {
+  adjustments: Array<{ id: string; label: string; group?: string }>
+  effects:     Array<{ id: string; label: string; group?: string }>
+  filters:     Array<{ id: string; label: string; instant?: boolean; group?: string }>
+}
+
+// ─── Internal state ───────────────────────────────────────────────────────────
+
+// Map from item id → MenuItem for dynamic enable/checked updates.
+const itemsById = new Map<string, MenuItem>()
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function send(actionId: string): void {
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  win?.webContents.send('menu:action', actionId)
+}
+
+type ItemOpts = Omit<MenuItemConstructorOptions, 'id' | 'label' | 'click'> & {
+  /** When true, the accelerator is shown in the menu but does NOT intercept the keyboard shortcut.
+   *  Use this for shortcuts that are already handled by the renderer's keydown listener. */
+  noIntercept?: boolean
+}
+
+function item(label: string, id: string, opts: ItemOpts = {}): MenuItemConstructorOptions {
+  const { noIntercept = false, ...menuOpts } = opts
+  return {
+    id,
+    label,
+    registerAccelerator: !noIntercept,
+    click: () => send(id),
+    ...menuOpts,
+  }
+}
+
+function sep(): MenuItemConstructorOptions {
+  return { type: 'separator' }
+}
+
+function groupedItems(
+  entries: Array<{ id: string; label: string; group?: string }>,
+  actionPrefix: string,
+): MenuItemConstructorOptions[] {
+  const result: MenuItemConstructorOptions[] = []
+  let lastGroup: string | undefined = undefined
+  for (const entry of entries) {
+    if (entry.group !== undefined && entry.group !== lastGroup && lastGroup !== undefined) {
+      result.push(sep())
+    }
+    lastGroup = entry.group
+    result.push(item(entry.label, `${actionPrefix}${entry.id}`))
+  }
+  return result
+}
+
+// ─── Build & set macOS application menu ──────────────────────────────────────
+
+export function buildAndSetMacMenu(payload: MenuBuildPayload): void {
+  itemsById.clear()
+
+  const appName = app.name || 'PixelShop'
+
+  const template: MenuItemConstructorOptions[] = [
+    // macOS app menu (first entry is always shown as the app name in the macOS menu bar)
+    {
+      label: appName,
+      submenu: [
+        { role: 'about', label: `About ${appName}` },
+        sep(),
+        { role: 'services' },
+        sep(),
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        sep(),
+        { role: 'quit' },
+      ],
+    },
+
+    // File
+    {
+      label: 'File',
+      submenu: [
+        item('New\u2026',       'new',    { accelerator: 'CmdOrCtrl+N' }),
+        item('Open\u2026',      'open',   { accelerator: 'CmdOrCtrl+O' }),
+        sep(),
+        item('Save',            'save',   { accelerator: 'CmdOrCtrl+S' }),
+        item('Save As\u2026',   'saveAs', { accelerator: 'CmdOrCtrl+Shift+S' }),
+        item('Export As\u2026', 'export', { accelerator: 'CmdOrCtrl+E' }),
+      ],
+    },
+
+    // Edit
+    {
+      label: 'Edit',
+      submenu: [
+        item('Undo',                 'undo',          { accelerator: 'CmdOrCtrl+Z',       noIntercept: true }),
+        item('Redo',                 'redo',          { accelerator: 'CmdOrCtrl+Y',       noIntercept: true }),
+        sep(),
+        item('Cut',                  'cut',           { accelerator: 'CmdOrCtrl+X',       noIntercept: true }),
+        item('Copy',                 'copy',          { accelerator: 'CmdOrCtrl+C',       noIntercept: true }),
+        item('Paste',                'paste',         { accelerator: 'CmdOrCtrl+V',       noIntercept: true }),
+        item('Delete',               'delete',        { accelerator: 'Backspace',         noIntercept: true }),
+        sep(),
+        item('Resize Image\u2026',        'resizeImage'),
+        item('Resize Image Canvas\u2026', 'resizeCanvas'),
+        sep(),
+        item('Transform\u2026', 'freeTransform', { accelerator: 'CmdOrCtrl+T', noIntercept: true }),
+      ],
+    },
+
+    // Select
+    {
+      label: 'Select',
+      submenu: [
+        item('Invert Selection', 'invertSelection', { accelerator: 'CmdOrCtrl+Shift+I', noIntercept: true }),
+      ],
+    },
+
+    // Layer
+    {
+      label: 'Layer',
+      submenu: [
+        item('New Layer',       'newLayer',      { accelerator: 'CmdOrCtrl+Shift+N' }),
+        item('Duplicate Layer', 'duplicateLayer'),
+        item('Delete Layer',    'deleteLayer'),
+        sep(),
+        item('Rasterize Layer', 'rasterizeLayer'),
+        sep(),
+        item('Group Layers',    'groupLayers',   { accelerator: 'CmdOrCtrl+G',       noIntercept: true }),
+        item('Ungroup Layers',  'ungroupLayers', { accelerator: 'CmdOrCtrl+Shift+G', noIntercept: true }),
+        sep(),
+        item('Merge Selected',  'mergeSelected'),
+        item('Merge Down',      'mergeDown'),
+        item('Merge Visible',   'mergeVisible'),
+        item('Flatten Image',   'flattenImage'),
+      ],
+    },
+
+    // Adjustments
+    {
+      label: 'Adjustments',
+      submenu: groupedItems(payload.adjustments, 'adj:'),
+    },
+
+    // Effects
+    {
+      label: 'Effects',
+      submenu: groupedItems(payload.effects, 'adj:'),
+    },
+
+    // Filters
+    {
+      label: 'Filters',
+      submenu: groupedItems(payload.filters, 'filter:'),
+    },
+
+    // View
+    {
+      label: 'View',
+      submenu: [
+        item('Zoom In',       'zoomIn',      { accelerator: 'CmdOrCtrl+=', noIntercept: true }),
+        item('Zoom Out',      'zoomOut',     { accelerator: 'CmdOrCtrl+-', noIntercept: true }),
+        item('Fit to Window', 'fitToWindow', { accelerator: 'CmdOrCtrl+0', noIntercept: true }),
+        sep(),
+        {
+          id:      'toggleGrid',
+          label:   'Show Grid',
+          type:    'checkbox',
+          checked: false,
+          click:   () => send('toggleGrid'),
+        },
+      ],
+    },
+
+    // Help
+    {
+      label: 'Help',
+      submenu: [
+        item('About PixelShop',    'about'),
+        item('Keyboard Shortcuts', 'keyboardShortcuts'),
+        sep(),
+        item('Open DevTools',      'openDevTools'),
+      ],
+    },
+  ]
+
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+
+  // Collect all items with an explicit id into the update map.
+  function collectItems(m: Menu): void {
+    for (const mi of m.items) {
+      if (mi.id) itemsById.set(mi.id, mi)
+      if (mi.submenu) collectItems(mi.submenu)
+    }
+  }
+  collectItems(menu)
+}
+
+// ─── Dynamic state updates ────────────────────────────────────────────────────
+
+export function setMacMenuItemEnabled(updates: Record<string, boolean>): void {
+  for (const [id, enabled] of Object.entries(updates)) {
+    const mi = itemsById.get(id)
+    if (mi) mi.enabled = enabled
+  }
+}
+
+export function setMacMenuItemChecked(updates: Record<string, boolean>): void {
+  for (const [id, checked] of Object.entries(updates)) {
+    const mi = itemsById.get(id)
+    if (mi) mi.checked = checked
+  }
+}

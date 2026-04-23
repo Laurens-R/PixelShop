@@ -22,6 +22,16 @@ declare global {
       writePaletteFile: (path: string, data: string) => Promise<void>
       clipboardWriteImage: (pngBase64: string) => Promise<void>
       clipboardReadImage: () => Promise<string | null>
+      // Platform & native menu (macOS)
+      platform: string
+      onMenuAction: (callback: (actionId: string) => void) => (() => void)
+      buildNativeMenu: (payload: {
+        adjustments: Array<{ id: string; label: string; group?: string }>
+        effects:     Array<{ id: string; label: string; group?: string }>
+        filters:     Array<{ id: string; label: string; instant?: boolean; group?: string }>
+      }) => void
+      setMenuItemEnabled: (updates: Record<string, boolean>) => void
+      setMenuItemChecked: (updates: Record<string, boolean>) => void
     }
   }
 

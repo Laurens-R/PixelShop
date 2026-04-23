@@ -9,6 +9,9 @@ import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { brushOptions } from '@/tools/brush'
 import { eraserOptions } from '@/tools/eraser'
+import { cloneStampOptions } from '@/tools/cloneStamp'
+import { cloneStampStore } from '@/store/cloneStampStore'
+import { drawCloneStampOverlay } from './cloneStampOverlay'
 import { selectionStore } from '@/store/selectionStore'
 import { cursorStore } from '@/store/cursorStore'
 import { transformStore } from '@/store/transformStore'
@@ -344,6 +347,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       }
     }
 
+    if (state.activeTool === 'clone-stamp' && cloneStampStore.source) {
+      if (!stateIds.has(cloneStampStore.source.layerId)) {
+        cloneStampStore.clearSource()
+      }
+    }
+
     for (const ls of state.layers) {
       if ('type' in ls && ls.type === 'adjustment') continue
       const gl = map.get(ls.id)
@@ -413,6 +422,42 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, state.activeTool])
 
+  useEffect(() => {
+    if (!isActive || state.activeTool !== 'clone-stamp') return
+
+    const redraw = (): void => {
+      const oc = toolOverlayRef.current
+      if (!oc) return
+      const canvas = canvasRef.current
+      if (canvas) canvas.style.cursor = cloneStampStore.source ? 'none' : 'crosshair'
+      if (!cloneStampStore.source) {
+        oc.getContext('2d')?.clearRect(0, 0, oc.width, oc.height)
+        return
+      }
+      drawCloneStampOverlay(
+        oc,
+        cloneStampStore.source.x,
+        cloneStampStore.source.y,
+        cursorStore.x,
+        cursorStore.y,
+        zoomRef.current,
+        window.devicePixelRatio,
+        cloneStampOptions.aligned,
+      )
+    }
+
+    redraw()
+    cloneStampStore.subscribe(redraw)
+    return () => {
+      cloneStampStore.unsubscribe(redraw)
+      const oc = toolOverlayRef.current
+      oc?.getContext('2d')?.clearRect(0, 0, oc.width, oc.height)
+      const canvas = canvasRef.current
+      if (canvas) canvas.style.cursor = ''
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, state.activeTool])
+
   function buildMaskMap(): Map<string, GpuLayer> {
     const maskMap = new Map<string, GpuLayer>()
     for (const ls of state.layers) {
@@ -461,8 +506,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     }
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
     // Hide brush cursor when switching away from a circle-cursor tool
-    if (sel !== 'brush' && sel !== 'eraser' && brushCursorRef.current) {
+    if (sel !== 'brush' && sel !== 'eraser' && sel !== 'clone-stamp' && brushCursorRef.current) {
       brushCursorRef.current.style.display = 'none'
+      brushCursorRef.current.className = styles.brushCursor
     }
   }, [state.activeTool, isActive])
 
@@ -618,12 +664,12 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     },
     onHover: (pos) => {
       if (isActive) cursorStore.setPosition(pos.x, pos.y)
-      // Update circle cursor for brush / eraser
+      // Update circle cursor for brush / eraser / clone-stamp
       const tool = state.activeTool
-      if ((tool === 'brush' || tool === 'eraser') && brushCursorRef.current) {
+      if ((tool === 'brush' || tool === 'eraser' || tool === 'clone-stamp') && brushCursorRef.current) {
         const dpr = window.devicePixelRatio
         const zoom = zoomRef.current
-        const size = tool === 'brush' ? brushOptions.size : eraserOptions.size
+        const size = tool === 'brush' ? brushOptions.size : tool === 'eraser' ? eraserOptions.size : cloneStampOptions.size
         const r = Math.max(1, size / 2 * zoom / dpr)
         const cx = (pos.x + 0.5) * zoom / dpr
         const cy = (pos.y + 0.5) * zoom / dpr
@@ -632,7 +678,13 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
         el.style.top    = `${cy - r}px`
         el.style.width  = `${r * 2}px`
         el.style.height = `${r * 2}px`
-        el.style.display = 'block'
+        if (tool === 'clone-stamp') {
+          el.style.display = cloneStampStore.source ? 'block' : 'none'
+          el.className = `${styles.brushCursor} ${styles.brushCursorCrossHair}`
+        } else {
+          el.style.display = 'block'
+          el.className = styles.brushCursor
+        }
       }
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onHover?.(pos, ctx)
@@ -663,7 +715,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             style={{
               width:  width  * state.canvas.zoom / window.devicePixelRatio,
               height: height * state.canvas.zoom / window.devicePixelRatio,
-              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none' : undefined,
+              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser' || (state.activeTool === 'clone-stamp' && cloneStampStore.source !== null)) ? 'none' : (state.activeTool === 'clone-stamp' ? 'crosshair' : undefined),
               // Bilinear when zoomed out (smooth downscale); nearest when at or above 100% (crisp pixel art)
               imageRendering: state.canvas.zoom < 1 ? 'auto' : 'pixelated',
             }}

@@ -54,6 +54,35 @@
   z-index: 10;
 }
 
+.brushCursorCrossHair {
+  overflow: visible;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.7);
+    pointer-events: none;
+  }
+
+  &::before {
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 1px;
+    transform: translate(-50%, -50%);
+  }
+
+  &::after {
+    top: 50%;
+    left: 50%;
+    width: 1px;
+    height: 10px;
+    transform: translate(-50%, -50%);
+  }
+}
+
 .gridOverlay {
   position: absolute;
   top: 0;

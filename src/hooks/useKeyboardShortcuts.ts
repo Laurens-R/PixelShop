@@ -18,6 +18,7 @@ interface UseKeyboardShortcutsOptions {
   handleKeyboardShortcuts?: () => void
   handleFreeTransform?:     () => void
   handleInvertSelection?:   () => void
+  handleCloneStamp?:        () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ export function useKeyboardShortcuts({
   handleKeyboardShortcuts,
   handleFreeTransform,
   handleInvertSelection,
+  handleCloneStamp,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -43,6 +45,9 @@ export function useKeyboardShortcuts({
       if (e.key === 'Escape')                                  { selectionStore.clear(); cropStore.clear(); return }
       if (e.key === 'Delete' || e.key === 'Backspace')         { e.preventDefault(); handleDelete(); return }
       if (e.key === '?' && !e.ctrlKey && !e.altKey)            { e.preventDefault(); handleKeyboardShortcuts?.(); return }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+        if (e.key === 's' || e.key === 'S') { e.preventDefault(); handleCloneStamp?.(); return }
+      }
       if (!e.ctrlKey && !e.metaKey) return
       if      (e.key === 'z')              { e.preventDefault(); handleUndo() }
       else if (e.key === 'y')              { e.preventDefault(); handleRedo() }
@@ -58,5 +63,5 @@ export function useKeyboardShortcuts({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleCloneStamp])
 }

@@ -13,6 +13,7 @@ export type Tool =
   | 'pencil'
   | 'brush'
   | 'eraser'
+  | 'clone-stamp'
   | 'fill'
   | 'gradient'
   | 'dodge'

@@ -115,7 +115,15 @@ const Icon = {
       <circle cx="12" cy="4" r="3" />
       <polygon points="2,15 14,15 8,9.5" />
     </svg>
-  )
+  ),
+  cloneStamp: (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <rect x="5" y="7" width="6" height="5" rx="0.5" />
+      <line x1="8" y1="2" x2="8" y2="7" />
+      <line x1="5.5" y1="2" x2="10.5" y2="2" />
+      <line x1="8" y1="0.5" x2="8" y2="3.5" />
+    </svg>
+  ),
 }
 
 // ─── Shape picker definitions ─────────────────────────────────────────────────
@@ -227,6 +235,10 @@ const TOOL_GRID: ToolGrid = [
     { id: 'eraser',     label: 'Eraser',        shortcut: 'E', icon: Icon.eraser },
     null
   ],
+  [
+    { id: 'clone-stamp', label: 'Clone Stamp',  shortcut: 'S', icon: Icon.cloneStamp },
+    null
+  ],
   // group 5 – fills
   [
     { id: 'fill',       label: 'Paint Bucket',  shortcut: 'G', icon: Icon.fill },
@@ -245,7 +257,7 @@ const TOOL_GRID: ToolGrid = [
 ]
 
 /** Tools that can only operate on a pixel layer. */
-const PIXEL_ONLY_TOOLS = new Set<Tool>(['brush', 'pencil', 'eraser', 'fill', 'gradient', 'dodge', 'burn'])
+const PIXEL_ONLY_TOOLS = new Set<Tool>(['brush', 'pencil', 'eraser', 'clone-stamp', 'fill', 'gradient', 'dodge', 'burn'])
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -332,7 +344,7 @@ export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): 
         {TOOL_GRID.map((row, rowIdx) => {
           const isFirstInGroup =
             rowIdx === 0 ||
-            (rowIdx === 1) || (rowIdx === 3) || (rowIdx === 4) || (rowIdx === 6) || (rowIdx === 7) || (rowIdx === 8) || (rowIdx === 9)
+            (rowIdx === 1) || (rowIdx === 3) || (rowIdx === 4) || (rowIdx === 7) || (rowIdx === 8) || (rowIdx === 9)
 
           return (
             <React.Fragment key={rowIdx}>

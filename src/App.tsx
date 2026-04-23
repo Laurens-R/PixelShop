@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AppProvider, useAppContext } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
 import { historyStore } from '@/store/historyStore'
@@ -47,9 +47,10 @@ import { useAdjustments } from '@/hooks/useAdjustments'
 import { useFilters } from '@/hooks/useFilters'
 import { useTransform } from '@/hooks/useTransform'
 import { transformStore } from '@/store/transformStore'
+import { cloneStampStore } from '@/store/cloneStampStore'
 import { ModalDialog } from '@/components/dialogs/ModalDialog/ModalDialog'
 import { DialogButton } from '@/components/widgets/DialogButton/DialogButton'
-import type { Tool, LayerState } from '@/types'
+import type { Tool, LayerState, AdjustmentType } from '@/types'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
 import type { AdjustmentRegistrationEntry } from '@/adjustments/registry'
 import { FILTER_REGISTRY } from '@/filters/registry'
@@ -97,6 +98,16 @@ function AppContent(): React.JSX.Element {
   const [showLensFlareDialog,       setShowLensFlareDialog]       = useState(false)
   const [showPixelateDialog,         setShowPixelateDialog]         = useState(false)
   const [showGeneratePaletteDialog,   setShowGeneratePaletteDialog]   = useState(false)
+  const [cloneStampNotification,       setCloneStampNotification]       = useState<string | null>(null)
+
+  // ── Clone stamp source deletion notification ─────────────────────
+  useEffect(() => {
+    cloneStampStore.onSourceDeleted = () => {
+      setCloneStampNotification('⚠ Source layer was deleted — Alt+click to set a new source')
+      setTimeout(() => setCloneStampNotification(null), 4000)
+    }
+    return () => { cloneStampStore.onSourceDeleted = null }
+  }, [])
 
   // ── Tab management ────────────────────────────────────────────────
   const {
@@ -275,6 +286,7 @@ function AppContent(): React.JSX.Element {
     handleKeyboardShortcuts: useCallback(() => setShowShortcutsDialog(true), []),
     handleFreeTransform: handleEnterTransform,
     handleInvertSelection: useCallback(() => selectionStore.invert(), []),
+    handleCloneStamp: useCallback(() => handleToolChange('clone-stamp'), [handleToolChange]),
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -292,9 +304,116 @@ function AppContent(): React.JSX.Element {
     return l !== undefined && isPixelRootLayer(l)
   }).length >= 2
 
+  // ── macOS native application menu ────────────────────────────────
+  const isMac = window.api.platform === 'darwin'
+
+  // A ref that holds the latest action dispatcher (avoids stale closures in the IPC listener).
+  const macMenuHandlerRef = useRef<(actionId: string) => void>(() => { /* noop until mounted */ })
+  macMenuHandlerRef.current = useCallback((actionId: string): void => {
+    // Dynamic: adjustment / effects layers
+    if (actionId.startsWith('adj:')) {
+      const type = actionId.slice(4) as AdjustmentType
+      requireTransformDecision(() => adjustments.handleCreateAdjustmentLayer(type))
+      return
+    }
+    // Dynamic: filters
+    if (actionId.startsWith('filter:')) {
+      const key = actionId.slice(7) as FilterKey
+      const fi = FILTER_MENU_ITEMS.find(f => f.key === key)
+      if (fi?.instant) {
+        requireTransformDecision(() => filters.handleInstantFilter(key))
+      } else {
+        handleOpenFilterDialog(key)
+      }
+      return
+    }
+    // Static actions
+    switch (actionId) {
+      case 'new':             setShowNewImageDialog(true); break
+      case 'open':            handleOpen(); break
+      case 'save':            handleSave(false); break
+      case 'saveAs':          handleSave(true); break
+      case 'export':          setShowExportDialog(true); break
+      case 'undo':            handleUndo(); break
+      case 'redo':            handleRedo(); break
+      case 'cut':             handleCut(); break
+      case 'copy':            handleCopy(); break
+      case 'paste':           handlePaste(); break
+      case 'delete':          handleDelete(); break
+      case 'resizeImage':     setShowResizeDialog(true); break
+      case 'resizeCanvas':    setShowResizeCanvasDialog(true); break
+      case 'freeTransform':   requireTransformDecision(handleEnterTransform); break
+      case 'invertSelection': selectionStore.invert(); break
+      case 'newLayer':        handleNewLayer(); break
+      case 'duplicateLayer':  handleDuplicateLayer(); break
+      case 'deleteLayer':     handleDeleteActiveLayer(); break
+      case 'rasterizeLayer':  state.activeLayerId && handleRasterizeLayer(state.activeLayerId); break
+      case 'groupLayers':     handleGroupLayers(); break
+      case 'ungroupLayers':   handleUngroupLayers(); break
+      case 'mergeSelected':   handleMergeSelected([...effectiveSelectedIds]); break
+      case 'mergeDown':       handleMergeDown(); break
+      case 'mergeVisible':    handleMergeVisible(); break
+      case 'flattenImage':    handleFlattenImage(); break
+      case 'zoomIn':          handleZoomIn(); break
+      case 'zoomOut':         handleZoomOut(); break
+      case 'fitToWindow':     handleFitToWindow(); break
+      case 'toggleGrid':      handleToggleGrid(); break
+      case 'about':           setShowAboutDialog(true); break
+      case 'keyboardShortcuts': setShowShortcutsDialog(true); break
+      case 'openDevTools':    window.api.openDevTools(); break
+    }
+  }, [
+    requireTransformDecision, adjustments, filters, handleOpenFilterDialog,
+    handleOpen, handleSave, handleUndo, handleRedo, handleCut, handleCopy, handlePaste,
+    handleDelete, handleNewLayer, handleDuplicateLayer, handleDeleteActiveLayer,
+    handleRasterizeLayer, handleGroupLayers, handleUngroupLayers, handleMergeSelected,
+    handleMergeDown, handleMergeVisible, handleFlattenImage, handleZoomIn, handleZoomOut,
+    handleFitToWindow, handleToggleGrid, handleEnterTransform,
+    state.activeLayerId, effectiveSelectedIds,
+  ])
+
+  // Build the native menu once on mount (sends the dynamic items list to the main process).
+  useEffect(() => {
+    if (!isMac) return
+    window.api.buildNativeMenu({
+      adjustments: ADJUSTMENT_MENU_ITEMS.map(i => ({ id: i.type, label: i.label, group: i.group })),
+      effects:     EFFECTS_MENU_ITEMS.map(i => ({ id: i.type, label: i.label, group: i.group })),
+      filters:     FILTER_MENU_ITEMS.map(i => ({ id: i.key, label: i.label, group: i.group })),
+    })
+  }, [isMac])
+
+  // Register the IPC action listener once. Handler is always fresh via the ref.
+  useEffect(() => {
+    if (!isMac) return
+    const cleanup = window.api.onMenuAction((actionId) => macMenuHandlerRef.current(actionId))
+    return cleanup
+  }, [isMac])
+
+  // Sync enabled/disabled state of native menu items when app state changes.
+  useEffect(() => {
+    if (!isMac) return
+    const enabled: Record<string, boolean> = {
+      freeTransform:  isFreeTransformEnabled,
+      rasterizeLayer: isRasterizeLayerEnabled,
+      mergeSelected:  isMergeSelectedEnabled,
+    }
+    for (const ai of ADJUSTMENT_MENU_ITEMS) enabled[`adj:${ai.type}`]   = adjustments.isAdjustmentMenuEnabled
+    for (const ei of EFFECTS_MENU_ITEMS)    enabled[`adj:${ei.type}`]   = adjustments.isAdjustmentMenuEnabled
+    for (const fi of FILTER_MENU_ITEMS)     enabled[`filter:${fi.key}`] = filters.isFiltersMenuEnabled
+    window.api.setMenuItemEnabled(enabled)
+  }, [isMac, isFreeTransformEnabled, isRasterizeLayerEnabled, isMergeSelectedEnabled,
+      adjustments.isAdjustmentMenuEnabled, filters.isFiltersMenuEnabled])
+
+  // Sync Show Grid checkbox state.
+  useEffect(() => {
+    if (!isMac) return
+    window.api.setMenuItemChecked({ toggleGrid: state.canvas.showGrid })
+  }, [isMac, state.canvas.showGrid])
+
   return (
     <div className={styles.app}>
       <TopBar
+        isMac={isMac}
         onDebug={() => window.api.openDevTools()}
         onNew={() => setShowNewImageDialog(true)}
         onOpen={handleOpen}
@@ -627,6 +746,10 @@ function AppContent(): React.JSX.Element {
           dispatch({ type: 'SET_SWATCHES', payload: palette })
         }}
       />
+
+      {cloneStampNotification && (
+        <div className={styles.notification}>{cloneStampNotification}</div>
+      )}
 
       {/* ── Transform guard — shown when switching away from an active transform ── */}
       <ModalDialog

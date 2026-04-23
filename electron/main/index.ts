@@ -1,7 +1,12 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+
+// Set the app name early so the macOS menu bar shows "PixelShop" instead of "Electron".
+app.setName('PixelShop')
 import { registerIpcHandlers } from './ipc'
+import { buildAndSetMacMenu, setMacMenuItemEnabled, setMacMenuItemChecked } from './menu'
+import type { MenuBuildPayload } from './menu'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -43,6 +48,23 @@ app.whenReady().then(() => {
   })
 
   registerIpcHandlers()
+
+  // ── macOS native application menu ──────────────────────────────────
+  if (process.platform === 'darwin') {
+    // Renderer sends full menu structure (with dynamic adjustment/filter items) on startup.
+    ipcMain.on('menu:build', (_event, payload: MenuBuildPayload) => {
+      buildAndSetMacMenu(payload)
+    })
+    // Renderer sends enabled-state updates when relevant app state changes.
+    ipcMain.on('menu:set-enabled', (_event, updates: Record<string, boolean>) => {
+      setMacMenuItemEnabled(updates)
+    })
+    // Renderer sends checked-state updates (e.g. Show Grid checkbox).
+    ipcMain.on('menu:set-checked', (_event, updates: Record<string, boolean>) => {
+      setMacMenuItemChecked(updates)
+    })
+  }
+
   createWindow()
 
   app.on('activate', () => {

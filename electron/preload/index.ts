@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
@@ -33,6 +34,35 @@ const api = {
     ipcRenderer.invoke('clipboard:write-image', pngBase64),
   clipboardReadImage: (): Promise<string | null> =>
     ipcRenderer.invoke('clipboard:read-image'),
+
+  // ── Platform & native menu (macOS) ────────────────────────────────
+  platform: process.platform as string,
+
+  /** Listen for native menu actions. Returns a cleanup function that removes the listener. */
+  onMenuAction: (callback: (actionId: string) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, actionId: string): void => callback(actionId)
+    ipcRenderer.on('menu:action', handler)
+    return () => ipcRenderer.removeListener('menu:action', handler)
+  },
+
+  /** Send the full menu structure to the main process to build the native macOS menu. */
+  buildNativeMenu: (payload: {
+    adjustments: Array<{ id: string; label: string; group?: string }>
+    effects:     Array<{ id: string; label: string; group?: string }>
+    filters:     Array<{ id: string; label: string; instant?: boolean; group?: string }>
+  }): void => {
+    ipcRenderer.send('menu:build', payload)
+  },
+
+  /** Update the enabled state of one or more native menu items by ID. */
+  setMenuItemEnabled: (updates: Record<string, boolean>): void => {
+    ipcRenderer.send('menu:set-enabled', updates)
+  },
+
+  /** Update the checked state of one or more native menu checkboxes by ID. */
+  setMenuItemChecked: (updates: Record<string, boolean>): void => {
+    ipcRenderer.send('menu:set-checked', updates)
+  },
 }
 
 if (process.contextIsolated) {
