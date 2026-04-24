@@ -60,6 +60,22 @@ declare global {
           callback: (p: { file: 'encoder' | 'decoder'; progress: number }) => void,
         ) => () => void
       }
+      // Alpha matting (Refine Edge)
+      matting: {
+        checkModel: () => Promise<{ ready: boolean; path: string | null }>
+        downloadModel: () => Promise<{ success: true } | { error: string }>
+        refine: (params: {
+          imageRgba: Uint8Array
+          width: number
+          height: number
+          selectionMask: Uint8Array
+          bandRadius: number
+        }) => Promise<{ alpha: Uint8Array }>
+        invalidateSession: () => Promise<void>
+        onDownloadProgress: (
+          callback: (p: { progress: number; loaded: number; total: number }) => void,
+        ) => () => void
+      }
     }
   }
 

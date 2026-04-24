@@ -116,6 +116,44 @@ const api = {
       return () => ipcRenderer.removeListener('sam:download-progress', handler)
     },
   },
+
+  // ── Alpha matting (Refine Edge) ─────────────────────────────────
+  matting: {
+    checkModel: (): Promise<{ ready: boolean; path: string | null }> =>
+      ipcRenderer.invoke('matting:check-model'),
+
+    downloadModel: (): Promise<{ success: true } | { error: string }> =>
+      ipcRenderer.invoke('matting:download-model'),
+
+    refine: (params: {
+      imageRgba: Uint8Array
+      width: number
+      height: number
+      selectionMask: Uint8Array
+      bandRadius: number
+    }): Promise<{ alpha: Uint8Array }> =>
+      ipcRenderer.invoke('matting:refine', {
+        imageRgba: Buffer.from(params.imageRgba.buffer, params.imageRgba.byteOffset, params.imageRgba.byteLength),
+        width: params.width,
+        height: params.height,
+        selectionMask: Buffer.from(params.selectionMask.buffer, params.selectionMask.byteOffset, params.selectionMask.byteLength),
+        bandRadius: params.bandRadius,
+      }),
+
+    invalidateSession: (): Promise<void> =>
+      ipcRenderer.invoke('matting:invalidate-session'),
+
+    onDownloadProgress: (
+      callback: (p: { progress: number; loaded: number; total: number }) => void,
+    ): (() => void) => {
+      const handler = (
+        _e: IpcRendererEvent,
+        p: { progress: number; loaded: number; total: number },
+      ): void => callback(p)
+      ipcRenderer.on('matting:download-progress', handler)
+      return () => ipcRenderer.removeListener('matting:download-progress', handler)
+    },
+  },
 }
 
 if (process.contextIsolated) {

@@ -16,6 +16,12 @@ class ObjectSelectionStore {
   downloadProgress: { file: 'encoder' | 'decoder'; progress: number } | null = null
   modelError: string | null = null
 
+  // ── Refine Edge (alpha matting) status ──────────────────────────────────────
+  mattingModelStatus: ModelStatus = 'unknown'
+  mattingDownloadProgress: { progress: number; loaded: number; total: number } | null = null
+  mattingModelError: string | null = null
+  refineStatus: InferenceStatus = 'idle'
+
   // ── Session state ────────────────────────────────────────────────────────────
   promptMode: PromptMode = 'rect'
   points: PromptPoint[] = []

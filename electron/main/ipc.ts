@@ -2,6 +2,7 @@ import { ipcMain, dialog, BrowserWindow, app, clipboard, nativeImage } from 'ele
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { registerSamHandlers } from './sam'
+import { registerMattingHandlers } from './matting'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('debug:openDevTools', (event) => {
@@ -174,4 +175,5 @@ export function registerIpcHandlers(): void {
   })
 
   registerSamHandlers()
+  registerMattingHandlers()
 }

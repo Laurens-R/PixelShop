@@ -16,10 +16,12 @@ export const objectSelectionOptions = {
 // ─── Module-level callbacks (set by useObjectSelection) ───────────────────────
 
 export const objectSelectionCallbacks = {
-  commit:        (_mode: SelectionMode) => { /* set by hook */ },
-  cancel:        () => { /* set by hook */ },
-  downloadModel: () => { /* set by hook */ },
-  runSubject:    () => { /* set by hook */ },
+  commit:                (_mode: SelectionMode) => { /* set by hook */ },
+  cancel:                () => { /* set by hook */ },
+  downloadModel:         () => { /* set by hook */ },
+  runSubject:            () => { /* set by hook */ },
+  refineEdge:            () => { /* set by hook */ },
+  downloadMattingModel:  () => { /* set by hook */ },
 }
 
 // ─── Handler factory ──────────────────────────────────────────────────────────
@@ -115,12 +117,18 @@ function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): Reac
   const [feather, setFeather] = useState(objectSelectionOptions.feather)
   const [antiAlias, setAntiAlias] = useState(objectSelectionOptions.antiAlias)
   const [hasPendingMask, setHasPendingMask] = useState(objectSelectionStore.pendingMask !== null)
+  const [mattingStatus, setMattingStatus] = useState(objectSelectionStore.mattingModelStatus)
+  const [refineStatus, setRefineStatus] = useState(objectSelectionStore.refineStatus)
+  const [mattingProgress, setMattingProgress] = useState(objectSelectionStore.mattingDownloadProgress)
 
   useEffect(() => {
     const update = (): void => {
       setModelStatus(objectSelectionStore.modelStatus)
       setInferenceStatus(objectSelectionStore.inferenceStatus)
       setHasPendingMask(objectSelectionStore.pendingMask !== null)
+      setMattingStatus(objectSelectionStore.mattingModelStatus)
+      setRefineStatus(objectSelectionStore.refineStatus)
+      setMattingProgress(objectSelectionStore.mattingDownloadProgress)
     }
     objectSelectionStore.subscribe(update)
     return () => objectSelectionStore.unsubscribe(update)
@@ -208,6 +216,31 @@ function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): Reac
       >
         Subject
       </button>
+      <span className={styles.optSep} />
+      {mattingStatus === 'ready' ? (
+        <button
+          className={styles.optBtn}
+          onClick={() => objectSelectionCallbacks.refineEdge()}
+          disabled={refineStatus === 'running'}
+          title="Alpha matting refinement of the current selection edges (great for hair)"
+        >
+          {refineStatus === 'running' ? 'Refining…' : 'Refine Edge'}
+        </button>
+      ) : mattingStatus === 'downloading' ? (
+        <span className={styles.optText}>
+          Downloading matting model{mattingProgress && mattingProgress.total > 0
+            ? ` ${Math.round(mattingProgress.progress * 100)}%`
+            : '…'}
+        </span>
+      ) : mattingStatus === 'error' || mattingStatus === 'unknown' ? (
+        <button
+          className={styles.optBtn}
+          onClick={() => objectSelectionCallbacks.downloadMattingModel()}
+          title="Download RVM matting model (~14 MB) for Refine Edge"
+        >
+          Get Refine Edge (~14 MB)
+        </button>
+      ) : null}
       {inferenceStatus === 'running' && (
         <span className={styles.optText}>Analyzing…</span>
       )}
