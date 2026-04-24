@@ -37,25 +37,21 @@ interface OrtModule {
 }
 
 // ─── Model paths ─────────────────────────────────────────────────────────────
-// In dev: models live at <project root>/resources/models/mobilesam/
-// In prod: models are copied to app.asar.unpacked or next to resources via
-//          extraResources, accessible at process.resourcesPath/models/mobilesam/
+// Dev:  <project root>/resources/models/efficientsam/
+// Prod: process.resourcesPath/models/efficientsam/  (via extraResources)
 
 function getModelsDir(): string {
   if (app.isPackaged) {
-    return join(process.resourcesPath, 'models', 'mobilesam')
+    return join(process.resourcesPath, 'models', 'efficientsam')
   }
   // In dev, electron-vite compiles main to out/main/index.js;
   // project root is 2 levels up from that file.
   const devRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-  return join(devRoot, 'resources', 'models', 'mobilesam')
+  return join(devRoot, 'resources', 'models', 'efficientsam')
 }
-function getEncoderPath(): string {
-  return join(getModelsDir(), 'encoder.onnx')
-}
-function getDecoderPath(): string {
-  return join(getModelsDir(), 'decoder.onnx')
-}
+
+function getEncoderPath(): string { return join(getModelsDir(), 'encoder.onnx') }
+function getDecoderPath(): string { return join(getModelsDir(), 'decoder.onnx') }
 
 // ─── Runtime-loaded ONNX ─────────────────────────────────────────────────────
 
@@ -75,6 +71,7 @@ function getOrt(): OrtModule {
 let encoderSession: OrtInferenceSession | null = null
 let decoderSession: OrtInferenceSession | null = null
 let cachedEmbeddings: Float32Array | null = null
+let cachedEmbeddingShape: number[] | null = null
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -102,16 +99,15 @@ async function loadSessions(): Promise<void> {
   }
 }
 
+// EfficientSAM expects CHW float32 in [0, 1] (no ImageNet normalization).
 function preprocessImage(rgba: Buffer): Float32Array {
-  const MEAN = [0.485, 0.456, 0.406]
-  const STD = [0.229, 0.224, 0.225]
   const n = 1024 * 1024
-  // Channel-last (HWC) layout: [1024, 1024, 3]
+  // Channel-first (CHW) layout: [3, 1024, 1024]
   const tensor = new Float32Array(3 * n)
   for (let i = 0; i < n; i++) {
-    tensor[i * 3 + 0] = (rgba[i * 4 + 0] / 255.0 - MEAN[0]) / STD[0]
-    tensor[i * 3 + 1] = (rgba[i * 4 + 1] / 255.0 - MEAN[1]) / STD[1]
-    tensor[i * 3 + 2] = (rgba[i * 4 + 2] / 255.0 - MEAN[2]) / STD[2]
+    tensor[0 * n + i] = rgba[i * 4 + 0] / 255.0 // R
+    tensor[1 * n + i] = rgba[i * 4 + 1] / 255.0 // G
+    tensor[2 * n + i] = rgba[i * 4 + 2] / 255.0 // B
   }
   return tensor
 }
@@ -142,19 +138,17 @@ export function registerSamHandlers(): void {
       const ort = getOrt()
 
       const floatData = preprocessImage(imageData)
-      // PulpCut/mobilesam-onnx encoder expects channel-last HWC: [1024, 1024, 3]
-      const inputTensor = new ort.Tensor('float32', floatData, [1024, 1024, 3])
+      // EfficientSAM encoder expects channel-first NCHW: [1, 3, 1024, 1024], pixel values in [0, 1]
+      const inputTensor = new ort.Tensor('float32', floatData, [1, 3, 1024, 1024])
       const feeds: Record<string, OrtTensor> = {}
       feeds[encoderSession!.inputNames[0]] = inputTensor
       const results = await encoderSession!.run(feeds)
 
-      const embKey =
-        encoderSession!.outputNames.find((n) => n.includes('embedding')) ??
-        encoderSession!.outputNames[0]
-      const embTensor = results[embKey]
+      const embTensor = results[encoderSession!.outputNames[0]]
       const embData = new Float32Array(embTensor.data as Float32Array)
 
       cachedEmbeddings = embData
+      cachedEmbeddingShape = Array.from(embTensor.dims)
 
       return { embeddings: Buffer.from(embData.buffer) }
     },
@@ -194,6 +188,7 @@ export function registerSamHandlers(): void {
       const promptLabels: number[] = []
 
       if (params.box !== null) {
+        // Box corners: label 2 = top-left, label 3 = bottom-right
         promptCoords.push(params.box.x1 * scale, params.box.y1 * scale)
         promptLabels.push(2)
         promptCoords.push(params.box.x2 * scale, params.box.y2 * scale)
@@ -205,22 +200,27 @@ export function registerSamHandlers(): void {
         promptLabels.push(pt.positive ? 1 : 0)
       }
 
-      // Padding point required by SAM decoder
-      promptCoords.push(0, 0)
-      promptLabels.push(-1)
-
-      const N = promptLabels.length
-
-      const allFeeds: Record<string, OrtTensor> = {
-        image_embeddings: new ort.Tensor('float32', embedData, [1, 256, 64, 64]),
-        point_coords: new ort.Tensor('float32', new Float32Array(promptCoords), [1, N, 2]),
-        point_labels: new ort.Tensor('float32', new Float32Array(promptLabels), [1, N]),
-        mask_input: new ort.Tensor('float32', new Float32Array(256 * 256), [1, 1, 256, 256]),
-        has_mask_input: new ort.Tensor('float32', new Float32Array([0.0]), [1]),
-        orig_im_size: new ort.Tensor('float32', new Float32Array([1024.0, 1024.0]), [2]),
+      if (promptLabels.length === 0) {
+        throw new Error('No prompts provided. Add points or draw a box before running inference.')
       }
 
-      // Only pass inputs the decoder actually expects (varies by ONNX export variant)
+      const N = promptLabels.length
+      // Embeddings shape was stored when encode-image ran; reconstruct the tensor.
+      const embShape = cachedEmbeddingShape ?? [1, 256, 64, 64]
+
+      // EfficientSAM decoder inputs:
+      //   image_embeddings:      [B, C, H, W]  (from encoder output)
+      //   batched_point_coords:  [1, 1, N, 2]  float32 – in encoder-input pixel space
+      //   batched_point_labels:  [1, 1, N]     float32 – 1=fg, 0=bg, 2=box-TL, 3=box-BR
+      //   orig_im_size:          [2]            int64   – [H, W] of encoder input (1024×1024)
+      const allFeeds: Record<string, OrtTensor> = {
+        image_embeddings: new ort.Tensor('float32', embedData, embShape),
+        batched_point_coords: new ort.Tensor('float32', new Float32Array(promptCoords), [1, 1, N, 2]),
+        batched_point_labels: new ort.Tensor('float32', new Float32Array(promptLabels), [1, 1, N]),
+        orig_im_size: new ort.Tensor('int64', new BigInt64Array([BigInt(1024), BigInt(1024)]), [2]),
+      }
+
+      // Only pass inputs the decoder actually expects
       const feeds: Record<string, OrtTensor> = {}
       for (const name of decoderSession!.inputNames) {
         if (name in allFeeds) feeds[name] = allFeeds[name]
@@ -228,8 +228,12 @@ export function registerSamHandlers(): void {
 
       const results = await decoderSession!.run(feeds)
 
-      const iouTensor = results['iou_predictions']
-      const lowResMasksTensor = results['low_res_masks']
+      // EfficientSAM decoder outputs (positional):
+      //   [0] predicted_logits:       [1, 1, num_masks, H, W]  – raw logits at orig_im_size
+      //   [1] predicted_iou:          [1, 1, num_masks]
+      //   [2] predicted_lowres_logits (optional, ignored)
+      const logitsTensor = results[decoderSession!.outputNames[0]]
+      const iouTensor    = results[decoderSession!.outputNames[1]]
 
       const iouData = iouTensor.data as Float32Array
       let bestIdx = 0
@@ -241,20 +245,23 @@ export function registerSamHandlers(): void {
         }
       }
 
-      const masksData = lowResMasksTensor.data as Float32Array
-      const pixelCount = 256 * 256
-      const maskSlice = masksData.slice(bestIdx * pixelCount, (bestIdx + 1) * pixelCount)
+      // dims: [1, 1, num_masks, H, W]  → stride per mask = H*W
+      const H = logitsTensor.dims[3]
+      const W = logitsTensor.dims[4]
+      const pixelCount = H * W
+      const logitsData = logitsTensor.data as Float32Array
+      const logitSlice = logitsData.slice(bestIdx * pixelCount, (bestIdx + 1) * pixelCount)
 
       const uint8Mask = new Uint8Array(pixelCount)
       for (let i = 0; i < pixelCount; i++) {
-        const val = 1.0 / (1.0 + Math.exp(-maskSlice[i]))
+        const val = 1.0 / (1.0 + Math.exp(-logitSlice[i]))
         uint8Mask[i] = Math.min(255, Math.max(0, Math.round(val * 255)))
       }
 
       return {
         mask: Buffer.from(uint8Mask),
-        width: 256,
-        height: 256,
+        width: W,
+        height: H,
         iouScore: bestIou,
       }
     },
@@ -262,6 +269,7 @@ export function registerSamHandlers(): void {
 
   ipcMain.handle('sam:invalidate-cache', (): void => {
     cachedEmbeddings = null
+    cachedEmbeddingShape = null
     // Reset sessions so models are reloaded if files changed
     encoderSession = null
     decoderSession = null

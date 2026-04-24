@@ -45,31 +45,28 @@ async function downsampleTo1024(
 }
 
 async function upsampleMask(
-  mask256: Uint8Array,
+  mask1024: Uint8Array,
   canvasWidth: number,
   canvasHeight: number,
 ): Promise<Uint8Array> {
-  // The decoder returns a 256×256 mask in the *padded* 1024×1024 space.
+  // EfficientSAM decoder returns a 1024×1024 mask in the *padded* encoder-input space.
   // Only the top-left region corresponding to the actual (non-padded) image
-  // contains real content. Crop to that region before upsampling.
+  // contains real content. Crop to that region before resizing to canvas dimensions.
   const scale = 1024 / Math.max(canvasWidth, canvasHeight)
-  const dstW = Math.round(canvasWidth * scale)
-  const dstH = Math.round(canvasHeight * scale)
-  // 256 = 1024/4, so the content occupies [0, 0, dstW/4, dstH/4] in mask space
-  const cropW = Math.max(1, Math.round(dstW / 4))
-  const cropH = Math.max(1, Math.round(dstH / 4))
+  const dstW = Math.max(1, Math.round(canvasWidth * scale))
+  const dstH = Math.max(1, Math.round(canvasHeight * scale))
 
-  const rgba256 = new Uint8ClampedArray(256 * 256 * 4)
-  for (let i = 0; i < 256 * 256; i++) {
-    rgba256[i * 4 + 0] = mask256[i]
-    rgba256[i * 4 + 1] = mask256[i]
-    rgba256[i * 4 + 2] = mask256[i]
-    rgba256[i * 4 + 3] = 255
+  const rgba1024 = new Uint8ClampedArray(1024 * 1024 * 4)
+  for (let i = 0; i < 1024 * 1024; i++) {
+    rgba1024[i * 4 + 0] = mask1024[i]
+    rgba1024[i * 4 + 1] = mask1024[i]
+    rgba1024[i * 4 + 2] = mask1024[i]
+    rgba1024[i * 4 + 3] = 255
   }
-  // Crop to the non-padded region, then resize to canvas dimensions
+  // Crop to the non-padded content region, then resize to canvas dimensions
   const bmp = await createImageBitmap(
-    new ImageData(rgba256, 256, 256),
-    0, 0, cropW, cropH,
+    new ImageData(rgba1024, 1024, 1024),
+    0, 0, dstW, dstH,
     { resizeWidth: canvasWidth, resizeHeight: canvasHeight, resizeQuality: 'medium' },
   )
   const oc = new OffscreenCanvas(canvasWidth, canvasHeight)
@@ -429,35 +426,6 @@ export function useObjectSelection({
     objectSelectionStore.reset()
   }, [])
 
-  const downloadModel = useCallback(async (): Promise<void> => {
-    objectSelectionStore.modelStatus = 'downloading'
-    objectSelectionStore.downloadProgress = null
-    objectSelectionStore.modelError = null
-    objectSelectionStore.notify()
-
-    const unsubscribe = window.api.sam.onDownloadProgress((p) => {
-      objectSelectionStore.downloadProgress = p
-      objectSelectionStore.notify()
-    })
-
-    try {
-      const result = await window.api.sam.downloadModel()
-      if ('error' in result) {
-        objectSelectionStore.modelStatus = 'error'
-        objectSelectionStore.modelError = result.error
-      } else {
-        objectSelectionStore.modelStatus = 'ready'
-        objectSelectionStore.downloadProgress = null
-      }
-    } catch (err) {
-      objectSelectionStore.modelStatus = 'error'
-      objectSelectionStore.modelError = err instanceof Error ? err.message : String(err)
-    } finally {
-      unsubscribe()
-      objectSelectionStore.notify()
-    }
-  }, [])
-
   // ── Refine Edge (alpha matting via RVM) ────────────────────────────────────
 
   const downloadMattingModel = useCallback(async (): Promise<void> => {
@@ -674,19 +642,17 @@ export function useObjectSelection({
   useEffect(() => {
     objectSelectionCallbacks.commit = commitSelection
     objectSelectionCallbacks.cancel = cancelSelection
-    objectSelectionCallbacks.downloadModel = () => { void downloadModel() }
     objectSelectionCallbacks.runSubject = () => { void runSelectSubject() }
     objectSelectionCallbacks.refineEdge = () => { void refineEdge() }
     objectSelectionCallbacks.downloadMattingModel = () => { void downloadMattingModel() }
     return () => {
       objectSelectionCallbacks.commit = () => {}
       objectSelectionCallbacks.cancel = () => {}
-      objectSelectionCallbacks.downloadModel = () => {}
       objectSelectionCallbacks.runSubject = () => {}
       objectSelectionCallbacks.refineEdge = () => {}
       objectSelectionCallbacks.downloadMattingModel = () => {}
     }
-  }, [commitSelection, cancelSelection, downloadModel, runSelectSubject, refineEdge, downloadMattingModel])
+  }, [commitSelection, cancelSelection, runSelectSubject, refineEdge, downloadMattingModel])
 
   // ── Store subscription → trigger inference ─────────────────────────────────
 

@@ -2,7 +2,8 @@ import type { PromptPoint, SAMBoundingBox } from '@/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type ModelStatus = 'unknown' | 'checking' | 'downloading' | 'ready' | 'error'
+export type ModelStatus = 'unknown' | 'checking' | 'ready' | 'error'
+export type MattingModelStatus = 'unknown' | 'checking' | 'downloading' | 'ready' | 'error'
 export type PromptMode = 'rect' | 'point'
 export type InferenceStatus = 'idle' | 'running' | 'error'
 
@@ -13,11 +14,10 @@ type Listener = () => void
 class ObjectSelectionStore {
   // ── Model status ────────────────────────────────────────────────────────────
   modelStatus: ModelStatus = 'unknown'
-  downloadProgress: { file: 'encoder' | 'decoder'; progress: number } | null = null
   modelError: string | null = null
 
   // ── Refine Edge (alpha matting) status ──────────────────────────────────────
-  mattingModelStatus: ModelStatus = 'unknown'
+  mattingModelStatus: MattingModelStatus = 'unknown'
   mattingDownloadProgress: { progress: number; loaded: number; total: number } | null = null
   mattingModelError: string | null = null
   refineStatus: InferenceStatus = 'idle'

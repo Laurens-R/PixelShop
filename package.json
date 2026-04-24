@@ -36,8 +36,8 @@
   "build": {
     "extraResources": [
       {
-        "from": "resources/models/mobilesam",
-        "to": "models/mobilesam"
+        "from": "resources/models/efficientsam",
+        "to": "models/efficientsam"
       },
       {
         "from": "resources/models/rvm",

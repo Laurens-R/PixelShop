@@ -19,7 +19,7 @@ export const objectSelectionOptions = {
 export const objectSelectionCallbacks = {
   commit:                (_mode: SelectionMode) => { /* set by hook */ },
   cancel:                () => { /* set by hook */ },
-  downloadModel:         () => { /* set by hook */ },
+  downloadModel:         () => { /* not used — models are bundled */ },
   runSubject:            () => { /* set by hook */ },
   refineEdge:            () => { /* set by hook */ },
   downloadMattingModel:  () => { /* set by hook */ },
@@ -144,7 +144,7 @@ function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): Reac
 
   if (modelStatus === 'error') {
     return (
-      <span className={styles.optText}>Model not found. Ensure ONNX files are bundled in resources/models/mobilesam/.</span>
+      <span className={styles.optText}>EfficientSAM model not found. Place encoder.onnx and decoder.onnx in resources/models/efficientsam/.</span>
     )
   }
 

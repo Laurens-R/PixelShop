@@ -78,9 +78,6 @@ const api = {
     checkModel: (): Promise<{ encoderReady: boolean; decoderReady: boolean }> =>
       ipcRenderer.invoke('sam:check-model'),
 
-    downloadModel: (): Promise<{ success: true } | { error: string }> =>
-      ipcRenderer.invoke('sam:download-model'),
-
     encodeImage: (
       imageData: Uint8Array,
       origWidth: number,
@@ -104,17 +101,6 @@ const api = {
 
     invalidateCache: (): Promise<void> =>
       ipcRenderer.invoke('sam:invalidate-cache'),
-
-    onDownloadProgress: (
-      callback: (p: { file: 'encoder' | 'decoder'; progress: number }) => void,
-    ): (() => void) => {
-      const handler = (
-        _e: IpcRendererEvent,
-        p: { file: 'encoder' | 'decoder'; progress: number },
-      ): void => callback(p)
-      ipcRenderer.on('sam:download-progress', handler)
-      return () => ipcRenderer.removeListener('sam:download-progress', handler)
-    },
   },
 
   // ── Alpha matting (Refine Edge) ─────────────────────────────────
