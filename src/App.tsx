@@ -48,6 +48,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useAdjustments } from '@/hooks/useAdjustments'
 import { useFilters } from '@/hooks/useFilters'
 import { useTransform } from '@/hooks/useTransform'
+import { usePolygonalSelection } from '@/hooks/usePolygonalSelection'
 import { useContentAwareFill } from '@/hooks/useContentAwareFill'
 import { transformStore } from '@/store/transformStore'
 import { cloneStampStore } from '@/store/cloneStampStore'
@@ -109,6 +110,7 @@ function AppContent(): React.JSX.Element {
   const [contentAwareFillLabel,        setContentAwareFillLabel]        = useState('Filling…')
   const [hasSelection,                 setHasSelection]                 = useState(false)
   const [recentFiles,                  setRecentFiles]                  = useState<string[]>([])
+  const [findLayersCounter,            setFindLayersCounter]            = useState(0)
 
   // ── Clone stamp source deletion notification ─────────────────────
   const cloneStampNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -299,6 +301,7 @@ function AppContent(): React.JSX.Element {
   }, [dispatch])
   const handleFitToWindow  = useCallback(() => { canvasHandleRef.current?.fitToWindow() }, [canvasHandleRef])
   const handleToggleGrid   = useCallback(() => { dispatch({ type: 'TOGGLE_GRID' }) }, [dispatch])
+  const handleFindLayers   = useCallback(() => { setFindLayersCounter(c => c + 1) }, [])
 
   const handleSelectAll = useCallback((): void => {
     const { width, height } = stateRef.current.canvas
@@ -318,6 +321,9 @@ function AppContent(): React.JSX.Element {
   const handleDeselectLayers = useCallback((): void => {
     dispatch({ type: 'SET_SELECTED_LAYERS', payload: [] })
   }, [dispatch])
+
+  // ── Polygonal selection keyboard handling ───────────────────────
+  usePolygonalSelection()
 
   // ── Transform ─────────────────────────────────────────────────────
   const { handleEnterTransform, handleApply: handleTransformApply, handleCancel: handleTransformCancel, isFreeTransformEnabled } = useTransform({
@@ -385,6 +391,12 @@ function AppContent(): React.JSX.Element {
     handleSelectAllLayers,
     handleCloneStamp: useCallback(() => handleToolChange('clone-stamp'), [handleToolChange]),
     handleContentAwareDelete: useCallback(() => handleOpenCafDialog('delete'), [handleOpenCafDialog]),
+    handleFindLayers,
+    handleCycleLasso: useCallback(() => {
+      const current = stateRef.current.activeTool
+      const next = current === 'polygonal-selection' ? 'lasso' : 'polygonal-selection'
+      handleToolChange(next)
+    }, [handleToolChange]),
   })
 
   // ── Export ────────────────────────────────────────────────────────
@@ -459,6 +471,7 @@ function AppContent(): React.JSX.Element {
       case 'deselect':         handleDeselect(); break
       case 'selectAllLayers':  handleSelectAllLayers(); break
       case 'deselectLayers':   handleDeselectLayers(); break
+      case 'findLayers':       handleFindLayers(); break
       case 'newLayer':        handleNewLayer(); break
       case 'duplicateLayer':  handleDuplicateLayer(); break
       case 'deleteLayer':     handleDeleteActiveLayer(); break
@@ -487,6 +500,7 @@ function AppContent(): React.JSX.Element {
     handleMergeDown, handleMergeVisible, handleFlattenImage, handleZoomIn, handleZoomOut,
     handleFitToWindow, handleToggleGrid, handleEnterTransform,
     handleSelectAll, handleDeselect, handleSelectAllLayers, handleDeselectLayers,
+    handleFindLayers,
     handleOpenCafDialog,
     state.activeLayerId, effectiveSelectedIds,
   ])
@@ -592,6 +606,7 @@ function AppContent(): React.JSX.Element {
         onDeselect={handleDeselect}
         onSelectAllLayers={handleSelectAllLayers}
         onDeselectLayers={handleDeselectLayers}
+        onFindLayers={handleFindLayers}
       />
       <ToolOptionsBar />
       <TabBar
@@ -642,6 +657,7 @@ function AppContent(): React.JSX.Element {
           onMergeGroup={handleMergeGroup}
           onGroupSelected={handleGroupLayers}
           onUngroup={handleUngroupLayers}
+          findLayersTrigger={findLayersCounter}
         />
       </div>
 

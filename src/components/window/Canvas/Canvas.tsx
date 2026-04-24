@@ -12,6 +12,7 @@ import { eraserOptions } from '@/tools/eraser'
 import { cloneStampOptions } from '@/tools/cloneStamp'
 import { cloneStampStore } from '@/store/cloneStampStore'
 import { drawCloneStampOverlay } from './cloneStampOverlay'
+import { polygonalSelectionStore } from '@/store/polygonalSelectionStore'
 import { selectionStore } from '@/store/selectionStore'
 import { cursorStore } from '@/store/cursorStore'
 import { transformStore } from '@/store/transformStore'
@@ -424,7 +425,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
 
   useEffect(() => {
     if (!isActive || state.activeTool !== 'clone-stamp') return
-
     const redraw = (): void => {
       const oc = toolOverlayRef.current
       if (!oc) return
@@ -452,6 +452,87 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       oc?.getContext('2d')?.clearRect(0, 0, oc.width, oc.height)
       const canvas = canvasRef.current
       if (canvas) canvas.style.cursor = ''
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, state.activeTool])
+
+  useEffect(() => {
+    if (!isActive || state.activeTool !== 'polygonal-selection') return
+
+    const redraw = (): void => {
+      const oc = toolOverlayRef.current
+      if (!oc) return
+      const ctx2d = oc.getContext('2d')
+      if (!ctx2d) return
+      ctx2d.clearRect(0, 0, oc.width, oc.height)
+
+      const { vertices, cursor, nearClose } = polygonalSelectionStore
+      if (vertices.length === 0) return
+
+      // Update cursor reactively (P2-C)
+      if (canvasRef.current) {
+        canvasRef.current.style.cursor = nearClose ? 'cell' : 'crosshair'
+      }
+
+      // 1. Black backing stroke on committed segments
+      if (vertices.length >= 2) {
+        ctx2d.strokeStyle = 'rgba(0,0,0,0.8)'
+        ctx2d.lineWidth = 3
+        ctx2d.setLineDash([])
+        ctx2d.beginPath()
+        ctx2d.moveTo(vertices[0].x, vertices[0].y)
+        for (let i = 1; i < vertices.length; i++) ctx2d.lineTo(vertices[i].x, vertices[i].y)
+        ctx2d.stroke()
+
+        // 2. White top stroke on committed segments
+        ctx2d.strokeStyle = 'white'
+        ctx2d.lineWidth = 1.5
+        ctx2d.setLineDash([])
+        ctx2d.beginPath()
+        ctx2d.moveTo(vertices[0].x, vertices[0].y)
+        for (let i = 1; i < vertices.length; i++) ctx2d.lineTo(vertices[i].x, vertices[i].y)
+        ctx2d.stroke()
+      }
+
+      // 3. Dashed rubber-band from last vertex to cursor
+      ctx2d.strokeStyle = 'rgba(42, 113, 255, 0.8)'
+      ctx2d.lineWidth = 1
+      ctx2d.setLineDash([4, 3])
+      ctx2d.beginPath()
+      ctx2d.moveTo(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y)
+      ctx2d.lineTo(cursor.x, cursor.y)
+      ctx2d.stroke()
+      ctx2d.setLineDash([])
+
+      // 4. Vertex dots at all placed vertices (P2-B)
+      for (const v of vertices) {
+        ctx2d.beginPath()
+        ctx2d.arc(v.x, v.y, 4, 0, Math.PI * 2)
+        ctx2d.fillStyle = 'white'
+        ctx2d.fill()
+        ctx2d.strokeStyle = 'rgba(0,0,0,0.8)'
+        ctx2d.lineWidth = 1.5
+        ctx2d.setLineDash([])
+        ctx2d.stroke()
+      }
+
+      // 5. Close-snap indicator on origin (on top of regular dot) when nearClose
+      if (nearClose) {
+        ctx2d.lineWidth   = 2
+        ctx2d.strokeStyle = '#ffffff'
+        ctx2d.beginPath()
+        ctx2d.arc(vertices[0].x, vertices[0].y, 7, 0, Math.PI * 2)
+        ctx2d.stroke()
+      }
+    }
+
+    redraw()
+    polygonalSelectionStore.subscribe(redraw)
+
+    return () => {
+      polygonalSelectionStore.unsubscribe(redraw)
+      const oc = toolOverlayRef.current
+      oc?.getContext('2d')?.clearRect(0, 0, oc.width, oc.height)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, state.activeTool])
@@ -503,6 +584,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       selectionStore.setPending(null)
     }
     toolHandlerRef.current = TOOL_REGISTRY[state.activeTool].createHandler()
+    // Cancel any in-progress polygonal selection when switching tools
+    polygonalSelectionStore.cancel()
     // Hide brush cursor when switching away from a circle-cursor tool
     if (brushCursorRef.current) {
       if (sel !== 'brush' && sel !== 'eraser' && sel !== 'clone-stamp') {
@@ -716,7 +799,9 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             style={{
               width:  width  * state.canvas.zoom / window.devicePixelRatio,
               height: height * state.canvas.zoom / window.devicePixelRatio,
-              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none' : undefined,
+              cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none'
+                    : (state.activeTool === 'polygonal-selection') ? 'crosshair'
+                    : undefined,
               // Bilinear when zoomed out (smooth downscale); nearest when at or above 100% (crisp pixel art)
               imageRendering: state.canvas.zoom < 1 ? 'auto' : 'pixelated',
             }}

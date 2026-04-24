@@ -69,3 +69,33 @@
     background: vars.$color-surface-hover;
   }
 }
+
+.optModeBtn {
+  @include m.ps-input;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  cursor: pointer;
+  color: vars.$color-text-dim;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background: vars.$color-surface-hover;
+  }
+}
+
+.optModeBtnActive {
+  background: vars.$color-accent-blue;
+  color: #fff;
+
+  &:hover {
+    background: vars.$color-accent-blue;
+  }
+}

@@ -1,7 +1,7 @@
 // ─── Selection store ──────────────────────────────────────────────────────────
 // Module-level singleton. Tools and the canvas overlay both import this directly.
 
-export type SelectionMode = 'set' | 'add' | 'subtract'
+export type SelectionMode = 'set' | 'add' | 'subtract' | 'intersect'
 
 /**
  * PendingSelection represents a live drag preview that hasn't been committed
@@ -100,7 +100,7 @@ export class SelectionStore {
     this.notify()
   }
 
-  setPolygon(points: { x: number; y: number }[], mode: SelectionMode = 'set', feather = 0): void {
+  setPolygon(points: { x: number; y: number }[], mode: SelectionMode = 'set', feather = 0, antiAlias = false): void {
     const { width: w, height: h } = this
     this.pending = null
 
@@ -127,9 +127,23 @@ export class SelectionStore {
       }
       xs.sort((a, b) => a - b)
       for (let k = 0; k + 1 < xs.length; k += 2) {
-        const lx2 = Math.max(0, Math.floor(xs[k]))
-        const rx2 = Math.min(w - 1, Math.ceil(xs[k + 1]))
-        if (lx2 <= rx2) m.fill(255, y * w + lx2, y * w + rx2 + 1)
+        if (antiAlias) {
+          const xL = xs[k]
+          const xR = xs[k + 1]
+          const iL = Math.max(0, Math.floor(xL))
+          const iR = Math.min(w - 1, Math.floor(xR))
+          for (let x = iL; x <= iR; x++) {
+            const covL = Math.max(x, xL)
+            const covR = Math.min(x + 1, xR)
+            const alpha = Math.round(Math.max(0, covR - covL) * 255)
+            const idx = y * w + x
+            if (alpha > m[idx]) m[idx] = alpha
+          }
+        } else {
+          const lx2 = Math.max(0, Math.floor(xs[k]))
+          const rx2 = Math.min(w - 1, Math.ceil(xs[k + 1]))
+          if (lx2 <= rx2) m.fill(255, y * w + lx2, y * w + rx2 + 1)
+        }
       }
     }
     if (feather > 0) this.applyFeather(m, feather)
@@ -146,6 +160,7 @@ export class SelectionStore {
     mode: SelectionMode = 'set',
     feather = 0,
     dilation = 0,
+    antiAlias = false,
   ): void {
     const { width: w, height: h } = this
     if (sx < 0 || sx >= w || sy < 0 || sy >= h) return
@@ -171,21 +186,53 @@ export class SelectionStore {
       visited[base] = 1
       const stack: number[] = [base]
 
-      while (stack.length > 0) {
-        const idx = stack.pop()!
-        if (diff(idx) > tolerance) continue
-        m[idx] = 255
-        const x = idx % w
-        const y = (idx / w) | 0
-        if (x > 0     && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1) }
-        if (x < w - 1 && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1) }
-        if (y > 0     && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w) }
-        if (y < h - 1 && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w) }
+      if (antiAlias) {
+        const AA_ZONE = 32
+        while (stack.length > 0) {
+          const idx = stack.pop()!
+          const d = diff(idx)
+          if (d > tolerance + AA_ZONE) continue
+          if (d > tolerance) {
+            m[idx] = Math.round((1 - (d - tolerance) / AA_ZONE) * 255)
+            continue
+          }
+          m[idx] = 255
+          const x = idx % w
+          const y = (idx / w) | 0
+          if (x > 0     && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1) }
+          if (x < w - 1 && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1) }
+          if (y > 0     && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w) }
+          if (y < h - 1 && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w) }
+        }
+      } else {
+        while (stack.length > 0) {
+          const idx = stack.pop()!
+          if (diff(idx) > tolerance) continue
+          m[idx] = 255
+          const x = idx % w
+          const y = (idx / w) | 0
+          if (x > 0     && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1) }
+          if (x < w - 1 && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1) }
+          if (y > 0     && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w) }
+          if (y < h - 1 && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w) }
+        }
       }
     } else {
       // Non-contiguous: select all pixels within tolerance anywhere on the layer
-      for (let i = 0; i < w * h; i++) {
-        if (diff(i) <= tolerance) m[i] = 255
+      if (antiAlias) {
+        const AA_ZONE = 32
+        for (let i = 0; i < w * h; i++) {
+          const d = diff(i)
+          if (d <= tolerance) {
+            m[i] = 255
+          } else if (d <= tolerance + AA_ZONE) {
+            m[i] = Math.round((1 - (d - tolerance) / AA_ZONE) * 255)
+          }
+        }
+      } else {
+        for (let i = 0; i < w * h; i++) {
+          if (diff(i) <= tolerance) m[i] = 255
+        }
       }
     }
 
@@ -276,6 +323,16 @@ export class SelectionStore {
       for (let i = 0; i < newMask.length; i++) {
         if (newMask[i] > this.mask[i]) this.mask[i] = newMask[i]
       }
+    } else if (mode === 'intersect') {
+      // Intersection: retain only pixels selected in both masks.
+      // When there is no existing mask, intersect with "everything selected" → keep the new mask as-is.
+      for (let i = 0; i < newMask.length; i++) {
+        this.mask[i] = Math.min(this.mask[i], newMask[i])
+      }
+      // If the result is entirely zero, treat as no selection.
+      let any = false
+      for (let i = 0; i < this.mask.length; i++) if (this.mask[i]) { any = true; break }
+      if (!any) { this.mask = null; this.borderSegments = null; return }
     } else {
       // Subtract: reduce by the subtracted strength
       for (let i = 0; i < this.mask.length; i++) {

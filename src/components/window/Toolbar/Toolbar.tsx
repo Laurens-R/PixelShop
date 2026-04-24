@@ -23,6 +23,12 @@ const Icon = {
       <line x1="7" y1="9" x2="5" y2="14" />
     </svg>
   ),
+  polygonalLasso: (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3,13 3,5 7,2 13,4 13,10 8,13" strokeDasharray="2.5 1.5" />
+      <circle cx="3" cy="13" r="1.2" fill="currentColor" />
+    </svg>
+  ),
   magicWand: (
     <svg viewBox="0 0 16 16" fill="currentColor">
       <rect x="1.5" y="11.5" width="7" height="2" rx="1" transform="rotate(-45 5 12.5)" />
@@ -214,12 +220,16 @@ const TOOL_GRID: ToolGrid = [
   ],
   // group 2 – selection
   [
-    { id: 'select',     label: 'Marquee',       shortcut: 'M', icon: Icon.select },
-    { id: 'lasso',      label: 'Lasso',         shortcut: 'L', icon: Icon.lasso }
+    { id: 'select',              label: 'Marquee',          shortcut: 'M', icon: Icon.select },
+    { id: 'lasso',               label: 'Lasso',            shortcut: 'L', icon: Icon.lasso }
   ],
   [
-    { id: 'magic-wand', label: 'Magic Wand',    shortcut: 'W', icon: Icon.magicWand },
-    { id: 'crop',       label: 'Crop',          shortcut: 'C', icon: Icon.crop }
+    { id: 'polygonal-selection', label: 'Polygonal Lasso',  shortcut: 'L', icon: Icon.polygonalLasso },
+    { id: 'magic-wand',          label: 'Magic Wand',       shortcut: 'W', icon: Icon.magicWand }
+  ],
+  [
+    { id: 'crop',                label: 'Crop',             shortcut: 'C', icon: Icon.crop },
+    null
   ],
   // group 3 – sampling
   [
@@ -344,7 +354,7 @@ export function Toolbar({ activeTool = 'pencil', onToolChange }: ToolbarProps): 
         {TOOL_GRID.map((row, rowIdx) => {
           const isFirstInGroup =
             rowIdx === 0 ||
-            (rowIdx === 1) || (rowIdx === 3) || (rowIdx === 4) || (rowIdx === 7) || (rowIdx === 8) || (rowIdx === 9)
+            (rowIdx === 1) || (rowIdx === 4) || (rowIdx === 5) || (rowIdx === 8) || (rowIdx === 9) || (rowIdx === 10)
 
           return (
             <React.Fragment key={rowIdx}>

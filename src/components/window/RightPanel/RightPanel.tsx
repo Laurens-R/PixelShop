@@ -11,6 +11,7 @@ type LayerTab = 'Layers' | 'History' | 'Info'
 
 interface RightPanelProps {
   activeTabId: string
+  findLayersTrigger?: number
   onMergeSelected: (ids: string[]) => void
   onMergeVisible: () => void
   onMergeDown: () => void
@@ -24,7 +25,7 @@ interface RightPanelProps {
   onUngroup: (groupId: string) => void
 }
 
-export function RightPanel({ activeTabId, onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onDuplicateLayer, onOpenAdjustmentPanel, onGeneratePalette, onMergeGroup, onGroupSelected, onUngroup }: RightPanelProps): React.JSX.Element {
+export function RightPanel({ activeTabId, findLayersTrigger, onMergeSelected, onMergeVisible, onMergeDown, onFlattenImage, onRasterizeLayer, onDuplicateLayer, onOpenAdjustmentPanel, onGeneratePalette, onMergeGroup, onGroupSelected, onUngroup }: RightPanelProps): React.JSX.Element {
   const [colorTab, setColorTab]   = useState<ColorTab>('Color')
   const [layerTab, setLayerTab]   = useState<LayerTab>('Layers')
   const [colorTabs, setColorTabs] = useState<ColorTab[]>(['Color', 'Swatches', 'Navigator'])
@@ -149,6 +150,8 @@ export function RightPanel({ activeTabId, onMergeSelected, onMergeVisible, onMer
             onMergeGroup={onMergeGroup}
             onGroupSelected={onGroupSelected}
             onUngroup={onUngroup}
+            activeTabId={activeTabId}
+            findLayersTrigger={findLayersTrigger}
           />
         )}
         {layerTab === 'History' && (

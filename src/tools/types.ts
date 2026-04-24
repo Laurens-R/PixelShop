@@ -100,6 +100,8 @@ export interface ToolOptionsStyles {
   optCheckLabel: string
   optSep: string
   optBtn: string
+  optModeBtn: string
+  optModeBtnActive: string
 }
 
 // ─── Full tool definition registered in the tool registry ─────────────────────

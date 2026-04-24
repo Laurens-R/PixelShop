@@ -6,7 +6,7 @@ import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOpti
 
 // ─── Shared options ───────────────────────────────────────────────────────────
 
-export const wandOptions = { tolerance: 32, contiguous: true, feather: 0, dilation: 0 }
+export const wandOptions = { tolerance: 32, contiguous: true, feather: 0, dilation: 0, antiAlias: false }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -48,6 +48,7 @@ function createMagicWandHandler(): ToolHandler {
         mode,
         wandOptions.feather,
         wandOptions.dilation,
+        wandOptions.antiAlias,
       )
     },
 
@@ -63,6 +64,7 @@ function MagicWandOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.
   const [contiguous, setContiguous] = useState(wandOptions.contiguous)
   const [feather, setFeather]       = useState(wandOptions.feather)
   const [dilation, setDilation]     = useState(wandOptions.dilation)
+  const [antiAlias, setAntiAlias]   = useState(wandOptions.antiAlias)
 
   return (
     <>
@@ -94,6 +96,15 @@ function MagicWandOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.
           onChange={e => { wandOptions.contiguous = e.target.checked; setContiguous(e.target.checked) }}
         />
         Contiguous
+      </label>
+      <span className={styles.optSep} />
+      <label className={styles.optCheckLabel}>
+        <input
+          type="checkbox"
+          checked={antiAlias}
+          onChange={e => { wandOptions.antiAlias = e.target.checked; setAntiAlias(e.target.checked) }}
+        />
+        Anti-alias
       </label>
     </>
   )

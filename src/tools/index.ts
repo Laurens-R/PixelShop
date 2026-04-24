@@ -6,6 +6,7 @@ import { eraserTool } from './eraser'
 import { selectTool } from './select'
 import { lassoTool } from './lasso'
 import { magicWandTool } from './magicWand'
+import { polygonalSelectionTool } from './polygonalSelection'
 import { fillTool } from './fill'
 import { eyedropperTool } from './eyedropper'
 import { zoomTool } from './zoom'
@@ -26,6 +27,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   'clone-stamp':  cloneStampTool,
   select:         selectTool,
   lasso:        lassoTool,
+  'polygonal-selection': polygonalSelectionTool,
   'magic-wand': magicWandTool,
   fill:         fillTool,
   eyedropper:   eyedropperTool,

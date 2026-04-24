@@ -121,6 +121,21 @@ const FolderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+// ─── Match highlight helper ──────────────────────────────────────────────────
+
+function highlightMatch(name: string, query: string): React.ReactNode {
+  if (!query) return name
+  const idx = name.toLowerCase().indexOf(query.toLowerCase())
+  if (idx < 0) return name
+  return (
+    <>
+      {name.slice(0, idx)}
+      <mark className={styles.nameMatchMark}>{name.slice(idx, idx + query.length)}</mark>
+      {name.slice(idx + query.length)}
+    </>
+  )
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface LayerPanelProps {
@@ -134,6 +149,8 @@ interface LayerPanelProps {
   onMergeGroup:        (groupId: string) => void
   onGroupSelected:     (layerIds: string[]) => void
   onUngroup:           (groupId: string) => void
+  activeTabId?:        string
+  findLayersTrigger?:  number
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -149,6 +166,8 @@ export function LayerPanel({
   onMergeGroup,
   onGroupSelected,
   onUngroup,
+  activeTabId,
+  findLayersTrigger,
 }: LayerPanelProps): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const layers = state.layers
@@ -188,6 +207,24 @@ export function LayerPanel({
   const [collapsedPixelLayers, setCollapsedPixelLayers] = useState<Set<string>>(new Set())
   const togglePixelLayerCollapse = (id: string): void =>
     setCollapsedPixelLayers(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
+
+  // ── Filter bar state ──────────────────────────────────────────────────────────
+  const [filterQuery,  setFilterQuery]  = useState<string>('')
+  const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false)
+  const filterInputRef = useRef<HTMLInputElement>(null)
+
+  // Reset filter when switching tabs
+  useEffect(() => {
+    setFilterQuery('')
+    setIsFilterOpen(false)
+  }, [activeTabId])
+
+  // Open and focus filter bar when trigger increments
+  useEffect(() => {
+    if (!findLayersTrigger) return
+    setIsFilterOpen(true)
+    requestAnimationFrame(() => { filterInputRef.current?.focus() })
+  }, [findLayersTrigger])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -240,10 +277,64 @@ export function LayerPanel({
     return result
   }, [layers, collapsedPixelLayers])
 
+  // ── Filtered rows ────────────────────────────────────────────────────────────
+
+  const filteredRows: TreeRow[] = useMemo((): TreeRow[] => {
+    if (!filterQuery) return treeRows
+
+    const q = filterQuery.toLowerCase()
+    const layerMap = new Map(layers.map(l => [l.id, l]))
+
+    // Pass 1: collect direct name-match IDs
+    const nameMatchIds = new Set(
+      layers.filter(l => l.name.toLowerCase().includes(q)).map(l => l.id)
+    )
+
+    // Pass 2: compute visible IDs
+    const visibleIds = new Set<string>()
+
+    function markAllDescendants(group: GroupLayerState): void {
+      for (const childId of group.childIds) {
+        visibleIds.add(childId)
+        const child = layerMap.get(childId)
+        if (child && isGroupLayer(child)) markAllDescendants(child)
+      }
+    }
+
+    function subtreeHasMatch(group: GroupLayerState): boolean {
+      for (const childId of group.childIds) {
+        if (nameMatchIds.has(childId)) return true
+        const child = layerMap.get(childId)
+        if (child && isGroupLayer(child) && subtreeHasMatch(child)) return true
+      }
+      return false
+    }
+
+    for (const layer of layers) {
+      if ('type' in layer && (layer.type === 'mask' || layer.type === 'adjustment')) continue
+
+      if (nameMatchIds.has(layer.id)) {
+        visibleIds.add(layer.id)
+        if (isGroupLayer(layer)) markAllDescendants(layer)
+      } else if (isGroupLayer(layer) && subtreeHasMatch(layer)) {
+        visibleIds.add(layer.id)
+      }
+    }
+
+    // Mask / adjustment children shown alongside their visible parent
+    for (const layer of layers) {
+      if ('type' in layer && (layer.type === 'mask' || layer.type === 'adjustment')) {
+        const parentId = (layer as MaskLayerState | AdjustmentLayerState).parentId
+        if (visibleIds.has(parentId)) visibleIds.add(layer.id)
+      }
+    }
+
+    return treeRows.filter(row => visibleIds.has(row.layer.id))
+  }, [treeRows, filterQuery, layers])
+
   // Determine which row to highlight as "active" — if the active layer is hidden
   // inside a collapsed group, highlight the collapsed group row instead.
-  const displayActiveId = useMemo((): string | null => {
-    if (!activeLayerId) return null
+  const displayActiveId = useMemo((): string | null => {    if (!activeLayerId) return null
     if (treeRows.some(r => r.layer.id === activeLayerId)) return activeLayerId
     // Active layer might be a mask/adjustment whose pixel parent is collapsed
     const activeLayer_ = layers.find(l => l.id === activeLayerId)
@@ -509,7 +600,7 @@ export function LayerPanel({
   }
 
   return (
-    <div className={styles.panel}>
+    <div className={[styles.panel, filterQuery !== '' ? styles.panelFiltered : ''].join(' ')}>
       {/* ── Blend mode + Opacity ──────────────────────────────────────── */}
       <div className={styles.blendRow}>
         <select
@@ -551,6 +642,59 @@ export function LayerPanel({
         </div>
       )}
 
+      {/* ── Filter bar ───────────────────────────────────────────────── */}
+      <div
+        className={[
+          styles.filterBar,
+          isFilterOpen                       ? styles.filterBarOpen   : '',
+          isFilterOpen && filterQuery !== '' ? styles.filterBarActive : '',
+        ].join(' ')}
+      >
+        <span className={styles.filterIcon} aria-hidden="true">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" width="12" height="12">
+            <circle cx="5" cy="5" r="3.5" />
+            <line x1="8" y1="8" x2="11" y2="11" />
+          </svg>
+        </span>
+        <input
+          ref={filterInputRef}
+          type="text"
+          className={styles.filterInput}
+          placeholder="Filter layers…"
+          value={filterQuery}
+          onChange={(e) => {
+            setFilterQuery(e.target.value)
+            if (e.target.value !== '') setIsFilterOpen(true)
+          }}
+          onFocus={() => setIsFilterOpen(true)}
+          onBlur={() => {
+            if (filterQuery === '') setIsFilterOpen(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setFilterQuery('')
+              setIsFilterOpen(false)
+              filterInputRef.current?.blur()
+            }
+          }}
+          aria-label="Filter layers by name"
+        />
+        {filterQuery !== '' ? (
+          <button
+            className={styles.filterClearBtn}
+            tabIndex={-1}
+            aria-label="Clear filter"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setFilterQuery('')
+              filterInputRef.current?.focus()
+            }}
+          >×</button>
+        ) : (
+          <span className={styles.filterClearPlaceholder} aria-hidden="true" />
+        )}
+      </div>
+
       {/* ── Layer list ────────────────────────────────────────────────── */}
       <ul
         className={styles.list}
@@ -560,7 +704,11 @@ export function LayerPanel({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        {treeRows.map(({ layer, depth, hasChildren }) => {
+        {filterQuery !== '' && filteredRows.length === 0 ? (
+          <li className={styles.filterEmpty}>
+            <span className={styles.filterEmptyText}>No layers match <em>&ldquo;{filterQuery}&rdquo;</em></span>
+          </li>
+        ) : filteredRows.map(({ layer, depth, hasChildren }) => {
           const isMask = 'type' in layer && layer.type === 'mask'
           const isAdjustment = 'type' in layer && layer.type === 'adjustment'
           const isGroup = isGroupLayer(layer)
@@ -669,7 +817,7 @@ export function LayerPanel({
                   onDoubleClick={(e) => startEdit(layer, e)}
                   title="Double-click to rename"
                 >
-                  {layer.name}
+                  {highlightMatch(layer.name, filterQuery)}
                 </span>
               )}
 
@@ -683,6 +831,9 @@ export function LayerPanel({
 
       {/* ── Footer toolbar ────────────────────────────────────────────── */}
       <div className={styles.footer}>
+        {filterQuery !== '' && (
+          <span className={styles.filterCount}>{filteredRows.length} of {layers.length}</span>
+        )}
         <button className={styles.footerBtn} onClick={onLayerAdd} aria-label="New layer" title="New layer">
           <AddLayerIcon />
         </button>

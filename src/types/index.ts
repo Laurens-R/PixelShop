@@ -6,6 +6,7 @@ export type Tool =
   | 'move'
   | 'select'
   | 'lasso'
+  | 'polygonal-selection'
   | 'magic-wand'
   | 'crop'
   | 'frame'

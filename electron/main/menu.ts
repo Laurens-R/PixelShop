@@ -149,6 +149,8 @@ export function buildAndSetMacMenu(payload: MenuBuildPayload): void {
         item('All Layers',       'selectAllLayers',  { accelerator: 'Alt+CmdOrCtrl+A',   noIntercept: true }),
         item('Deselect Layers',  'deselectLayers'),
         sep(),
+        item('Find Layers',      'findLayers',       { accelerator: 'Alt+Shift+CmdOrCtrl+F', noIntercept: true }),
+        sep(),
         item('Invert Selection', 'invertSelection',  { accelerator: 'CmdOrCtrl+Shift+I', noIntercept: true }),
       ],
     },

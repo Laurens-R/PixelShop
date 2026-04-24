@@ -23,6 +23,8 @@ interface UseKeyboardShortcutsOptions {
   handleSelectAllLayers?:   () => void
   handleCloneStamp?:        () => void
   handleContentAwareDelete?: () => void
+  handleFindLayers?:        () => void
+  handleCycleLasso?:        () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -46,6 +48,8 @@ export function useKeyboardShortcuts({
   handleSelectAllLayers,
   handleCloneStamp,
   handleContentAwareDelete,
+  handleFindLayers,
+  handleCycleLasso,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -56,6 +60,7 @@ export function useKeyboardShortcuts({
       if (e.key === '?' && !e.ctrlKey && !e.altKey)            { e.preventDefault(); handleKeyboardShortcuts?.(); return }
       if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         if (e.key === 's' || e.key === 'S') { e.preventDefault(); handleCloneStamp?.(); return }
+        if (e.key === 'l' || e.key === 'L') { e.preventDefault(); handleCycleLasso?.(); return }
       }
       if (!e.ctrlKey && !e.metaKey) return
       if      (e.key === 'z')              { e.preventDefault(); handleUndo() }
@@ -72,8 +77,9 @@ export function useKeyboardShortcuts({
       else if (e.key === 'a' && !e.altKey)  { e.preventDefault(); handleSelectAll?.() }
       else if (e.key === 'd' && !e.altKey)  { e.preventDefault(); handleDeselect?.() }
       else if (e.key === 'a' &&  e.altKey)  { e.preventDefault(); handleSelectAllLayers?.() }
+      else if (e.key === 'f' && e.altKey && e.shiftKey) { e.preventDefault(); handleFindLayers?.() }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleSelectAll, handleDeselect, handleSelectAllLayers, handleCloneStamp, handleContentAwareDelete])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleSelectAll, handleDeselect, handleSelectAllLayers, handleCloneStamp, handleContentAwareDelete, handleFindLayers, handleCycleLasso])
 }
