@@ -131,6 +131,7 @@ const api = {
       height: number
       selectionMask: Uint8Array
       bandRadius: number
+      mode: 'hair' | 'object'
     }): Promise<{ alpha: Uint8Array }> =>
       ipcRenderer.invoke('matting:refine', {
         imageRgba: Buffer.from(params.imageRgba.buffer, params.imageRgba.byteOffset, params.imageRgba.byteLength),
@@ -138,6 +139,7 @@ const api = {
         height: params.height,
         selectionMask: Buffer.from(params.selectionMask.buffer, params.selectionMask.byteOffset, params.selectionMask.byteLength),
         bandRadius: params.bandRadius,
+        mode: params.mode,
       }),
 
     invalidateSession: (): Promise<void> =>

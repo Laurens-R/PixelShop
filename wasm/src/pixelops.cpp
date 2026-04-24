@@ -21,6 +21,7 @@
 #include "curves_histogram.h"
 #include "transform.h"
 #include "inpaint.h"
+#include "grabcut.h"
 
 extern "C" {
 
@@ -152,6 +153,53 @@ void pixelops_inpaint(
     uint8_t* out
 ) {
     inpaint(pixels, width, height, mask, patchSize, sourceMask, out);
+}
+
+// ─── GrabCut Segmentation ─────────────────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_grabcut(
+    const uint8_t* rgba, int width, int height,
+    const uint8_t* trimap,  // 0=BG, 128=unknown, 255=FG
+    uint8_t* alpha_out,     // output 0/255 per pixel
+    int iterations,
+    int k                   // GMM components per class (5 recommended)
+) {
+    grabcut(rgba, width, height, trimap, alpha_out, iterations, k);
+}
+
+// ─── GrabCut Hybrid Building Blocks ──────────────────────────────────────────
+
+EMSCRIPTEN_KEEPALIVE
+float pixelops_grabcut_compute_beta(
+    const uint8_t* rgba, int width, int height
+) {
+    return grabcut_compute_beta(rgba, width, height);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_grabcut_kmeans_init(
+    const uint8_t* rgba, int width, int height,
+    const uint8_t* trimap, int k, float* paramsOut
+) {
+    grabcut_kmeans_init(rgba, width, height, trimap, k, paramsOut);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_grabcut_update_gmms(
+    const uint8_t* rgba, int width, int height,
+    const uint8_t* label, int k, float* paramsInOut
+) {
+    grabcut_update_gmms(rgba, width, height, label, k, paramsInOut);
+}
+
+EMSCRIPTEN_KEEPALIVE
+void pixelops_grabcut_mincut(
+    const float* capS, const float* capT,
+    const float* hW, const float* vW,
+    const uint8_t* trimap, int width, int height, uint8_t* labelOut
+) {
+    grabcut_mincut(capS, capT, hW, vW, trimap, width, height, labelOut);
 }
 
 } // extern "C"

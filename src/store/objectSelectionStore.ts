@@ -32,6 +32,11 @@ class ObjectSelectionStore {
   inferenceStatus: InferenceStatus = 'idle'
   /** Upsampled canvas-sized soft mask from the last successful decode. */
   pendingMask: Uint8Array | null = null
+  /**
+   * When true the pendingMask has already been through Refine Edge and its
+   * alpha values should be committed as-is (no extra feather/antiAlias pass).
+   */
+  pendingMaskRefined = false
 
   // ── Cache version (bumped to force re-encode on next inference) ──────────────
   cacheVersion = 0
@@ -48,6 +53,7 @@ class ObjectSelectionStore {
     this.isDragging = false
     this.inferenceStatus = 'idle'
     this.pendingMask = null
+    this.pendingMaskRefined = false
     this.notify()
   }
 

@@ -164,6 +164,7 @@ interface RefineParams {
   height: number
   selectionMask: Buffer    // 0–255, length = width*height (cropped to same region)
   bandRadius: number       // pixels — width of the "unknown" band around selection edge
+  mode: 'hair' | 'object' // hair → RVM neural matting; object → guided-filter
 }
 
 interface RefineResult {
@@ -357,8 +358,6 @@ export function registerMattingHandlers(): void {
         throw new Error(`selectionMask length ${params.selectionMask.length} ≠ ${width}×${height}`)
       }
 
-      const rvmAlpha = await runRvm(params.imageRgba, width, height)
-
       // Build trimap from selection mask:
       //   inner  = erode(selection, bandRadius)   → definitely foreground
       //   outer  = dilate(selection, bandRadius)  → outside this is definitely bg
@@ -366,6 +365,9 @@ export function registerMattingHandlers(): void {
       const sel = new Uint8Array(params.selectionMask.buffer, params.selectionMask.byteOffset, params.selectionMask.byteLength)
       const inner = erode(sel, width, height, bandRadius)
       const outer = dilate(sel, width, height, bandRadius)
+
+      // Hair / fur mode: RVM neural alpha matting.
+      const rvmAlpha = await runRvm(params.imageRgba, width, height)
 
       let nInner = 0, nOuter = 0, nBand = 0
       const out = new Uint8Array(width * height)
@@ -376,8 +378,7 @@ export function registerMattingHandlers(): void {
         } else if (outer[i] < 128) {
           out[i] = 0
         } else {
-          const a = rvmAlpha[i]
-          out[i] = Math.max(0, Math.min(255, Math.round(a * 255)))
+          out[i] = Math.max(0, Math.min(255, Math.round(rvmAlpha[i] * 255)))
           nBand++
         }
         if (outer[i] >= 128) nOuter++

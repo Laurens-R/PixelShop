@@ -104,6 +104,46 @@ _pixelops_remove_motion_blur(
     sourceMaskPtr: number,
     outPtr: number
   ): void
+
+  /**
+   * GrabCut segmentation (Rother et al. 2004).
+   * @param rgbaPtr   RGBA image, width×height×4 bytes.
+   * @param width     Image width.
+   * @param height    Image height.
+   * @param trimapPtr Per-pixel trimap: 0=BG, 128=unknown, 255=FG. width×height bytes.
+   * @param alphaPtr  Output alpha mask (0 or 255). width×height bytes. Pre-allocated.
+   * @param iterations EM iterations (3 is typically sufficient).
+   * @param k         GMM components per class (5 recommended).
+   */
+  _pixelops_grabcut(
+    rgbaPtr: number,
+    width: number,
+    height: number,
+    trimapPtr: number,
+    alphaPtr: number,
+    iterations: number,
+    k: number
+  ): void
+
+  _pixelops_grabcut_compute_beta(
+    rgbaPtr: number, width: number, height: number
+  ): number
+
+  _pixelops_grabcut_kmeans_init(
+    rgbaPtr: number, width: number, height: number,
+    trimapPtr: number, k: number, paramsOutPtr: number
+  ): void
+
+  _pixelops_grabcut_update_gmms(
+    rgbaPtr: number, width: number, height: number,
+    labelPtr: number, k: number, paramsInOutPtr: number
+  ): void
+
+  _pixelops_grabcut_mincut(
+    capSPtr: number, capTPtr: number,
+    hWPtr: number, vWPtr: number,
+    trimapPtr: number, width: number, height: number, labelOutPtr: number
+  ): void
 }
 
 /** Factory function exported by the Emscripten-generated ES module */

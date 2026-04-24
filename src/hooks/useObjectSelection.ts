@@ -6,6 +6,7 @@ import { objectSelectionStore } from '@/store/objectSelectionStore'
 import { objectSelectionCallbacks, objectSelectionOptions } from '../tools/objectSelection'
 import { selectionStore } from '@/store/selectionStore'
 import type { SelectionMode } from '@/store/selectionStore'
+import { grabCutHybrid } from '@/wasm/grabcutHybrid'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -301,10 +302,20 @@ export function useObjectSelection({
       upsampled = keepComponentsContainingSeeds(upsampled, width, height, seeds)
 
       objectSelectionStore.pendingMask = upsampled
+      objectSelectionStore.pendingMaskRefined = false
 
-      // Show as live preview (always 'set' mode during session)
+      // Live preview: show the combined result for the current mode so the user
+      // sees exactly what will be committed. For 'set' just apply directly;
+      // for add/subtract/intersect restore a copy of the saved mask first so
+      // applyMask operates on the correct base (and cannot corrupt savedMaskRef).
       const { feather, antiAlias } = objectSelectionOptions
-      selectionStore.setFromSAMMask(upsampled, 'set', feather, antiAlias)
+      const previewMode = objectSelectionOptions.mode
+      if (previewMode !== 'set' && savedMaskRef.current !== null) {
+        selectionStore.restoreMask(new Uint8Array(savedMaskRef.current))
+      } else if (previewMode !== 'set') {
+        selectionStore.clear()
+      }
+      selectionStore.setFromSAMMask(upsampled, previewMode, feather, antiAlias)
 
       objectSelectionStore.inferenceStatus = 'idle'
       objectSelectionStore.notify()
@@ -358,9 +369,16 @@ export function useObjectSelection({
       // Subject mode: keep only the component containing the canvas center.
       upsampled = keepComponentsContainingSeeds(upsampled, width, height, [centerPoint])
       objectSelectionStore.pendingMask = upsampled
+      objectSelectionStore.pendingMaskRefined = false
 
       const { feather, antiAlias } = objectSelectionOptions
-      selectionStore.setFromSAMMask(upsampled, 'set', feather, antiAlias)
+      const previewMode = objectSelectionOptions.mode
+      if (previewMode !== 'set' && savedMaskRef.current !== null) {
+        selectionStore.restoreMask(new Uint8Array(savedMaskRef.current))
+      } else if (previewMode !== 'set') {
+        selectionStore.clear()
+      }
+      selectionStore.setFromSAMMask(upsampled, previewMode, feather, antiAlias)
 
       objectSelectionStore.inferenceStatus = 'idle'
       objectSelectionStore.notify()
@@ -380,6 +398,10 @@ export function useObjectSelection({
     if (!pending) return
 
     const { feather, antiAlias } = objectSelectionOptions
+    // If the mask was already processed by Refine Edge its alpha values are
+    // final — skip the extra feather/antiAlias pass to avoid softening them.
+    const applyFeather = objectSelectionStore.pendingMaskRefined ? 0 : feather
+    const applyAA = objectSelectionStore.pendingMaskRefined ? false : antiAlias
 
     // Restore the original selection, then apply new mask with the chosen mode
     if (savedMaskRef.current !== null) {
@@ -387,7 +409,7 @@ export function useObjectSelection({
     } else {
       selectionStore.clear()
     }
-    selectionStore.setFromSAMMask(pending, mode, feather, antiAlias)
+    selectionStore.setFromSAMMask(pending, mode, applyFeather, applyAA)
 
     captureHistoryRef.current('Object Selection')
 
@@ -469,7 +491,11 @@ export function useObjectSelection({
 
   const refineEdge = useCallback(async (): Promise<void> => {
     if (objectSelectionStore.refineStatus === 'running') return
-    if (objectSelectionStore.mattingModelStatus !== 'ready') return
+    // Hair mode requires the RVM model; object (GrabCut) mode works without it.
+    if (
+      objectSelectionOptions.refineMode === 'hair' &&
+      objectSelectionStore.mattingModelStatus !== 'ready'
+    ) return
     const handle = canvasHandleRef.current
     if (!handle) return
 
@@ -501,8 +527,10 @@ export function useObjectSelection({
         return
       }
 
-      // Pad the bbox so RVM has surrounding context (helps wispy edges).
-      const PAD = 64
+      // Pad the bbox: hair (RVM) needs context for wispy edges; object mode
+      // needs room for GrabCut's outer dilation to extend beyond SAM's mask
+      // and capture pixels SAM missed (e.g. bright rims of dark objects).
+      const PAD = objectSelectionOptions.refineMode === 'object' ? 96 : 64
       const x0 = Math.max(0, minX - PAD)
       const y0 = Math.max(0, minY - PAD)
       const x1 = Math.min(cw - 1, maxX + PAD)
@@ -529,16 +557,86 @@ export function useObjectSelection({
         cropMask.set(mask.subarray(srcRow, srcRow + cropW), y * cropW)
       }
 
-      // 4. Send to RVM. Band radius scales with crop size, capped for sanity.
-      const bandRadius = Math.max(8, Math.min(48, Math.round(Math.min(cropW, cropH) * 0.05)))
-      const { alpha } = await window.api.matting.refine({
-        imageRgba: cropRgba,
-        width: cropW,
-        height: cropH,
-        selectionMask: cropMask,
-        bandRadius,
-      })
-      const refinedCrop = new Uint8Array(alpha.buffer, alpha.byteOffset, alpha.byteLength)
+      // 4. Refine edges based on selected mode.
+      // Object mode (GrabCut) uses an asymmetric trimap: small inner erosion
+      // gives a confident FG core to train colour models from; a wider outer
+      // dilation gives GrabCut room to expand into pixels SAM missed (e.g.
+      // bright rims of dark objects).
+      const erodeR =
+        objectSelectionOptions.refineMode === 'object'
+          ? Math.max(2, Math.min(8, Math.round(Math.min(cropW, cropH) * 0.005)))
+          : Math.max(8, Math.min(48, Math.round(Math.min(cropW, cropH) * 0.05)))
+      const dilateR =
+        objectSelectionOptions.refineMode === 'object'
+          ? Math.max(20, Math.min(60, Math.round(Math.min(cropW, cropH) * 0.04)))
+          : erodeR
+      const bandRadius = erodeR  // legacy name, used by hair-mode IPC call below
+
+      let refinedCrop: Uint8Array
+
+      if (objectSelectionOptions.refineMode === 'object') {
+        const tTri0 = performance.now()
+        // Build trimap via O(N) integral image of the binary selection.
+        // erosion(Re)  = all pixels in (2Re+1)² window are FG → window sum == area
+        // dilation(Rd) = at least one pixel in (2Rd+1)² is FG → window sum > 0
+        const N = cropW * cropH
+        const trimap = new Uint8Array(N)
+
+        // Integral image of binary {0,1}. Width/height +1 for the standard
+        // sum-area-table convention (zero row/col at index 0).
+        const iw = cropW + 1
+        const ih = cropH + 1
+        const ii = new Int32Array(iw * ih)
+        for (let y = 0; y < cropH; y++) {
+          let rowSum = 0
+          const dstBase = (y + 1) * iw
+          const upBase  = y * iw
+          for (let x = 0; x < cropW; x++) {
+            rowSum += cropMask[y * cropW + x] >= 128 ? 1 : 0
+            ii[dstBase + (x + 1)] = ii[upBase + (x + 1)] + rowSum
+          }
+        }
+        const windowSum = (x: number, y: number, R: number): { sum: number; area: number } => {
+          const x0w = Math.max(0, x - R)
+          const x1w = Math.min(cropW - 1, x + R)
+          const y0w = Math.max(0, y - R)
+          const y1w = Math.min(cropH - 1, y + R)
+          const sum =
+            ii[(y1w + 1) * iw + (x1w + 1)] -
+            ii[y0w       * iw + (x1w + 1)] -
+            ii[(y1w + 1) * iw + x0w]       +
+            ii[y0w       * iw + x0w]
+          const area = (x1w - x0w + 1) * (y1w - y0w + 1)
+          return { sum, area }
+        }
+        for (let y = 0; y < cropH; y++) {
+          for (let x = 0; x < cropW; x++) {
+            const e = windowSum(x, y, erodeR)
+            if (e.sum === e.area) {
+              trimap[y * cropW + x] = 255 // definite FG (eroded interior)
+              continue
+            }
+            const d = windowSum(x, y, dilateR)
+            trimap[y * cropW + x] = d.sum === 0 ? 0 : 128 // BG outside dilation, else unknown
+          }
+        }
+        const tTri = performance.now() - tTri0
+        const tGC0 = performance.now()
+        refinedCrop = await grabCutHybrid(cropRgba, cropW, cropH, trimap)
+        const tGC = performance.now() - tGC0
+        console.log(`[refineEdge] crop=${cropW}×${cropH} erode=${erodeR} dilate=${dilateR} trimap=${tTri.toFixed(0)}ms grabcut=${tGC.toFixed(0)}ms`)
+      } else {
+        // Hair / fur mode: RVM neural matting via IPC.
+        const { alpha } = await window.api.matting.refine({
+          imageRgba: cropRgba,
+          width: cropW,
+          height: cropH,
+          selectionMask: cropMask,
+          bandRadius,
+          mode: objectSelectionOptions.refineMode,
+        })
+        refinedCrop = new Uint8Array(alpha.buffer, alpha.byteOffset, alpha.byteLength)
+      }
 
       // 5. Place refined crop back into a canvas-sized mask. Outside the crop
       //    keep the original selection (padding ensures the refined region fully
@@ -554,6 +652,12 @@ export function useObjectSelection({
       // correct in memory). Pass feather=0, antiAlias=false to keep the
       // refined alpha exactly as RVM produced it.
       selectionStore.setFromSAMMask(out, 'set', 0, false)
+
+      // Update pendingMask so a subsequent Commit uses the refined result,
+      // not the original coarse SAM mask.
+      objectSelectionStore.pendingMask = out
+      objectSelectionStore.pendingMaskRefined = true
+
       captureHistoryRef.current('Refine Edge')
 
       objectSelectionStore.refineStatus = 'idle'

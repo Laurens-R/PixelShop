@@ -14,6 +14,7 @@ import {
 } from './shaders'
 import { AdjustmentEncoder } from './AdjustmentEncoder'
 import { initFilterCompute } from './filterCompute'
+import { initGrabCutCompute } from './grabcutCompute'
 
 // ─── Re-export all public types from the types module ─────────────────────────
 // All existing import sites use '@/webgpu/WebGPURenderer' — this keeps them working.
@@ -168,6 +169,7 @@ export class WebGPURenderer {
     this.adjEncoder = new AdjustmentEncoder(device, pixelWidth, pixelHeight)
 
     initFilterCompute(this.device, this.pixelWidth, this.pixelHeight)
+    initGrabCutCompute(this.device)
   }
 
   // ─── Pipeline factories ─────────────────────────────────────────────────────

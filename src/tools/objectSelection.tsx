@@ -11,6 +11,7 @@ export const objectSelectionOptions = {
   feather: 0,
   antiAlias: true,
   promptMode: 'rect' as 'rect' | 'point',
+  refineMode: 'hair' as 'hair' | 'object',
 }
 
 // ─── Module-level callbacks (set by useObjectSelection) ───────────────────────
@@ -116,6 +117,7 @@ function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): Reac
   const [promptMode, setPromptMode] = useState(objectSelectionOptions.promptMode)
   const [feather, setFeather] = useState(objectSelectionOptions.feather)
   const [antiAlias, setAntiAlias] = useState(objectSelectionOptions.antiAlias)
+  const [refineMode, setRefineMode] = useState(objectSelectionOptions.refineMode)
   const [hasPendingMask, setHasPendingMask] = useState(objectSelectionStore.pendingMask !== null)
   const [mattingStatus, setMattingStatus] = useState(objectSelectionStore.mattingModelStatus)
   const [refineStatus, setRefineStatus] = useState(objectSelectionStore.refineStatus)
@@ -218,17 +220,31 @@ function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): Reac
       </button>
       <span className={styles.optSep} />
       {mattingStatus === 'ready' ? (
-        <button
-          className={styles.optBtn}
-          onClick={() => objectSelectionCallbacks.refineEdge()}
-          disabled={refineStatus === 'running'}
-          title="Alpha matting refinement of the current selection edges (great for hair)"
-        >
-          {refineStatus === 'running' ? 'Refining…' : 'Refine Edge'}
-        </button>
+        <>
+          <select
+            className={styles.optSelect}
+            value={refineMode}
+            onChange={e => {
+              objectSelectionOptions.refineMode = e.target.value as 'hair' | 'object'
+              setRefineMode(e.target.value as 'hair' | 'object')
+            }}
+            title="Refine Edge algorithm"
+          >
+            <option value="hair">Hair / Fur</option>
+            <option value="object">Object / Hard Edge</option>
+          </select>
+          <button
+            className={styles.optBtn}
+            onClick={() => objectSelectionCallbacks.refineEdge()}
+            disabled={refineStatus === 'running'}
+            title="Alpha matting refinement of the current selection edges"
+          >
+            {refineStatus === 'running' ? 'Refining…' : 'Refine Edge'}
+          </button>
+        </>
       ) : mattingStatus === 'downloading' ? (
         <span className={styles.optText}>
-          Downloading matting model{mattingProgress && mattingProgress.total > 0
+          Downloading Refine Edge model{mattingProgress && mattingProgress.total > 0
             ? ` ${Math.round(mattingProgress.progress * 100)}%`
             : '…'}
         </span>
@@ -244,7 +260,7 @@ function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): Reac
       {inferenceStatus === 'running' && (
         <span className={styles.optText}>Analyzing…</span>
       )}
-      {promptMode === 'point' && hasPendingMask && (
+      {hasPendingMask && (
         <>
           <span className={styles.optSep} />
           <button

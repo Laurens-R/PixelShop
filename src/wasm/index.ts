@@ -343,3 +343,139 @@ export async function inpaintRegion(
     m._free(outPtr)
   }
 }
+
+/**
+ * GrabCut segmentation (Rother et al. 2004).
+ *
+ * @param pixels    RGBA image, width×height×4 bytes.
+ * @param width     Image width.
+ * @param height    Image height.
+ * @param trimap    Per-pixel trimap: 0=BG, 128=unknown, 255=FG. width×height bytes.
+ * @param iterations EM iterations (3 is typically sufficient).
+ * @param k         GMM components per class (5 recommended).
+ * @returns         Binary alpha mask (0 or 255), width×height bytes.
+ */
+export async function grabCut(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  trimap: Uint8Array,
+  iterations = 3,
+  k = 5,
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  const n = width * height
+
+  const rgbaPtr   = m._malloc(pixels.byteLength)
+  const trimapPtr = m._malloc(n)
+  const alphaPtr  = m._malloc(n)
+  try {
+    m.HEAPU8.set(pixels, rgbaPtr)
+    m.HEAPU8.set(trimap, trimapPtr)
+    m._pixelops_grabcut(rgbaPtr, width, height, trimapPtr, alphaPtr, iterations, k)
+    // Re-read HEAPU8 in case WASM memory grew
+    return m.HEAPU8.slice(alphaPtr, alphaPtr + n)
+  } finally {
+    m._free(rgbaPtr)
+    m._free(trimapPtr)
+    m._free(alphaPtr)
+  }
+}
+
+// ─── GrabCut hybrid building blocks ──────────────────────────────────────────
+
+/** Compute beta (1/2 contrast) for the image. */
+export async function grabCutComputeBeta(
+  pixels: Uint8Array, width: number, height: number,
+): Promise<number> {
+  const m = await getPixelOps()
+  const rgbaPtr = m._malloc(pixels.byteLength)
+  try {
+    m.HEAPU8.set(pixels, rgbaPtr)
+    return m._pixelops_grabcut_compute_beta(rgbaPtr, width, height)
+  } finally {
+    m._free(rgbaPtr)
+  }
+}
+
+/** Initialise both GMMs from the trimap via k-means++.
+ *  Returns a Float32Array of length 2*k*20 (FG first, then BG). */
+export async function grabCutKmeansInit(
+  pixels: Uint8Array, width: number, height: number,
+  trimap: Uint8Array, k: number,
+): Promise<Float32Array> {
+  const m = await getPixelOps()
+  const paramsLen = 2 * k * 20
+  const paramsBytes = paramsLen * 4
+  const rgbaPtr   = m._malloc(pixels.byteLength)
+  const trimapPtr = m._malloc(trimap.byteLength)
+  const paramsPtr = m._malloc(paramsBytes)
+  try {
+    m.HEAPU8.set(pixels, rgbaPtr)
+    m.HEAPU8.set(trimap, trimapPtr)
+    m._pixelops_grabcut_kmeans_init(rgbaPtr, width, height, trimapPtr, k, paramsPtr)
+    const off = paramsPtr >> 2
+    return m.HEAPF32.slice(off, off + paramsLen)
+  } finally {
+    m._free(rgbaPtr)
+    m._free(trimapPtr)
+    m._free(paramsPtr)
+  }
+}
+
+/** Re-estimate both GMMs given a binary label. Returns updated params. */
+export async function grabCutUpdateGmms(
+  pixels: Uint8Array, width: number, height: number,
+  label: Uint8Array, k: number, params: Float32Array,
+): Promise<Float32Array> {
+  const m = await getPixelOps()
+  const paramsLen = 2 * k * 20
+  const rgbaPtr   = m._malloc(pixels.byteLength)
+  const labelPtr  = m._malloc(label.byteLength)
+  const paramsPtr = m._malloc(params.byteLength)
+  try {
+    m.HEAPU8.set(pixels, rgbaPtr)
+    m.HEAPU8.set(label, labelPtr)
+    m.HEAPF32.set(params, paramsPtr >> 2)
+    m._pixelops_grabcut_update_gmms(rgbaPtr, width, height, labelPtr, k, paramsPtr)
+    const off = paramsPtr >> 2
+    return m.HEAPF32.slice(off, off + paramsLen)
+  } finally {
+    m._free(rgbaPtr)
+    m._free(labelPtr)
+    m._free(paramsPtr)
+  }
+}
+
+/** Run min-cut with externally-computed t-link and n-link arrays.
+ *  Returns binary label (0 or 1) per pixel, width*height bytes. */
+export async function grabCutMincut(
+  capS: Float32Array, capT: Float32Array,
+  hW: Float32Array, vW: Float32Array,
+  trimap: Uint8Array, width: number, height: number,
+): Promise<Uint8Array> {
+  const m = await getPixelOps()
+  const n = width * height
+  const capSPtr   = m._malloc(capS.byteLength)
+  const capTPtr   = m._malloc(capT.byteLength)
+  const hWPtr     = m._malloc(hW.byteLength)
+  const vWPtr     = m._malloc(vW.byteLength)
+  const trimapPtr = m._malloc(trimap.byteLength)
+  const labelPtr  = m._malloc(n)
+  try {
+    m.HEAPF32.set(capS, capSPtr >> 2)
+    m.HEAPF32.set(capT, capTPtr >> 2)
+    m.HEAPF32.set(hW,   hWPtr   >> 2)
+    m.HEAPF32.set(vW,   vWPtr   >> 2)
+    m.HEAPU8.set(trimap, trimapPtr)
+    m._pixelops_grabcut_mincut(capSPtr, capTPtr, hWPtr, vWPtr, trimapPtr, width, height, labelPtr)
+    return m.HEAPU8.slice(labelPtr, labelPtr + n)
+  } finally {
+    m._free(capSPtr)
+    m._free(capTPtr)
+    m._free(hWPtr)
+    m._free(vWPtr)
+    m._free(trimapPtr)
+    m._free(labelPtr)
+  }
+}

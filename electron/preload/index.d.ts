@@ -70,6 +70,7 @@ declare global {
           height: number
           selectionMask: Uint8Array
           bandRadius: number
+          mode: 'hair' | 'object'
         }) => Promise<{ alpha: Uint8Array }>
         invalidateSession: () => Promise<void>
         onDownloadProgress: (
