@@ -1,0 +1,242 @@
+import React, { useState, useEffect } from 'react'
+import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { objectSelectionStore } from '@/store/objectSelectionStore'
+import type { SelectionMode } from '@/store/selectionStore'
+import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolOptionsStyles } from './types'
+
+// ─── Module-level options ──────────────────────────────────────────────────────
+
+export const objectSelectionOptions = {
+  mode: 'set' as SelectionMode,
+  feather: 0,
+  antiAlias: true,
+  promptMode: 'rect' as 'rect' | 'point',
+}
+
+// ─── Module-level callbacks (set by useObjectSelection) ───────────────────────
+
+export const objectSelectionCallbacks = {
+  commit:        (_mode: SelectionMode) => { /* set by hook */ },
+  cancel:        () => { /* set by hook */ },
+  downloadModel: () => { /* set by hook */ },
+  runSubject:    () => { /* set by hook */ },
+}
+
+// ─── Handler factory ──────────────────────────────────────────────────────────
+
+function createObjectSelectionHandler(): ToolHandler {
+  return {
+    onPointerDown({ x, y, altKey }: ToolPointerPos) {
+      if (objectSelectionStore.modelStatus !== 'ready') return
+      if (objectSelectionOptions.promptMode === 'rect') {
+        objectSelectionStore.setDragRect(x, y, x, y)
+      } else {
+        objectSelectionStore.addPoint({ x, y, positive: !altKey })
+      }
+    },
+
+    onPointerMove({ x, y }: ToolPointerPos) {
+      if (!objectSelectionStore.isDragging) return
+      const r = objectSelectionStore.dragRect!
+      objectSelectionStore.setDragRect(r.x1, r.y1, x, y)
+    },
+
+    onPointerUp({ x, y }: ToolPointerPos) {
+      if (!objectSelectionStore.isDragging) return
+      const r = objectSelectionStore.dragRect!
+      if (Math.abs(x - r.x1) < 8 || Math.abs(y - r.y1) < 8) {
+        objectSelectionStore.dragRect = null
+        objectSelectionStore.endDrag()
+        return
+      }
+      // Clamp final position to drag end
+      objectSelectionStore.dragRect = { x1: r.x1, y1: r.y1, x2: x, y2: y }
+      objectSelectionStore.endDrag()
+      // useObjectSelection is subscribed and will trigger inference
+    },
+
+    onLeave() {
+      // Keep drag state — don't cancel on leave
+    },
+  }
+}
+
+// ─── Mode helpers ─────────────────────────────────────────────────────────────
+
+function modeLabel(m: SelectionMode): string {
+  if (m === 'set')      return 'New Selection'
+  if (m === 'add')      return 'Add to Selection'
+  if (m === 'subtract') return 'Subtract from Selection'
+  return 'Intersect with Selection'
+}
+
+function modeIcon(m: SelectionMode): React.JSX.Element {
+  if (m === 'set') {
+    return (
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
+        <rect x="1" y="1" width="12" height="12" strokeDasharray="2.5 1.5" />
+      </svg>
+    )
+  }
+  if (m === 'add') {
+    return (
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
+        <rect x="1" y="4" width="9" height="9" strokeDasharray="2.5 1.5" />
+        <rect x="4" y="1" width="9" height="9" strokeDasharray="2.5 1.5" />
+        <line x1="11" y1="1" x2="11" y2="4" stroke="currentColor" strokeWidth="1.5" />
+        <line x1="10" y1="2.5" x2="12" y2="2.5" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    )
+  }
+  if (m === 'subtract') {
+    return (
+      <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
+        <rect x="1" y="4" width="9" height="9" strokeDasharray="2.5 1.5" />
+        <rect x="4" y="1" width="9" height="9" strokeDasharray="2.5 1.5" />
+        <line x1="10" y1="2.5" x2="12" y2="2.5" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
+      <rect x="1" y="4" width="9" height="9" strokeDasharray="2.5 1.5" />
+      <rect x="4" y="1" width="9" height="9" strokeDasharray="2.5 1.5" />
+    </svg>
+  )
+}
+
+// ─── Options UI ───────────────────────────────────────────────────────────────
+
+function ObjectSelectionOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
+  const [modelStatus, setModelStatus] = useState(objectSelectionStore.modelStatus)
+  const [inferenceStatus, setInferenceStatus] = useState(objectSelectionStore.inferenceStatus)
+  const [mode, setMode] = useState(objectSelectionOptions.mode)
+  const [promptMode, setPromptMode] = useState(objectSelectionOptions.promptMode)
+  const [feather, setFeather] = useState(objectSelectionOptions.feather)
+  const [antiAlias, setAntiAlias] = useState(objectSelectionOptions.antiAlias)
+  const [hasPendingMask, setHasPendingMask] = useState(objectSelectionStore.pendingMask !== null)
+
+  useEffect(() => {
+    const update = (): void => {
+      setModelStatus(objectSelectionStore.modelStatus)
+      setInferenceStatus(objectSelectionStore.inferenceStatus)
+      setHasPendingMask(objectSelectionStore.pendingMask !== null)
+    }
+    objectSelectionStore.subscribe(update)
+    return () => objectSelectionStore.unsubscribe(update)
+  }, [])
+
+  // ── Model not downloaded ────────────────────────────────────────────────────
+
+  if (modelStatus === 'unknown' || modelStatus === 'checking') {
+    return <span className={styles.optText}>Checking model…</span>
+  }
+
+  if (modelStatus === 'error') {
+    return (
+      <span className={styles.optText}>Model not found. Ensure ONNX files are bundled in resources/models/mobilesam/.</span>
+    )
+  }
+
+  // ── Model ready ─────────────────────────────────────────────────────────────
+
+  const setM = (m: SelectionMode): void => {
+    objectSelectionOptions.mode = m
+    setMode(m)
+  }
+
+  const setP = (p: 'rect' | 'point'): void => {
+    objectSelectionOptions.promptMode = p
+    objectSelectionStore.promptMode = p
+    setPromptMode(p)
+  }
+
+  return (
+    <>
+      <label className={styles.optLabel}>Mode:</label>
+      {(['set', 'add', 'subtract', 'intersect'] as const).map(m => (
+        <button
+          key={m}
+          className={`${styles.optModeBtn} ${mode === m ? styles.optModeBtnActive : ''}`}
+          title={modeLabel(m)}
+          onClick={() => setM(m)}
+        >
+          {modeIcon(m)}
+        </button>
+      ))}
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>Prompt:</label>
+      <button
+        className={`${styles.optBtn} ${promptMode === 'rect' ? styles.optModeBtnActive : ''}`}
+        onClick={() => setP('rect')}
+        title="Rectangle prompt"
+      >
+        Rect
+      </button>
+      <button
+        className={`${styles.optBtn} ${promptMode === 'point' ? styles.optModeBtnActive : ''}`}
+        onClick={() => setP('point')}
+        title="Point prompt (Alt+click for negative)"
+      >
+        Point
+      </button>
+      <span className={styles.optSep} />
+      <label className={styles.optLabel}>Feather:</label>
+      <SliderInput
+        value={feather}
+        min={0}
+        max={100}
+        inputWidth={38}
+        suffix="px"
+        onChange={v => { objectSelectionOptions.feather = v; setFeather(v) }}
+      />
+      <span className={styles.optSep} />
+      <label className={styles.optCheckLabel}>
+        <input
+          type="checkbox"
+          checked={antiAlias}
+          onChange={e => { objectSelectionOptions.antiAlias = e.target.checked; setAntiAlias(e.target.checked) }}
+        />
+        Anti-alias
+      </label>
+      <span className={styles.optSep} />
+      <button
+        className={styles.optBtn}
+        onClick={() => objectSelectionCallbacks.runSubject()}
+        disabled={inferenceStatus === 'running'}
+        title="Auto-detect and select the main subject"
+      >
+        Subject
+      </button>
+      {inferenceStatus === 'running' && (
+        <span className={styles.optText}>Analyzing…</span>
+      )}
+      {promptMode === 'point' && hasPendingMask && (
+        <>
+          <span className={styles.optSep} />
+          <button
+            className={styles.optBtn}
+            onClick={() => objectSelectionCallbacks.commit(objectSelectionOptions.mode)}
+            title="Commit selection (Enter)"
+          >
+            ✓ Commit
+          </button>
+          <button
+            className={styles.optBtn}
+            onClick={() => objectSelectionCallbacks.cancel()}
+            title="Cancel selection (Escape)"
+          >
+            ✗
+          </button>
+        </>
+      )}
+    </>
+  )
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
+
+export const objectSelectionTool: ToolDefinition = {
+  createHandler: createObjectSelectionHandler,
+  Options: ObjectSelectionOptions,
+}

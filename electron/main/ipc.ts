@@ -1,6 +1,7 @@
 import { ipcMain, dialog, BrowserWindow, app, clipboard, nativeImage } from 'electron'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { registerSamHandlers } from './sam'
 
 export function registerIpcHandlers(): void {
   ipcMain.handle('debug:openDevTools', (event) => {
@@ -171,4 +172,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('app:exit', () => {
     app.quit()
   })
+
+  registerSamHandlers()
 }

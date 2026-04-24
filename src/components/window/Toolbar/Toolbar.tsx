@@ -29,6 +29,13 @@ const Icon = {
       <circle cx="3" cy="13" r="1.2" fill="currentColor" />
     </svg>
   ),
+  objectSelection: (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+      <rect x="1" y="1" width="14" height="14" rx="1" strokeDasharray="3 2" />
+      <circle cx="11.5" cy="4.5" r="1" fill="currentColor" stroke="none" />
+      <path d="M9 7l1.5 1.5L13 5" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.4" />
+    </svg>
+  ),
   magicWand: (
     <svg viewBox="0 0 16 16" fill="currentColor">
       <rect x="1.5" y="11.5" width="7" height="2" rx="1" transform="rotate(-45 5 12.5)" />
@@ -225,7 +232,11 @@ const TOOL_GRID: ToolGrid = [
   ],
   [
     { id: 'polygonal-selection', label: 'Polygonal Lasso',  shortcut: 'L', icon: Icon.polygonalLasso },
-    { id: 'magic-wand',          label: 'Magic Wand',       shortcut: 'W', icon: Icon.magicWand }
+    { id: 'object-selection',    label: 'Object Selection', shortcut: 'W', icon: Icon.objectSelection }
+  ],
+  [
+    { id: 'magic-wand',          label: 'Magic Wand',       shortcut: 'W', icon: Icon.magicWand },
+    null,
   ],
   [
     { id: 'crop',                label: 'Crop',             shortcut: 'C', icon: Icon.crop },

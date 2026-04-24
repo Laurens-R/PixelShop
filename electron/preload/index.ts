@@ -72,6 +72,50 @@ const api = {
   setMenuItemChecked: (updates: Record<string, boolean>): void => {
     ipcRenderer.send('menu:set-checked', updates)
   },
+
+  // ── SAM / Object Selection ────────────────────────────────────────────────
+  sam: {
+    checkModel: (): Promise<{ encoderReady: boolean; decoderReady: boolean }> =>
+      ipcRenderer.invoke('sam:check-model'),
+
+    downloadModel: (): Promise<{ success: true } | { error: string }> =>
+      ipcRenderer.invoke('sam:download-model'),
+
+    encodeImage: (
+      imageData: Uint8Array,
+      origWidth: number,
+      origHeight: number,
+    ): Promise<{ embeddings: Uint8Array }> =>
+      ipcRenderer.invoke(
+        'sam:encode-image',
+        Buffer.from(imageData.buffer, imageData.byteOffset, imageData.byteLength),
+        origWidth,
+        origHeight,
+      ),
+
+    decodeMask: (params: {
+      embeddings: Uint8Array | null
+      points: Array<{ x: number; y: number; positive: boolean }>
+      box: { x1: number; y1: number; x2: number; y2: number } | null
+      origWidth: number
+      origHeight: number
+    }): Promise<{ mask: Uint8Array; width: number; height: number; iouScore: number }> =>
+      ipcRenderer.invoke('sam:decode-mask', params),
+
+    invalidateCache: (): Promise<void> =>
+      ipcRenderer.invoke('sam:invalidate-cache'),
+
+    onDownloadProgress: (
+      callback: (p: { file: 'encoder' | 'decoder'; progress: number }) => void,
+    ): (() => void) => {
+      const handler = (
+        _e: IpcRendererEvent,
+        p: { file: 'encoder' | 'decoder'; progress: number },
+      ): void => callback(p)
+      ipcRenderer.on('sam:download-progress', handler)
+      return () => ipcRenderer.removeListener('sam:download-progress', handler)
+    },
+  },
 }
 
 if (process.contextIsolated) {

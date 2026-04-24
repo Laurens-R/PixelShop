@@ -243,6 +243,20 @@ export class SelectionStore {
     this.notify()
   }
 
+  setFromSAMMask(
+    rawMask: Uint8Array,
+    mode: SelectionMode = 'set',
+    feather = 0,
+    antiAlias = true,
+  ): void {
+    this.pending = null
+    const m = new Uint8Array(rawMask)
+    if (antiAlias && feather === 0) this.applyFeather(m, 1)
+    if (feather > 0) this.applyFeather(m, feather)
+    this.applyMask(m, mode)
+    this.notify()
+  }
+
   // ── Internals ───────────────────────────────────────────────────────────────
 
   /**

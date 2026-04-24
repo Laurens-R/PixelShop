@@ -49,6 +49,7 @@ import { useAdjustments } from '@/hooks/useAdjustments'
 import { useFilters } from '@/hooks/useFilters'
 import { useTransform } from '@/hooks/useTransform'
 import { usePolygonalSelection } from '@/hooks/usePolygonalSelection'
+import { useObjectSelection } from '@/hooks/useObjectSelection'
 import { useContentAwareFill } from '@/hooks/useContentAwareFill'
 import { transformStore } from '@/store/transformStore'
 import { cloneStampStore } from '@/store/cloneStampStore'
@@ -325,6 +326,15 @@ function AppContent(): React.JSX.Element {
   // ── Polygonal selection keyboard handling ───────────────────────
   usePolygonalSelection()
 
+  // ── Object Selection (SAM) ────────────────────────────────────────
+  useObjectSelection({
+    canvasHandleRef,
+    stateRef,
+    captureHistory,
+    activeTabId,
+    layers: state.layers,
+  })
+
   // ── Transform ─────────────────────────────────────────────────────
   const { handleEnterTransform, handleApply: handleTransformApply, handleCancel: handleTransformCancel, isFreeTransformEnabled } = useTransform({
     canvasHandleRef, stateRef, dispatch, captureHistory,
@@ -395,6 +405,11 @@ function AppContent(): React.JSX.Element {
     handleCycleLasso: useCallback(() => {
       const current = stateRef.current.activeTool
       const next = current === 'polygonal-selection' ? 'lasso' : 'polygonal-selection'
+      handleToolChange(next)
+    }, [handleToolChange]),
+    handleCycleWand: useCallback(() => {
+      const current = stateRef.current.activeTool
+      const next = current === 'magic-wand' ? 'object-selection' : 'magic-wand'
       handleToolChange(next)
     }, [handleToolChange]),
   })

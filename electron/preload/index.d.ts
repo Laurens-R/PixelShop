@@ -39,6 +39,27 @@ declare global {
       }) => void
       setMenuItemEnabled: (updates: Record<string, boolean>) => void
       setMenuItemChecked: (updates: Record<string, boolean>) => void
+      // SAM / Object Selection
+      sam: {
+        checkModel: () => Promise<{ encoderReady: boolean; decoderReady: boolean }>
+        downloadModel: () => Promise<{ success: true } | { error: string }>
+        encodeImage: (
+          imageData: Uint8Array,
+          origWidth: number,
+          origHeight: number,
+        ) => Promise<{ embeddings: Uint8Array }>
+        decodeMask: (params: {
+          embeddings: Uint8Array | null
+          points: Array<{ x: number; y: number; positive: boolean }>
+          box: { x1: number; y1: number; x2: number; y2: number } | null
+          origWidth: number
+          origHeight: number
+        }) => Promise<{ mask: Uint8Array; width: number; height: number; iouScore: number }>
+        invalidateCache: () => Promise<void>
+        onDownloadProgress: (
+          callback: (p: { file: 'encoder' | 'decoder'; progress: number }) => void,
+        ) => () => void
+      }
     }
   }
 

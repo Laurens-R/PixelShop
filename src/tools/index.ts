@@ -7,6 +7,7 @@ import { selectTool } from './select'
 import { lassoTool } from './lasso'
 import { magicWandTool } from './magicWand'
 import { polygonalSelectionTool } from './polygonalSelection'
+import { objectSelectionTool } from './objectSelection'
 import { fillTool } from './fill'
 import { eyedropperTool } from './eyedropper'
 import { zoomTool } from './zoom'
@@ -28,6 +29,7 @@ export const TOOL_REGISTRY: Record<Tool, ToolDefinition> = {
   select:         selectTool,
   lasso:        lassoTool,
   'polygonal-selection': polygonalSelectionTool,
+  'object-selection': objectSelectionTool,
   'magic-wand': magicWandTool,
   fill:         fillTool,
   eyedropper:   eyedropperTool,

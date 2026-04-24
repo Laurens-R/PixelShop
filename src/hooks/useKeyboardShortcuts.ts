@@ -25,6 +25,7 @@ interface UseKeyboardShortcutsOptions {
   handleContentAwareDelete?: () => void
   handleFindLayers?:        () => void
   handleCycleLasso?:        () => void
+  handleCycleWand?:         () => void
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ export function useKeyboardShortcuts({
   handleContentAwareDelete,
   handleFindLayers,
   handleCycleLasso,
+  handleCycleWand,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -61,6 +63,7 @@ export function useKeyboardShortcuts({
       if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         if (e.key === 's' || e.key === 'S') { e.preventDefault(); handleCloneStamp?.(); return }
         if (e.key === 'l' || e.key === 'L') { e.preventDefault(); handleCycleLasso?.(); return }
+        if (e.key === 'w' || e.key === 'W') { e.preventDefault(); handleCycleWand?.(); return }
       }
       if (!e.ctrlKey && !e.metaKey) return
       if      (e.key === 'z')              { e.preventDefault(); handleUndo() }
@@ -81,5 +84,5 @@ export function useKeyboardShortcuts({
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleSelectAll, handleDeselect, handleSelectAllLayers, handleCloneStamp, handleContentAwareDelete, handleFindLayers, handleCycleLasso])
+  }, [handleUndo, handleRedo, handleCopy, handleCut, handlePaste, handleDelete, handleZoomIn, handleZoomOut, handleFitToWindow, handleToggleGrid, handleKeyboardShortcuts, handleFreeTransform, handleInvertSelection, handleSelectAll, handleDeselect, handleSelectAllLayers, handleCloneStamp, handleContentAwareDelete, handleFindLayers, handleCycleLasso, handleCycleWand])
 }

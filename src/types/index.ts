@@ -7,6 +7,7 @@ export type Tool =
   | 'select'
   | 'lasso'
   | 'polygonal-selection'
+  | 'object-selection'
   | 'magic-wand'
   | 'crop'
   | 'frame'
@@ -74,6 +75,21 @@ export interface Size {
 }
 
 export interface Rect extends Point, Size {}
+
+// ─── SAM / Object Selection ───────────────────────────────────────────────────
+
+export interface PromptPoint {
+  x: number
+  y: number
+  positive: boolean
+}
+
+export interface SAMBoundingBox {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
