@@ -87,3 +87,7 @@ export { ContentAwareFillProgress } from './modals/ContentAwareFillOptionsDialog
 export type { ContentAwareFillProgressProps } from './modals/ContentAwareFillOptionsDialog/ContentAwareFillProgress/ContentAwareFillProgress'
 export { ContentAwareFillOptionsDialog } from './modals/ContentAwareFillOptionsDialog/ContentAwareFillOptionsDialog'
 export type { ContentAwareFillOptionsDialogProps } from './modals/ContentAwareFillOptionsDialog/ContentAwareFillOptionsDialog'
+export { PixelBrushGallery } from './widgets/PixelBrushGallery/PixelBrushGallery'
+export type { PixelBrushGalleryProps } from './widgets/PixelBrushGallery/PixelBrushGallery'
+export { PixelBrushesModal } from './modals/PixelBrushesModal/PixelBrushesModal'
+export type { PixelBrushesModalProps } from './modals/PixelBrushesModal/PixelBrushesModal'

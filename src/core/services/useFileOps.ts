@@ -4,7 +4,7 @@ import { cloneHistoryEntries, historyStore } from '@/core/store/historyStore'
 import { IMAGE_EXTENSIONS, EXT_TO_MIME, loadImagePixels } from '@/core/io/imageLoader'
 import { makeTabId, fileTitle, DEFAULT_SWATCHES } from '@/core/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/core/store/tabTypes'
-import type { LayerState, BackgroundFill, AppState, SwatchGroup } from '@/types'
+import type { LayerState, BackgroundFill, AppState, SwatchGroup, PixelBrush } from '@/types'
 import type { AppAction } from '@/core/store/AppContext'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { showOperationError } from '@/utils/userFeedback'
@@ -104,6 +104,7 @@ export function useFileOps({
       activeLayerId: 'layer-0', zoom: 1,
       swatches: DEFAULT_SWATCHES,
       swatchGroups: [],
+      pixelBrushes: [],
     }
     const updated: TabRecord[] = [
       ...tabs.map(t => t.id === activeTabId ? { ...t, snapshot, savedHistory, savedLayerData } : t),
@@ -136,6 +137,7 @@ export function useFileOps({
         layers, activeLayerId: layerId, zoom: 1,
         swatches: DEFAULT_SWATCHES,
         swatchGroups: [],
+        pixelBrushes: [],
       }
       const snapshot      = captureActiveSnapshot()
       const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
@@ -172,6 +174,7 @@ export function useFileOps({
       }>
       swatches?: unknown
       swatchGroups?: unknown
+      pixelBrushes?: unknown
     }
 
     const layerData = new Map<string, string>()
@@ -200,11 +203,16 @@ export function useFileOps({
       }
       docSwatchGroups = doc.swatchGroups as SwatchGroup[]
     }
+    let docPixelBrushes: PixelBrush[] = []
+    if (doc.version >= 4 && Array.isArray(doc.pixelBrushes)) {
+      docPixelBrushes = doc.pixelBrushes as PixelBrush[]
+    }
     const newSnapshot: TabSnapshot = {
       canvasWidth: doc.canvas.width, canvasHeight: doc.canvas.height, backgroundFill: bg,
       layers, activeLayerId: doc.activeLayerId ?? layers[0]?.id ?? null, zoom: 1,
       swatches: docSwatches,
       swatchGroups: docSwatchGroups,
+      pixelBrushes: docPixelBrushes,
     }
     const snapshot      = captureActiveSnapshot()
     const savedHistory   = { entries: cloneHistoryEntries(historyStore.entries), currentIndex: historyStore.currentIndex }
@@ -221,6 +229,7 @@ export function useFileOps({
     dispatch({ type: 'SWITCH_TAB', payload: { width: doc.canvas.width, height: doc.canvas.height, backgroundFill: bg, layers, activeLayerId: newSnapshot.activeLayerId, zoom: 1 } })
     dispatch({ type: 'SET_SWATCHES', payload: docSwatches })
     dispatch({ type: 'SET_SWATCH_GROUPS', payload: docSwatchGroups })
+    dispatch({ type: 'SET_PIXEL_BRUSHES', payload: docPixelBrushes })
     const updated2 = await window.api.addRecentFile(path)
     onRecentFilesUpdated?.(updated2)
   }, [tabs, activeTabId, captureActiveSnapshot, serializeActiveTabPixels, handleSwitchTab, dispatch, setTabs, setActiveTabId, setPendingLayerData, onRecentFilesUpdated])
@@ -258,7 +267,7 @@ export function useFileOps({
       }
     }
     const doc = {
-      version: 3,
+      version: 4,
       canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
       layers: state.layers.map(l => ({
@@ -269,6 +278,7 @@ export function useFileOps({
       })),
       swatches: state.swatches,
       swatchGroups: state.swatchGroups,
+      pixelBrushes: state.pixelBrushes,
     }
     await window.api.savePxshopFile(path, JSON.stringify(doc))
     const savedPath = path
@@ -298,7 +308,7 @@ export function useFileOps({
       }
     }
     const doc = {
-      version: 3,
+      version: 4,
       canvas: { width: state.canvas.width, height: state.canvas.height, backgroundFill: state.canvas.backgroundFill },
       activeLayerId: state.activeLayerId,
       layers: state.layers.map(l => ({
@@ -309,6 +319,7 @@ export function useFileOps({
       })),
       swatches: state.swatches,
       swatchGroups: state.swatchGroups,
+      pixelBrushes: state.pixelBrushes,
     }
     await window.api.savePxshopFile(path, JSON.stringify(doc))
     // The current tab's filePath is NOT updated — this is a copy.

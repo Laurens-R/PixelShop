@@ -1,8 +1,16 @@
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { bresenham, blendPixelOver, walkQuadBezier, stampAirbrush } from './algorithm/bresenham'
 import type { BrushShape } from './algorithm/bresenham'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import { useAppContext } from '@/core/store/AppContext'
+import { selectionStore } from '@/core/store/selectionStore'
+import { pixelBrushStore } from '@/core/store/pixelBrushStore'
+import { PixelBrushGallery } from '@/ux/widgets/PixelBrushGallery/PixelBrushGallery'
+import { PixelBrushesModal } from '@/ux/modals/PixelBrushesModal/PixelBrushesModal'
+import type { PixelBrush } from '@/types'
+import type { WebGPURenderer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
+import type { GpuLayer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Shared options ───────────────────────────────────────────────────────────
@@ -15,7 +23,29 @@ export const pencilOptions = {
   antiAlias:    true,
   smoothing:    20,     // 0 = raw coords, 100 = maximum stabilizer (size > 1 only)
   motionBlur:   5,      // 0 = round dabs, 100 = dabs elongated along stroke direction (size > 1)
+  /** The currently active pixel brush. null = use the standard shape-based pencil. */
+  pixelBrush:   null as PixelBrush | null,
 }
+
+// ─── Pixel brush stamp cache ──────────────────────────────────────────────────
+
+/** Cache decoded RGBA bytes so we don't re-decode on every pointer event. */
+const brushPixelCache = new Map<string, Uint8ClampedArray>()
+
+function getBrushPixels(brush: PixelBrush): Uint8ClampedArray {
+  if (brushPixelCache.has(brush.id)) return brushPixelCache.get(brush.id)!
+  const bin = atob(brush.rgba)
+  const bytes = new Uint8ClampedArray(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  brushPixelCache.set(brush.id, bytes)
+  return bytes
+}
+
+// ─── Module-level context refs (for selection capture from the Options UI) ────
+
+/** Updated on every pointer event so the Options UI can capture selection pixels. */
+let _renderer: WebGPURenderer | null = null
+let _layer: GpuLayer | null = null
 
 /** EMA alpha: fraction of the new sample mixed in each event (used for size > 1 path). */
 function smoothingToAlpha(s: number): number {
@@ -83,6 +113,79 @@ function getColorShades(
     const [nr, ng, nb] = hslToRgb(h, s, nl)
     return { r: nr, g: ng, b: nb, a }
   })
+}
+
+// ─── Pixel brush paint ───────────────────────────────────────────────────────
+
+/**
+ * Paint a single canvas pixel using the brush as a repeating tile mask.
+ * Each canvas coordinate is looked up directly in the tile — the pattern
+ * always stays at 1:1 pixel scale.
+ */
+function paintBrushPixel(
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
+  canvasX: number,
+  canvasY: number,
+  brush: PixelBrush,
+  pixels: Uint8ClampedArray,
+  r: number, g: number, b: number, a: number,
+  opacity: number,
+  touched: Map<number, number>,
+  sel?: { mask: Uint8Array; width: number } | null,
+): void {
+  const bx = ((canvasX % brush.width)  + brush.width)  % brush.width
+  const by = ((canvasY % brush.height) + brush.height) % brush.height
+  if (pixels[(by * brush.width + bx) * 4 + 3] === 0) return
+  blendPixelOver(renderer, layer, canvasX, canvasY, r, g, b, a, opacity, touched, sel ?? undefined)
+}
+
+/**
+ * Stamp a `size`-pixel footprint at (cx, cy) using the brush as a tiling mask.
+ * The footprint shape follows the pencil's `shape` setting (round / square /
+ * diamond) so the stroke profile matches the standard pencil.
+ */
+function paintBrushStamp(
+  renderer: WebGPURenderer,
+  layer: GpuLayer,
+  cx: number,
+  cy: number,
+  brush: PixelBrush,
+  r: number, g: number, b: number, a: number,
+  opacity: number,
+  size: number,
+  shape: BrushShape,
+  touched: Map<number, number>,
+  sel?: { mask: Uint8Array; width: number } | null,
+): void {
+  const pixels = getBrushPixels(brush)
+  if (size <= 1) {
+    paintBrushPixel(renderer, layer, cx, cy, brush, pixels, r, g, b, a, opacity, touched, sel)
+    return
+  }
+  // Iterate a size×size axis-aligned bounding box so the painted footprint is
+  // exactly `size` pixels on each side (works for both even and odd sizes).
+  const half   = Math.floor(size / 2)
+  const radius = (size - 1) / 2  // distance from the box's geometric centre to its edge
+  for (let j = 0; j < size; j++) {
+    for (let i = 0; i < size; i++) {
+      const dx = i - half
+      const dy = j - half
+      // Offsets relative to the geometric centre, used by round/diamond tests.
+      const ox = dx - (radius - half)   // = i - radius
+      const oy = dy - (radius - half)   // = j - radius
+      let inside: boolean
+      if (shape === 'square') {
+        inside = true
+      } else if (shape === 'diamond') {
+        inside = (Math.abs(ox) + Math.abs(oy)) / Math.SQRT2 <= radius
+      } else {
+        inside = ox * ox + oy * oy <= radius * radius
+      }
+      if (!inside) continue
+      paintBrushPixel(renderer, layer, cx + dx, cy + dy, brush, pixels, r, g, b, a, opacity, touched, sel)
+    }
+  }
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -195,17 +298,30 @@ function createPencilHandler(): ToolHandler {
 
   return {
     onPointerDown({ x, y }: ToolPointerPos, ctx: ToolContext) {
+      _renderer = ctx.renderer
+      _layer    = ctx.layer
       touched = new Map()
 
-      if (pencilOptions.size === 1) {
-        // 1px path — direct Bresenham, no smoothing
+      const brush = pencilOptions.pixelBrush
+
+      if (pencilOptions.size === 1 || brush) {
+        // 1px path — direct Bresenham, no smoothing (also used for pixel brushes)
         lastRendered = null; lastCtrl = null
         const px = Math.round(x), py = Math.round(y)
-        paintOnePixel(px, py, ctx)
+        const { renderer, layer, layers, primaryColor, selectionMask, render, growLayerToFit } = ctx
+        const { r, g, b, a } = primaryColor
+        const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
+        if (brush) {
+          const pad = Math.ceil(pencilOptions.size / 2) + 2
+          growLayerToFit(px, py, pad)
+          paintBrushStamp(renderer, layer, px, py, brush, r, g, b, a, pencilOptions.opacity, pencilOptions.size, pencilOptions.shape, touched, sel ?? null)
+        } else {
+          growLayerToFit(px, py, 2)
+          blendPixelOver(renderer, layer, px, py, r, g, b, a, pencilOptions.opacity, touched, sel)
+        }
         lastPx    = { x: px, y: py }
         ppPrev    = { x: px, y: py }
         ppPending = null
-        const { renderer, layer, layers, render } = ctx
         renderer.flushLayer(layer)
         render(layers)
       } else {
@@ -215,7 +331,7 @@ function createPencilHandler(): ToolHandler {
         lastRendered = { x, y }
         lastCtrl     = { x, y }
         const { renderer, layer, layers, primaryColor, selectionMask, render, growLayerToFit } = ctx
-        const { r, g, b, a } = primaryColor
+        const { r, g, b, a } = primaryColor  // eslint-disable-line @typescript-eslint/no-unused-vars
         const padR = Math.ceil(pencilOptions.size / 2) + 2
         growLayerToFit(x, y, padR)
         const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
@@ -231,10 +347,30 @@ function createPencilHandler(): ToolHandler {
     },
 
     onPointerMove({ x, y }: ToolPointerPos, ctx: ToolContext) {
-      if (pencilOptions.size === 1) {
+      _renderer = ctx.renderer
+      _layer    = ctx.layer
+
+      const brush = pencilOptions.pixelBrush
+
+      if (pencilOptions.size === 1 || brush) {
         if (!lastPx) return
-        draw1pxSegment(x, y, ctx)
-        const { renderer, layer, layers, render } = ctx
+        const x1 = Math.round(x), y1 = Math.round(y)
+        if (lastPx.x === x1 && lastPx.y === y1) return
+        const { renderer, layer, layers, primaryColor, selectionMask, render, growLayerToFit } = ctx
+        const { r, g, b, a } = primaryColor
+        const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
+
+        if (brush) {
+          // Walk each Bresenham pixel and stamp a disk using the tiling brush mask
+          const pad = Math.ceil(pencilOptions.size / 2) + 2
+          bresenham(lastPx.x, lastPx.y, x1, y1, (px, py) => {
+            growLayerToFit(px, py, pad)
+            paintBrushStamp(renderer, layer, px, py, brush, r, g, b, a, pencilOptions.opacity, pencilOptions.size, pencilOptions.shape, touched!, sel ?? null)
+          })
+          lastPx = { x: x1, y: y1 }
+        } else {
+          draw1pxSegment(x, y, ctx)
+        }
         renderer.flushLayer(layer)
         render(layers)
       } else {
@@ -256,8 +392,8 @@ function createPencilHandler(): ToolHandler {
     },
 
     onPointerUp(_pos: ToolPointerPos, ctx: ToolContext) {
-      if (pencilOptions.size === 1) {
-        flushPPPending(ctx)
+      if (pencilOptions.size === 1 || pencilOptions.pixelBrush) {
+        if (!pencilOptions.pixelBrush) flushPPPending(ctx)
         const { renderer, layer, layers, render } = ctx
         renderer.flushLayer(layer)
         render(layers)
@@ -277,6 +413,181 @@ function createPencilHandler(): ToolHandler {
 
 // ─── Options UI ────────────────────────────────────────────────────────────────
 
+/**
+ * Capture the pixels within the current selection and create a new PixelBrush
+ * from them, adding it to the document brush library.
+ */
+function captureSelectionAsBrush(dispatch: ReturnType<typeof useAppContext>['dispatch']): void {
+  if (!_renderer || !_layer) return
+  const mask = selectionStore.mask
+  if (!mask) return
+
+  const cw = _renderer.pixelWidth
+  const ch = _renderer.pixelHeight
+
+  // Find bounding rect of the selection mask
+  let minX = cw, maxX = 0, minY = ch, maxY = 0
+  for (let y = 0; y < ch; y++) {
+    for (let x = 0; x < cw; x++) {
+      if (mask[y * cw + x]) {
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+      }
+    }
+  }
+  if (minX > maxX || minY > maxY) return
+
+  const bw = maxX - minX + 1
+  const bh = maxY - minY + 1
+  const rgba = new Uint8ClampedArray(bw * bh * 4)
+
+  const layerData = _layer.data
+  const lw = _layer.layerWidth
+  const ox = _layer.offsetX
+  const oy = _layer.offsetY
+
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const cx = minX + x
+      const cy = minY + y
+      // Only include pixels inside the selection
+      if (!mask[cy * cw + cx]) continue
+      // Sample layer-local pixel
+      const lx = cx - ox
+      const ly = cy - oy
+      if (lx < 0 || ly < 0 || lx >= lw || ly >= _layer.layerHeight) continue
+      const src = (ly * lw + lx) * 4
+      const dst = (y * bw + x) * 4
+      rgba[dst]     = layerData[src]
+      rgba[dst + 1] = layerData[src + 1]
+      rgba[dst + 2] = layerData[src + 2]
+      rgba[dst + 3] = layerData[src + 3]
+    }
+  }
+
+  // Encode as base64
+  let bin = ''
+  for (let i = 0; i < rgba.length; i++) bin += String.fromCharCode(rgba[i])
+  const b64 = btoa(bin)
+
+  const brush: PixelBrush = {
+    id:        crypto.randomUUID(),
+    name:      `Brush ${Date.now()}`,
+    width:     bw,
+    height:    bh,
+    rgba:      b64,
+    createdAt: Date.now(),
+  }
+  dispatch({ type: 'ADD_PIXEL_BRUSH', payload: brush })
+}
+
+// ─── Flyout portal ────────────────────────────────────────────────────────────
+
+interface BrushFlyoutProps {
+  anchorRef: React.RefObject<HTMLButtonElement | null>
+  onClose: () => void
+  docBrushes: PixelBrush[]
+  userBrushes: PixelBrush[]
+  selectedId: string | null
+  onSelect: (id: string | null) => void
+  onOpenModal: () => void
+}
+
+function BrushFlyout({
+  anchorRef, onClose, docBrushes, userBrushes, selectedId, onSelect, onOpenModal,
+}: BrushFlyoutProps): React.JSX.Element {
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  // Position below the anchor button
+  const rect = anchorRef.current?.getBoundingClientRect()
+  const top  = rect ? rect.bottom + 6 : 80
+  const left = rect ? rect.left      : 0
+
+  // Close on outside mousedown
+  useEffect(() => {
+    const handler = (e: MouseEvent): void => {
+      if (
+        !panelRef.current?.contains(e.target as Node) &&
+        !anchorRef.current?.contains(e.target as Node)
+      ) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [anchorRef, onClose])
+
+  const allBrushes = [...docBrushes, ...userBrushes]
+  // 'none' kept as documentation of the implicit shape — clearing selection in the gallery resets to standard pencil
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      style={{
+        position:    'fixed',
+        top,
+        left,
+        zIndex:      500,
+        background:  '#2d2d2d',
+        border:      '1px solid #191919',
+        borderRadius: 6,
+        boxShadow:   '0 4px 16px rgba(0,0,0,0.6)',
+        padding:     8,
+        minWidth:    220,
+        maxWidth:    320,
+      }}
+    >
+      <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>Pixel Brushes</div>
+      <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+        {/* "None" option — reverts to standard pencil */}
+        <div
+          onClick={() => { onSelect(null); onClose() }}
+          style={{
+            padding: '3px 6px',
+            borderRadius: 4,
+            cursor: 'pointer',
+            background: selectedId === null ? 'rgba(82,130,255,0.25)' : 'transparent',
+            fontSize: 11,
+            color: '#ccc',
+            marginBottom: 4,
+          }}
+        >
+          ✕ None (standard pencil)
+        </div>
+        {allBrushes.length === 0 ? (
+          <div style={{ fontSize: 11, color: '#777', padding: '4px 6px' }}>No brushes yet</div>
+        ) : (
+          <PixelBrushGallery
+            brushes={allBrushes}
+            selectedId={selectedId}
+            onSelect={(id) => { onSelect(id); onClose() }}
+          />
+        )}
+      </div>
+      <div style={{ borderTop: '1px solid #191919', marginTop: 6, paddingTop: 6 }}>
+        <button
+          style={{
+            fontSize: 11,
+            background: '#3a3a3a',
+            color: '#ccc',
+            border: '1px solid #191919',
+            borderRadius: 4,
+            padding: '3px 10px',
+            cursor: 'pointer',
+            width: '100%',
+          }}
+          onClick={() => { onClose(); onOpenModal() }}
+        >
+          Manage Brushes…
+        </button>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+// ─── Options component ────────────────────────────────────────────────────────
+
 function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Element {
   const { state, dispatch } = useAppContext()
   const { primaryColor } = state
@@ -288,6 +599,19 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
   const [antiAlias,    setAA]          = useState(pencilOptions.antiAlias)
   const [smoothing,    setSmoothing]   = useState(pencilOptions.smoothing)
   const [motionBlur,   setMotionBlur]  = useState(pencilOptions.motionBlur)
+  const [activeBrush,  setActiveBrush] = useState<PixelBrush | null>(null)
+  const [flyoutOpen,   setFlyoutOpen]  = useState(false)
+  const [modalOpen,    setModalOpen]   = useState(false)
+  const [userBrushes,  setUserBrushes] = useState<PixelBrush[]>(() => pixelBrushStore.getUserBrushes())
+
+  const flyoutBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  // Sync user brushes
+  useEffect(() => {
+    const update = (): void => setUserBrushes([...pixelBrushStore.getUserBrushes()])
+    pixelBrushStore.subscribe(update)
+    return () => pixelBrushStore.unsubscribe(update)
+  }, [])
 
   const handleSize        = (v: number): void => { pencilOptions.size        = v; setSize(v) }
   const handleOpacity     = (v: number): void => { pencilOptions.opacity     = v; setOpacity(v) }
@@ -304,7 +628,20 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
     setPixelPerfect(e.target.checked)
   }
 
+  const handleSelectBrush = useCallback((id: string | null): void => {
+    const all = [...state.pixelBrushes, ...userBrushes]
+    const found = id ? (all.find(b => b.id === id) ?? null) : null
+    pencilOptions.pixelBrush = found
+    setActiveBrush(found)
+  }, [state.pixelBrushes, userBrushes])
+
+  const handleCapture = useCallback((): void => {
+    captureSelectionAsBrush(dispatch)
+  }, [dispatch])
+
   const shades = getColorShades(primaryColor.r, primaryColor.g, primaryColor.b, primaryColor.a)
+
+  const brushBtnLabel = activeBrush ? activeBrush.name : 'Brushes'
 
   return (
     <>
@@ -366,6 +703,41 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
         />
         Anti-alias
       </label>
+      <span className={styles.optSep} />
+      {/* Pixel brush flyout */}
+      <button
+        ref={flyoutBtnRef}
+        className={styles.optBtn}
+        onClick={() => setFlyoutOpen(o => !o)}
+        title="Select a pixel brush"
+      >
+        {brushBtnLabel}
+      </button>
+      {flyoutOpen && (
+        <BrushFlyout
+          anchorRef={flyoutBtnRef as React.RefObject<HTMLButtonElement | null>}
+          onClose={() => setFlyoutOpen(false)}
+          docBrushes={state.pixelBrushes}
+          userBrushes={userBrushes}
+          selectedId={activeBrush?.id ?? null}
+          onSelect={handleSelectBrush}
+          onOpenModal={() => setModalOpen(true)}
+        />
+      )}
+      <button
+        className={styles.optBtn}
+        onClick={handleCapture}
+        title="Capture selection pixels as a new pixel brush"
+        disabled={!_renderer}
+      >
+        Capture
+      </button>
+      {modalOpen && (
+        <PixelBrushesModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </>
   )
 }

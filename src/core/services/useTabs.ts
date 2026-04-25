@@ -81,6 +81,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
     zoom:           state.canvas.zoom,
     swatches:       state.swatches,
     swatchGroups:   state.swatchGroups,
+    pixelBrushes:   state.pixelBrushes,
   }), [state])
 
   /** Encode every active layer's pixel data into Map<layerId, dataURL> (+ geometry entries).
@@ -137,6 +138,7 @@ export function useTabs(state: AppState, dispatch: Dispatch<AppAction>): UseTabs
     })
     dispatch({ type: 'SET_SWATCHES', payload: toTab.snapshot.swatches ?? DEFAULT_SWATCHES })
     dispatch({ type: 'SET_SWATCH_GROUPS', payload: toTab.snapshot.swatchGroups ?? [] })
+    dispatch({ type: 'SET_PIXEL_BRUSHES', payload: toTab.snapshot.pixelBrushes ?? [] })
   }, [dispatch])
 
   const handleSwitchTab = useCallback((toId: string): void => {

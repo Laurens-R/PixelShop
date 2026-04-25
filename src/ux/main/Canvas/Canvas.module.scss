@@ -1,6 +1,7 @@
 .viewport {
   flex: 1;
   overflow: auto;
+  position: relative; // needed so the antsOverlay positions against the viewport, not the page
   background-color: var(--color-canvas-bg);
 }
 
@@ -42,6 +43,18 @@
   pointer-events: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+// Marching-ants canvas: sits at viewport level (not inside canvasWrapper),
+// always viewport-sized in CSS, backed by physical pixels set in JS.
+// Stays fixed while the canvas content scrolls underneath.
+.antsOverlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
 }
 
 .brushCursor {

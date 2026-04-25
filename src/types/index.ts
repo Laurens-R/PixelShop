@@ -614,6 +614,23 @@ export interface CanvasState {
   key: number
 }
 
+// ─── Pixel Brushes ─────────────────────────────────────────────────────────────
+
+/**
+ * A custom pixel-art brush captured from a canvas selection.
+ * `rgba` holds the raw RGBA bytes (width × height × 4) encoded as a base64 string.
+ * Transparent pixels in the brush mask (a === 0) are skipped when stamping.
+ */
+export interface PixelBrush {
+  id: string
+  name: string
+  width: number
+  height: number
+  /** Raw RGBA bytes, width × height × 4, base64-encoded. */
+  rgba: string
+  createdAt: number
+}
+
 export interface AppState {
   activeTool: Tool
   activeShape: ShapeType
@@ -621,6 +638,8 @@ export interface AppState {
   secondaryColor: RGBAColor
   swatches: RGBAColor[]
   swatchGroups: SwatchGroup[]
+  /** Pixel brushes stored with this document (travel with the .pxshop file). */
+  pixelBrushes: PixelBrush[]
   layers: LayerState[]
   activeLayerId: string | null
   /** Layer IDs ctrl/cmd-clicked in the Layers panel for multi-selection operations. */

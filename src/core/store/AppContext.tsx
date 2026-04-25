@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer } from 'react'
-import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, GroupLayerState, BlendMode, BackgroundFill, GridType, SwatchGroup } from '@/types'
+import type { AppState, Tool, ShapeType, RGBAColor, LayerState, TextLayerState, ShapeLayerState, MaskLayerState, AdjustmentLayerState, GroupLayerState, BlendMode, BackgroundFill, GridType, SwatchGroup, PixelBrush } from '@/types'
 import { isGroupLayer } from '@/types'
 import { getDescendantIds, getParentGroup } from '@/utils/layerTree'
 import { DEFAULT_SWATCHES } from './tabTypes'
@@ -46,6 +46,10 @@ export type AppAction =
   | { type: 'RESIZE_CANVAS'; payload: { width: number; height: number } }
   | { type: 'SET_SWATCHES'; payload: RGBAColor[] }
   | { type: 'SET_SWATCH_GROUPS'; payload: SwatchGroup[] }
+  | { type: 'ADD_PIXEL_BRUSH'; payload: PixelBrush }
+  | { type: 'REMOVE_PIXEL_BRUSH'; payload: string }
+  | { type: 'RENAME_PIXEL_BRUSH'; payload: { id: string; name: string } }
+  | { type: 'SET_PIXEL_BRUSHES'; payload: PixelBrush[] }
   | { type: 'ADD_SWATCH_GROUP'; payload: { name: string; swatchIndices: number[] } }
   | { type: 'ADD_SWATCHES_TO_GROUP'; payload: { id: string; swatchIndices: number[] } }
   | { type: 'REMOVE_SWATCH_GROUP'; payload: string }
@@ -67,6 +71,7 @@ const initialState: AppState = {
   secondaryColor: { r: 255, g: 255, b: 255, a: 255 },
   swatches: DEFAULT_SWATCHES,
   swatchGroups: [],
+  pixelBrushes: [],
   layers: [{ id: 'layer-0', name: 'Background', visible: true, opacity: 1, locked: false, blendMode: 'normal' }],
   activeLayerId: 'layer-0',
   selectedLayerIds: [],
@@ -111,6 +116,23 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_SWATCH_GROUPS':
       return { ...state, swatchGroups: action.payload }
+
+    case 'ADD_PIXEL_BRUSH':
+      return { ...state, pixelBrushes: [...state.pixelBrushes, action.payload] }
+
+    case 'REMOVE_PIXEL_BRUSH':
+      return { ...state, pixelBrushes: state.pixelBrushes.filter(b => b.id !== action.payload) }
+
+    case 'RENAME_PIXEL_BRUSH':
+      return {
+        ...state,
+        pixelBrushes: state.pixelBrushes.map(b =>
+          b.id === action.payload.id ? { ...b, name: action.payload.name } : b,
+        ),
+      }
+
+    case 'SET_PIXEL_BRUSHES':
+      return { ...state, pixelBrushes: action.payload }
 
     case 'ADD_SWATCH_GROUP': {
       const { name, swatchIndices } = action.payload

@@ -53,6 +53,7 @@ import { useObjectSelection } from '@/core/services/useObjectSelection'
 import { useContentAwareFill } from '@/core/services/useContentAwareFill'
 import { transformStore } from '@/core/store/transformStore'
 import { cloneStampStore } from '@/core/store/cloneStampStore'
+import { pixelBrushStore } from '@/core/store/pixelBrushStore'
 import { ModalDialog } from '@/ux/modals/ModalDialog/ModalDialog'
 import { DialogButton } from '@/ux/widgets/DialogButton/DialogButton'
 import type { Tool, LayerState, AdjustmentType } from '@/types'
@@ -112,6 +113,9 @@ function AppContent(): React.JSX.Element {
   const [hasSelection,                 setHasSelection]                 = useState(false)
   const [recentFiles,                  setRecentFiles]                  = useState<string[]>([])
   const [findLayersCounter,            setFindLayersCounter]            = useState(0)
+
+  // ── Pixel brush store init ────────────────────────────────────────
+  useEffect(() => { void pixelBrushStore.init() }, [])
 
   // ── Clone stamp source deletion notification ─────────────────────
   const cloneStampNotifTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

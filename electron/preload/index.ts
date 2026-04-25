@@ -40,6 +40,16 @@ const api = {
   addRecentFile: (path: string): Promise<string[]> => ipcRenderer.invoke('recentFiles:add', path),
   clearRecentFiles: (): Promise<void> => ipcRenderer.invoke('recentFiles:clear'),
 
+  // ── Pixel Brushes (user-profile storage) ─────────────────────────────────────
+  loadUserPixelBrushes: (): Promise<string> => ipcRenderer.invoke('pixelBrushes:load'),
+  saveUserPixelBrushes: (data: string): Promise<void> => ipcRenderer.invoke('pixelBrushes:save', data),
+  openBrushFileDialog: (): Promise<string | null> => ipcRenderer.invoke('dialog:openBrushFile'),
+  saveBrushFileDialog: (defaultPath?: string): Promise<string | null> =>
+    ipcRenderer.invoke('dialog:saveBrushFile', defaultPath),
+  readBrushFile: (filePath: string): Promise<string> => ipcRenderer.invoke('file:readBrushFile', filePath),
+  writeBrushFile: (filePath: string, data: string): Promise<void> =>
+    ipcRenderer.invoke('file:writeBrushFile', filePath, data),
+
   // ── App lifecycle ─────────────────────────────────────────────────────────────
   exitApp: (): Promise<void> => ipcRenderer.invoke('app:exit'),
 

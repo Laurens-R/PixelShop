@@ -1,5 +1,5 @@
 import type { HistoryEntry } from '@/store/historyStore'
-import type { LayerState, BackgroundFill, RGBAColor, SwatchGroup } from '@/types'
+import type { LayerState, BackgroundFill, RGBAColor, SwatchGroup, PixelBrush } from '@/types'
 
 // ─── Default swatch palette ───────────────────────────────────────────────────
 
@@ -35,6 +35,8 @@ export interface TabSnapshot {
   zoom: number
   swatches: RGBAColor[]
   swatchGroups: SwatchGroup[]
+  /** Pixel brushes stored with this document. */
+  pixelBrushes: PixelBrush[]
 }
 
 // ─── Tab record ───────────────────────────────────────────────────────────────
@@ -71,4 +73,5 @@ export const INITIAL_SNAPSHOT: TabSnapshot = {
   zoom: 1,
   swatches: DEFAULT_SWATCHES,
   swatchGroups: [],
+  pixelBrushes: [],
 }

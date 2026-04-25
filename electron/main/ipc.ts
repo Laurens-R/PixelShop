@@ -168,6 +168,46 @@ export function registerIpcHandlers(): void {
     await saveRecentFiles([])
   })
 
+  // ── Pixel Brushes (user-profile storage) ─────────────────────────────────────
+
+  const userBrushesPath = (): string => join(app.getPath('userData'), 'pixel-brushes.json')
+
+  ipcMain.handle('pixelBrushes:load', async () => {
+    try {
+      return await readFile(userBrushesPath(), 'utf-8')
+    } catch {
+      return '[]'
+    }
+  })
+
+  ipcMain.handle('pixelBrushes:save', async (_event, data: string) => {
+    await writeFile(userBrushesPath(), data, 'utf-8')
+  })
+
+  ipcMain.handle('dialog:openBrushFile', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'PixelShop Brushes', extensions: ['pxbrush'] }],
+    })
+    return canceled ? null : filePaths[0]
+  })
+
+  ipcMain.handle('dialog:saveBrushFile', async (_event, defaultPath?: string) => {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath,
+      filters: [{ name: 'PixelShop Brushes', extensions: ['pxbrush'] }],
+    })
+    return canceled ? null : filePath
+  })
+
+  ipcMain.handle('file:readBrushFile', async (_event, filePath: string) => {
+    return readFile(filePath, 'utf-8')
+  })
+
+  ipcMain.handle('file:writeBrushFile', async (_event, filePath: string, data: string) => {
+    await writeFile(filePath, data, 'utf-8')
+  })
+
   // ── App lifecycle ─────────────────────────────────────────────────────────────
 
   ipcMain.handle('app:exit', () => {

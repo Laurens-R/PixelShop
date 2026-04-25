@@ -75,6 +75,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const viewportRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(state.canvas.zoom)
   zoomRef.current = state.canvas.zoom
+  const activeToolRef = useRef(state.activeTool)
+  activeToolRef.current = state.activeTool
   const pendingScrollRef = useRef<{ scrollLeft: number; scrollTop: number } | null>(null)
 
   // Keep a ref to the current layer list so the imperative handle can access
@@ -158,8 +160,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
     return () => { selectionStore.clear() }
   }, [width, height, isActive])
 
-  // ── Marching ants + crop overlay animation ─────────────────────
-  useMarchingAnts(isActive, overlayRef)
+  // ── Marching ants + crop overlay + polygonal selection overlay ──
+  useMarchingAnts(isActive, overlayRef, viewportRef, canvasWrapperRef, zoomRef, activeToolRef)
 
   // Publish canvas element into shared context (active canvas only)
   useEffect(() => {
@@ -457,84 +459,19 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, state.activeTool])
 
+  // Cursor updates for polygonal selection (drawing handled by useMarchingAnts)
   useEffect(() => {
     if (!isActive || state.activeTool !== 'polygonal-selection') return
 
-    const redraw = (): void => {
-      const oc = toolOverlayRef.current
-      if (!oc) return
-      const ctx2d = oc.getContext('2d')
-      if (!ctx2d) return
-      ctx2d.clearRect(0, 0, oc.width, oc.height)
-
-      const { vertices, cursor, nearClose } = polygonalSelectionStore
-      if (vertices.length === 0) return
-
-      // Update cursor reactively (P2-C)
+    const updateCursor = (): void => {
       if (canvasRef.current) {
-        canvasRef.current.style.cursor = nearClose ? 'cell' : 'crosshair'
-      }
-
-      // 1. Black backing stroke on committed segments
-      if (vertices.length >= 2) {
-        ctx2d.strokeStyle = 'rgba(0,0,0,0.8)'
-        ctx2d.lineWidth = 3
-        ctx2d.setLineDash([])
-        ctx2d.beginPath()
-        ctx2d.moveTo(vertices[0].x, vertices[0].y)
-        for (let i = 1; i < vertices.length; i++) ctx2d.lineTo(vertices[i].x, vertices[i].y)
-        ctx2d.stroke()
-
-        // 2. White top stroke on committed segments
-        ctx2d.strokeStyle = 'white'
-        ctx2d.lineWidth = 1.5
-        ctx2d.setLineDash([])
-        ctx2d.beginPath()
-        ctx2d.moveTo(vertices[0].x, vertices[0].y)
-        for (let i = 1; i < vertices.length; i++) ctx2d.lineTo(vertices[i].x, vertices[i].y)
-        ctx2d.stroke()
-      }
-
-      // 3. Dashed rubber-band from last vertex to cursor
-      ctx2d.strokeStyle = 'rgba(42, 113, 255, 0.8)'
-      ctx2d.lineWidth = 1
-      ctx2d.setLineDash([4, 3])
-      ctx2d.beginPath()
-      ctx2d.moveTo(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y)
-      ctx2d.lineTo(cursor.x, cursor.y)
-      ctx2d.stroke()
-      ctx2d.setLineDash([])
-
-      // 4. Vertex dots at all placed vertices (P2-B)
-      for (const v of vertices) {
-        ctx2d.beginPath()
-        ctx2d.arc(v.x, v.y, 4, 0, Math.PI * 2)
-        ctx2d.fillStyle = 'white'
-        ctx2d.fill()
-        ctx2d.strokeStyle = 'rgba(0,0,0,0.8)'
-        ctx2d.lineWidth = 1.5
-        ctx2d.setLineDash([])
-        ctx2d.stroke()
-      }
-
-      // 5. Close-snap indicator on origin (on top of regular dot) when nearClose
-      if (nearClose) {
-        ctx2d.lineWidth   = 2
-        ctx2d.strokeStyle = '#ffffff'
-        ctx2d.beginPath()
-        ctx2d.arc(vertices[0].x, vertices[0].y, 7, 0, Math.PI * 2)
-        ctx2d.stroke()
+        canvasRef.current.style.cursor = polygonalSelectionStore.nearClose ? 'cell' : 'crosshair'
       }
     }
 
-    redraw()
-    polygonalSelectionStore.subscribe(redraw)
-
-    return () => {
-      polygonalSelectionStore.unsubscribe(redraw)
-      const oc = toolOverlayRef.current
-      oc?.getContext('2d')?.clearRect(0, 0, oc.width, oc.height)
-    }
+    updateCursor()
+    polygonalSelectionStore.subscribe(updateCursor)
+    return () => { polygonalSelectionStore.unsubscribe(updateCursor) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, state.activeTool])
 
@@ -881,12 +818,6 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             height={height}
           />
           <div ref={brushCursorRef} className={styles.brushCursor} />
-          <canvas
-            ref={overlayRef}
-            className={styles.overlay}
-            width={width}
-            height={height}
-          />
           {state.canvas.showGrid && (() => {
             const { gridType, gridColor, gridSize, zoom } = state.canvas
             const dpr = window.devicePixelRatio
@@ -939,6 +870,8 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           })()}
         </div>
       </div>
+      {/* Marching-ants overlay: viewport-sized, screen-space, never scrolls */}
+      <canvas ref={overlayRef} className={styles.antsOverlay} />
     </div>
     <TextLayerEditor
       editingLayerId={editingLayerId}
