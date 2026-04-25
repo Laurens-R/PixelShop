@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { radialBlur } from '@/webgpu/filterCompute'
+import { radialBlur } from '@/webgpu/compute/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/ui/Canvas/canvasHandle'
 import { ToolWindow } from '@/components'

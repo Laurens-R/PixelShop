@@ -1,4 +1,4 @@
-import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../utils'
+import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../../utils'
 
 export const FILTER_GAUSSIAN_H_COMPUTE = /* wgsl */ `
 struct GaussianBlurParams {

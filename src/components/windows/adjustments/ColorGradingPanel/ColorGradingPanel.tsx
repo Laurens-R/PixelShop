@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { ColorGradingAdjustmentLayer, ColorGradingWheelParams } from '@/types'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import { ColorWheelWidget } from '@/components/widgets/ColorWheelWidget/ColorWheelWidget'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import styles from './ColorGradingPanel.module.scss'

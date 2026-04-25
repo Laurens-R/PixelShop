@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { ColorVibranceAdjustmentLayer } from '@/types'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './ColorVibrancePanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────

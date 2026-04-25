@@ -2,7 +2,7 @@ import React from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { ColorKeyAdjustmentLayer } from '@/types'
 import { ColorSwatch } from '@/components/widgets/ColorSwatch/ColorSwatch'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './ColorKeyPanel.module.scss'
 
 interface ColorKeyPanelProps {

@@ -19,7 +19,7 @@ import {
   getAdjustmentClipboardData,
   setAdjustmentClipboardData,
 } from '@/store/adjustmentClipboardStore'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import { CurvesGraph } from '@/components/widgets/CurvesGraph/CurvesGraph'
 import styles from './CurvesPanel.module.scss'
 

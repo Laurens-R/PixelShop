@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { ColorTemperatureAdjustmentLayer } from '@/types'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './ColorTemperaturePanel.module.scss'
 
 interface ColorTemperaturePanelProps {

@@ -1,7 +1,7 @@
 import React from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { ChromaticAberrationAdjustmentLayer } from '@/types'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './ChromaticAberrationOptions.module.scss'
 
 interface ChromaticAberrationOptionsProps {

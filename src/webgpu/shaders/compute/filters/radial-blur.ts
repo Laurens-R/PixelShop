@@ -1,4 +1,4 @@
-import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../utils'
+import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../../utils'
 
 export const FILTER_RADIAL_BLUR_COMPUTE = /* wgsl */ `
 struct RadialBlurParams {

@@ -3,7 +3,7 @@ import type { ShapeLayerState, ShapeType, RGBAColor } from '@/types'
 import { useAppContext } from '@/store/AppContext'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import { ColorSwatch } from '@/components/widgets/ColorSwatch/ColorSwatch'
-import { buildShapePath, rgbaToStr } from '../components/ui/Canvas/shapeRasterizer'
+import { buildShapePath, rgbaToStr } from '../components/main/Canvas/shapeRasterizer'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Module-level defaults for new shapes ────────────────────────────────────
@@ -298,7 +298,7 @@ function shapeName(t: ShapeType): string {
 // ─── Drawing-mode state (per handler instance) ────────────────────────────────
 
 type DrawMode =
-  | { t: 'idle' }
+  | { t: 'idle';     id: string }
   | { t: 'draw';     id: string; sx: number; sy: number }
   | { t: 'move';     id: string; gx: number; gy: number
       ocx: number; ocy: number; ox1: number; oy1: number; ox2: number; oy2: number
@@ -310,7 +310,7 @@ type DrawMode =
 // ─── Handler factory ──────────────────────────────────────────────────────────
 
 function createShapeHandler(): ToolHandler {
-  let mode: DrawMode    = { t: 'idle' }
+  let mode: DrawMode    = { t: 'idle', id: '' }
   let drawPreview: ShapeLayerState | null = null   // scratch layer used only during 'draw'
 
   function getActive(ctx: ToolContext): ShapeLayerState | null {
@@ -437,7 +437,7 @@ function createShapeHandler(): ToolHandler {
           if (ctx.overlayCanvas) drawHandles(ctx.overlayCanvas, ls, ctx.zoom)
         }
         drawPreview = null
-        mode = { t: 'idle' }
+        mode = { t: 'idle', id: '' }
         return
       }
 
@@ -448,7 +448,7 @@ function createShapeHandler(): ToolHandler {
         ctx.commitStroke(`Edit shape`)
         if (ctx.overlayCanvas) drawHandles(ctx.overlayCanvas, finalState, ctx.zoom)
       }
-      mode = { t: 'idle' }
+      mode = { t: 'idle', id: '' }
     },
 
     onHover(_pos: ToolPointerPos, ctx: ToolContext): void {
@@ -602,7 +602,7 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
             value={curStrokeWidth}
             min={1} max={100}
             onChange={setStrokeWidth}
-            styles={styles as unknown as import('@/components/widgets/SliderInput/SliderInput').SliderInputStyles}
+            //styles={styles as unknown as import('@/components/widgets/SliderInput/SliderInput').SliderInputStyles}
           />
         </>
       )}
@@ -636,7 +636,7 @@ function ShapeOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Elem
             value={curCornerRadius}
             min={0} max={200}
             onChange={setCornerRadius}
-            styles={styles as unknown as import('@/components/widgets/SliderInput/SliderInput').SliderInputStyles}
+            //styles={styles as unknown as import('@/components/widgets/SliderInput/SliderInput').SliderInputStyles}
           />
           <div className={styles.optSep} />
         </>

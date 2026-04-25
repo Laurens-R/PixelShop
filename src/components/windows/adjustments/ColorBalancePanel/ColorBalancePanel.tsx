@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { ColorBalanceAdjustmentLayer } from '@/types'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './ColorBalancePanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────

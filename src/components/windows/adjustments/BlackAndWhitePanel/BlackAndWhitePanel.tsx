@@ -2,7 +2,7 @@ import React from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { BlackAndWhiteAdjustmentLayer, AdjustmentParamsMap } from '@/types'
 import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './BlackAndWhitePanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────

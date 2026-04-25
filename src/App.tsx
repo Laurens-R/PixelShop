@@ -2,14 +2,14 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AppProvider, useAppContext } from '@/store/AppContext'
 import { CanvasProvider } from '@/store/CanvasContext'
 import { historyStore } from '@/store/historyStore'
-import { TopBar } from '@/components/ui/TopBar/TopBar'
-import { ToolOptionsBar } from '@/components/ui/ToolOptionsBar/ToolOptionsBar'
-import { TabBar } from '@/components/ui/TabBar/TabBar'
-import type { TabInfo } from '@/components/ui/TabBar/TabBar'
-import { Toolbar } from '@/components/ui/Toolbar/Toolbar'
-import { Canvas } from '@/components/ui/Canvas/Canvas'
-import { RightPanel } from '@/components/ui/RightPanel/RightPanel'
-import { StatusBar } from '@/components/ui/StatusBar/StatusBar'
+import { TopBar } from '@/components/main/TopBar/TopBar'
+import { ToolOptionsBar } from '@/components/main/ToolOptionsBar/ToolOptionsBar'
+import { TabBar } from '@/components/main/TabBar/TabBar'
+import type { TabInfo } from '@/components/main/TabBar/TabBar'
+import { Toolbar } from '@/components/main/Toolbar/Toolbar'
+import { Canvas } from '@/components/main/Canvas/Canvas'
+import { RightPanel } from '@/components/main/RightPanel/RightPanel'
+import { StatusBar } from '@/components/main/StatusBar/StatusBar'
 import { AdjustmentPanel } from '@/components/windows/ToolWindow'
 import { NewImageDialog } from '@/components/modals/NewImageDialog/NewImageDialog'
 import { ExportDialog } from '@/components/modals/ExportDialog/ExportDialog'
@@ -491,8 +491,8 @@ function AppContent(): React.JSX.Element {
       case 'duplicateLayer':  handleDuplicateLayer(); break
       case 'deleteLayer':     handleDeleteActiveLayer(); break
       case 'rasterizeLayer':  state.activeLayerId && handleRasterizeLayer(state.activeLayerId); break
-      case 'groupLayers':     handleGroupLayers(); break
-      case 'ungroupLayers':   handleUngroupLayers(); break
+      case 'groupLayers':     handleGroupLayers([...effectiveSelectedIds]); break
+      case 'ungroupLayers':   state.activeLayerId && handleUngroupLayers(state.activeLayerId); break
       case 'mergeSelected':   handleMergeSelected([...effectiveSelectedIds]); break
       case 'mergeDown':       handleMergeDown(); break
       case 'mergeVisible':    handleMergeVisible(); break

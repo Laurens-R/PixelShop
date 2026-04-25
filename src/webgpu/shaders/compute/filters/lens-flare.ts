@@ -1,4 +1,4 @@
-import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../utils'
+import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../../utils'
 
 export const FILTER_LENS_FLARE_COMPUTE = /* wgsl */ `
 struct LensFlareParams {

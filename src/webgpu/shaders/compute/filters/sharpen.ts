@@ -1,4 +1,4 @@
-import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../utils'
+import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../../utils'
 
 export const FILTER_SHARPEN_COMPUTE = /* wgsl */ `
 @group(0) @binding(0) var srcTex : texture_2d<f32>;

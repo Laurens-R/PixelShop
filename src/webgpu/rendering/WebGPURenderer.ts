@@ -6,15 +6,15 @@ import {
   createReadbackBuffer,
   createVertexBuffer,
   writeUniformBuffer,
-} from './utils'
+} from '../utils'
 import {
   COMPOSITE_SHADER,
   CHECKER_SHADER,
   BLIT_SHADER,
-} from './shaders'
-import { AdjustmentEncoder } from './AdjustmentEncoder'
-import { initFilterCompute } from './filterCompute'
-import { initGrabCutCompute } from './grabcutCompute'
+} from './../shaders/shaders'
+import { AdjustmentEncoder } from './../AdjustmentEncoder'
+import { initFilterCompute } from './../compute/filterCompute'
+import { initGrabCutCompute } from './../compute/grabcutCompute'
 
 // ─── Re-export all public types from the types module ─────────────────────────
 // All existing import sites use '@/webgpu/WebGPURenderer' — this keeps them working.
@@ -27,11 +27,11 @@ export type {
   SelectiveColorPassParams,
   CurvesPassParams,
   ColorGradingPassParams,
-} from './types'
-export { BLEND_MODE_INDEX, WebGPUUnavailableError } from './types'
+} from './../types'
+export { BLEND_MODE_INDEX, WebGPUUnavailableError } from './../types'
 
-import type { GpuLayer, RenderPlanEntry, AdjustmentRenderOp } from './types'
-import { BLEND_MODE_INDEX, WebGPUUnavailableError } from './types'
+import type { GpuLayer, RenderPlanEntry, AdjustmentRenderOp } from './../types'
+import { BLEND_MODE_INDEX, WebGPUUnavailableError } from './../types'
 
 // ─── Full-canvas quad (two triangles) ─────────────────────────────────────────
 

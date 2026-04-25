@@ -1,62 +1,93 @@
-import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../utils'
+import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer, unpackRows } from '../../../utils'
 
-export const FILTER_BILATERAL_COMPUTE = /* wgsl */ `
-struct BilateralParams {
-  radius       : u32,
-  _pad0        : u32,
-  sigmaSpatial : f32,
-  sigmaColor   : f32,
+export const FILTER_MEDIAN_COMPUTE = /* wgsl */ `
+struct MedianParams {
+  radius : u32,
+  _pad0  : u32,
+  _pad1  : u32,
+  _pad2  : u32,
 }
 
 @group(0) @binding(0) var srcTex : texture_2d<f32>;
 @group(0) @binding(1) var dstTex : texture_storage_2d<rgba8unorm, write>;
-@group(0) @binding(2) var<uniform> params : BilateralParams;
+@group(0) @binding(2) var<uniform> params : MedianParams;
+
+var<private> vals: array<f32, 441>;
+
+fn insertionSort(n: u32) {
+  for (var i = 1u; i < n; i++) {
+    let key = vals[i];
+    var j = i32(i) - 1;
+    loop {
+      if (j < 0 || vals[u32(j)] <= key) { break; }
+      vals[u32(j) + 1u] = vals[u32(j)];
+      j = j - 1;
+    }
+    vals[u32(j + 1)] = key;
+  }
+}
 
 @compute @workgroup_size(8, 8)
-fn cs_bilateral(@builtin(global_invocation_id) id: vec3u) {
+fn cs_median(@builtin(global_invocation_id) id: vec3u) {
   let dims = textureDimensions(srcTex);
   if (id.x >= dims.x || id.y >= dims.y) { return; }
 
-  let center = textureLoad(srcTex, vec2i(id.xy), 0);
-  let r      = i32(params.radius);
+  let r   = min(params.radius, 10u);
+  let n   = (2u * r + 1u) * (2u * r + 1u);
+  let mid = n / 2u;
 
-  let inv2SigmaS2 = 1.0 / (2.0 * params.sigmaSpatial * params.sigmaSpatial);
-  let inv2SigmaC2 = 1.0 / (2.0 * params.sigmaColor   * params.sigmaColor);
+  let orig = textureLoad(srcTex, vec2i(id.xy), 0);
 
-  var weightSum = 0.0;
-  var colorSum  = vec3f(0.0);
-
-  for (var ky = -r; ky <= r; ky++) {
-    for (var kx = -r; kx <= r; kx++) {
+  // Collect + sort R
+  var count = 0u;
+  for (var ky = -i32(r); ky <= i32(r); ky++) {
+    for (var kx = -i32(r); kx <= i32(r); kx++) {
       let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
       let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
-      let neighbor = textureLoad(srcTex, vec2i(sx, sy), 0);
-
-      let spatialDist2 = f32(kx * kx + ky * ky);
-      let colorDiff    = neighbor.rgb - center.rgb;
-      let colorDist2   = dot(colorDiff, colorDiff);
-
-      let w = exp(-spatialDist2 * inv2SigmaS2) * exp(-colorDist2 * inv2SigmaC2);
-
-      colorSum  += neighbor.rgb * w;
-      weightSum += w;
+      vals[count] = textureLoad(srcTex, vec2i(sx, sy), 0).r;
+      count += 1u;
     }
   }
+  insertionSort(n);
+  let medR = vals[mid];
 
-  let result = colorSum * (1.0 / weightSum);
-  textureStore(dstTex, vec2i(id.xy), vec4f(result, center.a));
+  // Collect + sort G
+  count = 0u;
+  for (var ky = -i32(r); ky <= i32(r); ky++) {
+    for (var kx = -i32(r); kx <= i32(r); kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      vals[count] = textureLoad(srcTex, vec2i(sx, sy), 0).g;
+      count += 1u;
+    }
+  }
+  insertionSort(n);
+  let medG = vals[mid];
+
+  // Collect + sort B
+  count = 0u;
+  for (var ky = -i32(r); ky <= i32(r); ky++) {
+    for (var kx = -i32(r); kx <= i32(r); kx++) {
+      let sx = clamp(i32(id.x) + kx, 0, i32(dims.x) - 1);
+      let sy = clamp(i32(id.y) + ky, 0, i32(dims.y) - 1);
+      vals[count] = textureLoad(srcTex, vec2i(sx, sy), 0).b;
+      count += 1u;
+    }
+  }
+  insertionSort(n);
+  let medB = vals[mid];
+
+  textureStore(dstTex, vec2i(id.xy), vec4f(medR, medG, medB, orig.a));
 }
 ` as const
 
-export async function runBilateral(
+export async function runMedian(
   device: GPUDevice,
   pipeline: GPUComputePipeline,
   pixels: Uint8Array,
   w: number,
   h: number,
   radius: number,
-  sigmaSpatial: number,
-  sigmaColor: number,
 ): Promise<Uint8Array> {
   const srcTex = device.createTexture({
     size: { width: w, height: h },
@@ -76,14 +107,9 @@ export async function runBilateral(
     usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
   })
 
-  const buf = new ArrayBuffer(16)
-  const dv  = new DataView(buf)
-  dv.setUint32(0,   radius,       true)
-  dv.setUint32(4,   0,            true)
-  dv.setFloat32(8,  sigmaSpatial, true)
-  dv.setFloat32(12, sigmaColor,   true)
-  const paramsBuf = createUniformBuffer(device, 16)
-  writeUniformBuffer(device, paramsBuf, buf)
+  const paramsData = new Uint32Array([radius, 0, 0, 0])
+  const paramsBuf  = createUniformBuffer(device, 16)
+  writeUniformBuffer(device, paramsBuf, paramsData)
 
   const encoder = device.createCommandEncoder()
   const bindGroup = device.createBindGroup({

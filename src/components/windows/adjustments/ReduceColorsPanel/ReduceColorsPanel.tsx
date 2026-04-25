@@ -3,7 +3,7 @@ import { useAppContext } from '@/store/AppContext'
 import type { ReduceColorsAdjustmentLayer, RGBAColor } from '@/types'
 import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
 import { quantize } from '@/wasm'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './ReduceColorsPanel.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────

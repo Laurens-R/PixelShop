@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { SelectiveColorAdjustmentLayer } from '@/types'
-import { ParentConnectorIcon } from '@/adjustments/AdjustmentIcons'
+import { ParentConnectorIcon } from '@/components/windows/ToolWindowIcons'
 import styles from './SelectiveColorPanel.module.scss'
 
 interface SelectiveColorPanelProps {

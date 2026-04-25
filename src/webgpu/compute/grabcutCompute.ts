@@ -1,6 +1,6 @@
-import { FILTER_GRABCUT_NLINKS_COMPUTE } from './shaders/grabcut/nlinks'
-import { FILTER_GRABCUT_DATATERMS_COMPUTE } from './shaders/grabcut/dataterms'
-import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer } from './utils'
+import { FILTER_GRABCUT_NLINKS_COMPUTE } from '../shaders/compute/grabcut/nlinks'
+import { FILTER_GRABCUT_DATATERMS_COMPUTE } from '../shaders/compute/grabcut/dataterms'
+import { createUniformBuffer, writeUniformBuffer, createReadbackBuffer } from '../utils'
 
 const K = 5
 const GAMMA = 75.0  // must match grabcut.cpp

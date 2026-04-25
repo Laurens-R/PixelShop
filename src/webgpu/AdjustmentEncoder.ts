@@ -37,7 +37,7 @@ import {
   OUTLINE_BLUR_H_COMPUTE,
   OUTLINE_BLUR_V_COMPUTE,
   OUTLINE_COMPOSITE_COMPUTE,
-} from './shaders'
+} from './shaders/shaders'
 import type {
   GpuLayer,
   AdjustmentRenderOp,
