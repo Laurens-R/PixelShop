@@ -6,7 +6,7 @@ import type { ClipboardData } from '@/store/clipboardStore'
 import { makeTabId } from '@/store/tabTypes'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

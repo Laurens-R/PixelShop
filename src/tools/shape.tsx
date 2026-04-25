@@ -3,7 +3,7 @@ import type { ShapeLayerState, ShapeType, RGBAColor } from '@/types'
 import { useAppContext } from '@/store/AppContext'
 import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
 import { ColorSwatch } from '@/components/widgets/ColorSwatch/ColorSwatch'
-import { buildShapePath, rgbaToStr } from '../components/window/Canvas/shapeRasterizer'
+import { buildShapePath, rgbaToStr } from '../components/ui/Canvas/shapeRasterizer'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Module-level defaults for new shapes ────────────────────────────────────

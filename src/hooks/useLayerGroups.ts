@@ -3,7 +3,7 @@ import type { Dispatch, MutableRefObject } from 'react'
 import type { AppState, PixelLayerState, LayerState } from '@/types'
 import { isGroupLayer } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
 import { getDescendantIds } from '@/utils/layerTree'
 import { showOperationError } from '@/utils/userFeedback'
 

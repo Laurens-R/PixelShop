@@ -6,7 +6,7 @@ import { makeTabId, fileTitle, DEFAULT_SWATCHES } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
 import type { LayerState, BackgroundFill, AppState, SwatchGroup } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
 import { showOperationError } from '@/utils/userFeedback'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

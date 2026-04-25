@@ -4,7 +4,7 @@ import { historyStore } from '@/store/historyStore'
 import type { ClearHistoryOptions } from '@/store/historyStore'
 import type { AppState, RGBAColor } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/window/Canvas/Canvas'
+import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
 import type { TabRecord } from '@/store/tabTypes'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
