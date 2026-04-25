@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import { objectSelectionStore } from '@/store/objectSelectionStore'
 import type { SelectionMode } from '@/store/selectionStore'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolOptionsStyles } from './types'

@@ -4,7 +4,7 @@ import type { FilterKey, LayerState, AppState } from '@/types'
 import { isPixelLayer } from '@/types'
 import { sharpen, sharpenMore } from '@/webgpu/compute/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
-import type { CanvasHandle } from '@/components/ui/Canvas/canvasHandle'
+import type { CanvasHandle } from '@/ux/ui/Canvas/canvasHandle'
 import type { AppAction } from '@/store/AppContext'
 
 // ─── Selection-aware compositing helper ───────────────────────────────────────

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { TextAlign, TextLayerState } from '@/types'
-import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 import { useAppContext } from '@/store/AppContext'
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { MutableRefObject } from 'react'
 import type { AppState } from '@/types'
-import type { CanvasHandle } from '@/components/main/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { objectSelectionStore } from '@/store/objectSelectionStore'
 import { objectSelectionCallbacks, objectSelectionOptions } from '../tools/objectSelection'
 import { selectionStore } from '@/store/selectionStore'

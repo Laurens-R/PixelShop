@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { eraseThickLine } from './algorithm/bresenham'
-import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Module-level options ────────────────────────────────────────────────────

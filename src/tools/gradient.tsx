@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { SliderInput } from '@/components/widgets/SliderInput/SliderInput'
+import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 import type { RGBAColor } from '@/types'
 
