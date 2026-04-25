@@ -2,7 +2,6 @@ import { ADJUSTMENT_REGISTRY } from '@/core/operations/adjustments/registry'
 import { adjustmentPreviewStore } from '@/core/store/adjustmentPreviewStore'
 import type { AppAction } from '@/core/store/AppContext'
 import type { AdjustmentLayerState, AdjustmentType, AppState, LayerState } from '@/types'
-import { isPixelLayer } from '@/types'
 import type { Dispatch, MutableRefObject } from 'react'
 import { useCallback, useMemo } from 'react'
 
@@ -29,8 +28,8 @@ export interface UseAdjustmentsReturn {
 
 /** Returns true for layer types that can own adjustment/effect children. */
 function isEffectEligibleLayer(layer: LayerState): boolean {
-  return isPixelLayer(layer) ||
-    ('type' in layer && (layer.type === 'text' || layer.type === 'shape'))
+  if (!('type' in layer)) return true  // PixelLayerState has no type discriminant
+  return layer.type === 'text' || layer.type === 'shape'
 }
 
 export function useAdjustments({
