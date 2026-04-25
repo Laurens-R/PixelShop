@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { transformStore } from '@/store/transformStore'
+import { transformStore } from '@/core/store/transformStore'
 import type { TransformParams, Point, TransformHandleMode, TransformInterpolation } from '@/types'
 import styles from './transform.module.scss'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'

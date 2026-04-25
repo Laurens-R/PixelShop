@@ -1,5 +1,5 @@
+import { polygonalSelectionStore } from '@/core/store/polygonalSelectionStore'
 import { useEffect } from 'react'
-import { polygonalSelectionStore } from '@/store/polygonalSelectionStore'
 
 export function usePolygonalSelection(): void {
   useEffect(() => {

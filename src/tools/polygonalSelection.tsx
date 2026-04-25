@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
-import { polygonalSelectionStore } from '@/store/polygonalSelectionStore'
-import type { SelectionMode } from '@/store/selectionStore'
+import { polygonalSelectionStore } from '@/core/store/polygonalSelectionStore'
+import type { SelectionMode } from '@/core/store/selectionStore'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Module-level options ──────────────────────────────────────────────────────

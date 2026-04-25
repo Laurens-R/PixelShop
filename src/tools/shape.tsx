@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback } from 'react'
 import type { ShapeLayerState, ShapeType, RGBAColor } from '@/types'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import { ColorSwatch } from '@/ux/widgets/ColorSwatch/ColorSwatch'
 import { buildShapePath, rgbaToStr } from '../ux/main/Canvas/shapeRasterizer'

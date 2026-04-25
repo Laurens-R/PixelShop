@@ -1,5 +1,5 @@
 import React from 'react'
-import type { GpuLayer, WebGPURenderer } from '@/webgpu/WebGPURenderer'
+import type { GpuLayer, WebGPURenderer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 import type { RGBAColor } from '@/types'
 import type { ToolDefinition, ToolHandler, ToolOptionsStyles, ToolContext, ToolPointerPos } from './types'
 

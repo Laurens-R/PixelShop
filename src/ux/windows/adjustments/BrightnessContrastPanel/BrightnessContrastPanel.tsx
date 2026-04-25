@@ -1,5 +1,5 @@
 import React from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { BrightnessContrastAdjustmentLayer } from '@/types'
 import { ParentConnectorIcon } from '@/ux/windows/ToolWindowIcons'
 import styles from './BrightnessContrastPanel.module.scss'

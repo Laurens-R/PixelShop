@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import type { LayerState, BlendMode, MaskLayerState, AdjustmentLayerState, GroupLayerState } from '@/types'
 import { isGroupLayer } from '@/types'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import { buildRootLayerIds, getParentGroup, isDescendantOf, reorderRootLayers } from '@/utils/layerTree'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import styles from './Layers.module.scss'

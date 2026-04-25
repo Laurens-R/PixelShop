@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CurvesChannel } from '@/types'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { computeHistogramRGBA } from '@/wasm'
-import type { CurvesChannel } from '@/types'
 import type { CurvesHistogramResult } from '@/wasm/types'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 interface UseCurvesHistogramOptions {
   canvasHandleRef: { readonly current: CanvasHandle | null }

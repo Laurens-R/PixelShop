@@ -1,5 +1,5 @@
 import type { ShapeLayerState } from '@/types'
-import type { GpuLayer } from '@/webgpu/WebGPURenderer'
+import type { GpuLayer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 
 // ─── Shared offscreen canvas ──────────────────────────────────────────────────
 

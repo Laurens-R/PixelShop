@@ -1,5 +1,5 @@
+import type { AdjustmentParamsMap, CurvesPreset } from '@/types'
 import { useCallback, useEffect, useState } from 'react'
-import type { CurvesPreset, AdjustmentParamsMap } from '@/types'
 
 interface UseCurvesPresetsState {
   presets: CurvesPreset[]

@@ -1,10 +1,10 @@
 import { useImperativeHandle, useRef } from 'react'
 import type React from 'react'
-import type { GpuLayer, WebGPURenderer, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
+import type { GpuLayer, WebGPURenderer, RenderPlanEntry } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 import type { LayerState, RGBAColor } from '@/types'
 import { isGroupLayer } from '@/types'
 import { buildRenderPlan as buildCanvasRenderPlan, buildSubPlan } from './canvasPlan'
-import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
+import { adjustmentPreviewStore } from '@/core/store/adjustmentPreviewStore'
 import { encodePng } from './pngHelpers'
 import { rasterizeDocument, type RasterBackend, type RasterReason } from '@/graphicspipeline/rasterization'
 

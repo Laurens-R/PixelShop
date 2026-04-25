@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { useAppContext } from '@/store/AppContext'
-import { cursorStore } from '@/store/cursorStore'
+import { useAppContext } from '@/core/store/AppContext'
+import { cursorStore } from '@/core/store/cursorStore'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
 import { ColorSwatch } from '@/ux/widgets/ColorSwatch/ColorSwatch'
 import styles from './StatusBar.module.scss'

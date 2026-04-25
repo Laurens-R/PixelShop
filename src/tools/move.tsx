@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { selectionStore } from '@/store/selectionStore'
+import { selectionStore } from '@/core/store/selectionStore'
 import type { TextLayerState, ShapeLayerState } from '@/types'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 

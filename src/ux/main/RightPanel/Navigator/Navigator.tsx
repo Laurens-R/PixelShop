@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useAppContext } from '@/store/AppContext'
-import { useCanvasContext } from '@/store/CanvasContext'
+import { useAppContext } from '@/core/store/AppContext'
+import { useCanvasContext } from '@/core/store/CanvasContext'
 import styles from './Navigator.module.scss'
 
 const MIN_ZOOM = 0.05

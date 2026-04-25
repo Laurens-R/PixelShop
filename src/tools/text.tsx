@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import { useAppContext } from '@/core/store/AppContext'
 import type { TextAlign, TextLayerState } from '@/types'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
-import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
-import { useAppContext } from '@/store/AppContext'
+import React, { useEffect, useState } from 'react'
+import type { ToolContext, ToolDefinition, ToolHandler, ToolOptionsStyles, ToolPointerPos } from './types'
 
 // ─── Module-level options ─────────────────────────────────────────────────────
 

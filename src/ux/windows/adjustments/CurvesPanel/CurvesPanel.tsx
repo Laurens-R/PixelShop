@@ -1,24 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { CurvesAdjustmentLayer, CurvesChannel, CurvesControlPoint } from '@/types'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
-import { useCurvesHistogram } from '@/hooks/useCurvesHistogram'
+import { useCurvesHistogram } from '@/core/services/useCurvesHistogram'
 import {
   cloneCurvesParams,
   nextPointId,
   validateCurvesParams,
   withDirtyPresetRef,
   makeIdentityCurve,
-} from '@/operations/adjustments/curves'
+} from '@/core/operations/adjustments/curves'
 import {
   BUILTIN_CURVES_PRESETS,
   clonePresetChannels,
-} from '@/operations/adjustments/curvesPresets'
-import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
+} from '@/core/operations/adjustments/curvesPresets'
+import { adjustmentPreviewStore } from '@/core/store/adjustmentPreviewStore'
 import {
   getAdjustmentClipboardData,
   setAdjustmentClipboardData,
-} from '@/store/adjustmentClipboardStore'
+} from '@/core/store/adjustmentClipboardStore'
 import { ParentConnectorIcon } from '@/ux/windows/ToolWindowIcons'
 import { CurvesGraph } from '@/ux/widgets/CurvesGraph/CurvesGraph'
 import styles from './CurvesPanel.module.scss'

@@ -1,5 +1,5 @@
 import React from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { ChromaticAberrationAdjustmentLayer } from '@/types'
 import { ParentConnectorIcon } from '@/ux/windows/ToolWindowIcons'
 import styles from './ChromaticAberrationOptions.module.scss'

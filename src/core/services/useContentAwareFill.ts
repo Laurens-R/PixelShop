@@ -1,12 +1,12 @@
-import { useCallback, useRef } from 'react'
-import type { Dispatch, MutableRefObject } from 'react'
+import type { AppAction } from '@/core/store/AppContext'
+import { selectionStore } from '@/core/store/selectionStore'
 import type { AppState } from '@/types'
-import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
-import { selectionStore } from '@/store/selectionStore'
-import { inpaintRegion, getPixelOps } from '@/wasm'
 import { computeSourceMask } from '@/utils/computeSourceMask'
 import { extractErrorMessage } from '@/utils/userFeedback'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
+import { getPixelOps, inpaintRegion } from '@/wasm'
+import type { Dispatch, MutableRefObject } from 'react'
+import { useCallback, useRef } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

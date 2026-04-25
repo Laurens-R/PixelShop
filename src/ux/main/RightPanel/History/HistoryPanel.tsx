@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { historyStore } from '@/store/historyStore'
+import { historyStore } from '@/core/store/historyStore'
 import { DialogButton } from '@/ux/widgets/DialogButton/DialogButton'
 import styles from './HistoryPanel.module.scss'
 

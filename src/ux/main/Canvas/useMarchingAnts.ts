@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { selectionStore } from '@/store/selectionStore'
-import { cropStore } from '@/store/cropStore'
+import { selectionStore } from '@/core/store/selectionStore'
+import { cropStore } from '@/core/store/cropStore'
 
 /**
  * Drives the marching-ants / crop-overlay RAF animation loop.

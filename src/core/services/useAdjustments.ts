@@ -1,10 +1,10 @@
-import { useCallback, useMemo } from 'react'
-import type { Dispatch, MutableRefObject } from 'react'
-import type { AppState, AdjustmentLayerState, AdjustmentType, LayerState } from '@/types'
+import { ADJUSTMENT_REGISTRY } from '@/core/operations/adjustments/registry'
+import { adjustmentPreviewStore } from '@/core/store/adjustmentPreviewStore'
+import type { AppAction } from '@/core/store/AppContext'
+import type { AdjustmentLayerState, AdjustmentType, AppState, LayerState } from '@/types'
 import { isPixelLayer } from '@/types'
-import type { AppAction } from '@/store/AppContext'
-import { ADJUSTMENT_REGISTRY } from '@/operations/adjustments/registry'
-import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
+import type { Dispatch, MutableRefObject } from 'react'
+import { useCallback, useMemo } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

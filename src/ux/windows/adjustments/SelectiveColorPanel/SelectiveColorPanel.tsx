@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { SelectiveColorAdjustmentLayer } from '@/types'
 import { ParentConnectorIcon } from '@/ux/windows/ToolWindowIcons'
 import styles from './SelectiveColorPanel.module.scss'

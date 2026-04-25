@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import type { RGBAColor } from '@/types'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import { EmbedColorPicker, hexToRgb, toHex } from '@/ux/widgets/EmbedColorPicker/EmbedColorPicker'
 import styles from './ColorPicker.module.scss'
 

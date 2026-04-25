@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer, DropShadowAdjustmentLayer, GlowAdjustmentLayer, OutlineAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { BrightnessContrastPanel } from './adjustments/BrightnessContrastPanel/BrightnessContrastPanel'

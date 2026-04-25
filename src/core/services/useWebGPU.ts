@@ -1,5 +1,5 @@
-import { useRef, useEffect, useCallback, useState } from 'react'
 import { WebGPURenderer, WebGPUUnavailableError, type GpuLayer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface UseWebGPUOptions {
   pixelWidth: number

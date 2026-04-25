@@ -1,6 +1,6 @@
 import type { AdjustmentLayerState, LayerState, RGBAColor, OutlineParams } from '@/types'
 import { isGroupLayer } from '@/types'
-import { buildCurvesLuts } from '@/operations/adjustments/curves'
+import { buildCurvesLuts } from '@/core/operations/adjustments/curves'
 import type { GpuLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 import { buildRootLayerIds } from '@/utils/layerTree'
 

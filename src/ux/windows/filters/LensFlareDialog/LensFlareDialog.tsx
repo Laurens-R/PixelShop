@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { renderLensFlare } from '@/graphicspipeline/webgpu/compute/filterCompute'
-import type { CanvasHandle } from '@/components/ui/Canvas/canvasHandle'
+import type { CanvasHandle } from '@/ux/main/Canvas/canvasHandle'
 import { ToolWindow, DialogButton } from '@/ux'
 import styles from './LensFlareDialog.module.scss'
 

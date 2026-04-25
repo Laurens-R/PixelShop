@@ -1,5 +1,5 @@
 import React from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { ColorKeyAdjustmentLayer } from '@/types'
 import { ColorSwatch } from '@/ux/widgets/ColorSwatch/ColorSwatch'
 import { ParentConnectorIcon } from '@/ux/windows/ToolWindowIcons'

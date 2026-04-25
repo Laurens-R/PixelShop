@@ -1,12 +1,12 @@
-import { useCallback } from 'react'
-import type { Dispatch, MutableRefObject } from 'react'
-import { selectionStore } from '@/store/selectionStore'
-import { clipboardStore } from '@/store/clipboardStore'
-import type { ClipboardData } from '@/store/clipboardStore'
-import { makeTabId } from '@/store/tabTypes'
+import type { AppAction } from '@/core/store/AppContext'
+import type { ClipboardData } from '@/core/store/clipboardStore'
+import { clipboardStore } from '@/core/store/clipboardStore'
+import { selectionStore } from '@/core/store/selectionStore'
+import { makeTabId } from '@/core/store/tabTypes'
 import type { AppState } from '@/types'
-import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
+import type { Dispatch, MutableRefObject } from 'react'
+import { useCallback } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

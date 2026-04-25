@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react'
+import { objectSelectionStore } from '@/core/store/objectSelectionStore'
+import type { SelectionMode } from '@/core/store/selectionStore'
 import { SliderInput } from '@/ux/widgets/SliderInput/SliderInput'
-import { objectSelectionStore } from '@/store/objectSelectionStore'
-import type { SelectionMode } from '@/store/selectionStore'
-import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolOptionsStyles } from './types'
+import React, { useEffect, useState } from 'react'
+import type { ToolDefinition, ToolHandler, ToolOptionsStyles, ToolPointerPos } from './types'
 
 // ─── Module-level options ──────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { cropStore } from '@/store/cropStore'
-import type { CropRect } from '@/store/cropStore'
+import { cropStore } from '@/core/store/cropStore'
+import type { CropRect } from '@/core/store/cropStore'
 import type { ToolDefinition, ToolHandler, ToolPointerPos, ToolContext, ToolOptionsStyles } from './types'
 
 // ─── Handler ──────────────────────────────────────────────────────────────────

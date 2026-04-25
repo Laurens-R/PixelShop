@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { useAppContext } from '@/store/AppContext'
+import { useAppContext } from '@/core/store/AppContext'
 import type { ColorGradingAdjustmentLayer, ColorGradingWheelParams } from '@/types'
 import { ParentConnectorIcon } from '@/ux/windows/ToolWindowIcons'
 import { ColorWheelWidget } from '@/ux/widgets/ColorWheelWidget/ColorWheelWidget'

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef } from 'react'
-import type { Dispatch, MutableRefObject } from 'react'
-import { historyStore } from '@/store/historyStore'
-import type { ClearHistoryOptions } from '@/store/historyStore'
+import type { AppAction } from '@/core/store/AppContext'
+import type { ClearHistoryOptions } from '@/core/store/historyStore'
+import { historyStore } from '@/core/store/historyStore'
+import type { TabRecord } from '@/core/store/tabTypes'
 import type { AppState, RGBAColor } from '@/types'
-import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
-import type { TabRecord } from '@/store/tabTypes'
+import type { Dispatch, MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo } from 'react'
-import type { Dispatch, MutableRefObject } from 'react'
-import type { AppState } from '@/types'
-import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
-import { transformStore } from '@/store/transformStore'
-import { selectionStore } from '@/store/selectionStore'
+import type { AppAction } from '@/core/store/AppContext'
+import { selectionStore } from '@/core/store/selectionStore'
+import { transformStore } from '@/core/store/transformStore'
 import { computeInverseAffine, computeInverseHomography } from '@/tools/transform'
+import type { AppState } from '@/types'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { applyAffineTransform, applyPerspectiveTransform } from '@/wasm'
+import type { Dispatch, MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

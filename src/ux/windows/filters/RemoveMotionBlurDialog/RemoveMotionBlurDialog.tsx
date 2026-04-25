@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { removeMotionBlur } from '@/wasm'
-import { selectionStore } from '@/store/selectionStore'
-import type { CanvasHandle } from '@/components/ui/Canvas/canvasHandle'
+import { selectionStore } from '@/core/store/selectionStore'
+import type { CanvasHandle } from '@/ux/main/Canvas/canvasHandle'
 import { ToolWindow } from '@/ux'
 import styles from './RemoveMotionBlurDialog.module.scss'
 

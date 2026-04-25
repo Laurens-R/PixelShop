@@ -1,11 +1,11 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
-import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
+import type { AppAction } from '@/core/store/AppContext'
+import { cloneHistoryEntries, historyStore } from '@/core/store/historyStore'
+import type { TabRecord, TabSnapshot } from '@/core/store/tabTypes'
+import { DEFAULT_SWATCHES, INITIAL_SNAPSHOT, makeTabId } from '@/core/store/tabTypes'
 import type { AppState } from '@/types'
-import type { AppAction } from '@/store/AppContext'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
-import { makeTabId, INITIAL_SNAPSHOT, DEFAULT_SWATCHES } from '@/store/tabTypes'
-import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
+import type { Dispatch, SetStateAction } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

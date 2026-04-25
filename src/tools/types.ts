@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { WebGPURenderer, GpuLayer } from '@/webgpu/WebGPURenderer'
+import type { WebGPURenderer, GpuLayer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 import type { RGBAColor, TextLayerState, ShapeLayerState } from '@/types'
 
 // ─── Runtime context passed to tool handlers on each pointer event ────────────

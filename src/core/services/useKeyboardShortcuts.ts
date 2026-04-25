@@ -1,6 +1,6 @@
+import { cropStore } from '@/core/store/cropStore'
+import { selectionStore } from '@/core/store/selectionStore'
 import { useEffect } from 'react'
-import { selectionStore } from '@/store/selectionStore'
-import { cropStore } from '@/store/cropStore'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

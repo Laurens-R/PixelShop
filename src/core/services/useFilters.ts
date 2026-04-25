@@ -1,11 +1,11 @@
-import { useCallback, useMemo } from 'react'
-import type { Dispatch, MutableRefObject } from 'react'
-import type { FilterKey, LayerState, AppState } from '@/types'
-import { isPixelLayer } from '@/types'
 import { sharpen, sharpenMore } from '@/graphicspipeline/webgpu/compute/filterCompute'
-import { selectionStore } from '@/store/selectionStore'
+import type { AppAction } from '@/core/store/AppContext'
+import { selectionStore } from '@/core/store/selectionStore'
+import type { AppState, FilterKey, LayerState } from '@/types'
+import { isPixelLayer } from '@/types'
 import type { CanvasHandle } from '@/ux/main/Canvas/canvasHandle'
-import type { AppAction } from '@/store/AppContext'
+import type { Dispatch, MutableRefObject } from 'react'
+import { useCallback, useMemo } from 'react'
 
 // ─── Selection-aware compositing helper ───────────────────────────────────────
 

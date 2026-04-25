@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
-import type { Dispatch } from 'react'
+import type { AppAction } from '@/core/store/AppContext'
 import type { RGBAColor } from '@/types'
-import type { AppAction } from '@/store/AppContext'
-import { serializePalette, parsePaletteFile } from '@/utils/paletteFormat'
+import { parsePaletteFile, serializePalette } from '@/utils/paletteFormat'
+import type { Dispatch } from 'react'
+import { useCallback, useRef, useState } from 'react'
 
 interface UsePaletteFileOpsOptions {
   swatches: RGBAColor[]
