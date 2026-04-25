@@ -96,6 +96,18 @@
   }
 }
 
+.pixelBrushCursor {
+  position: absolute;
+  display: none;
+  image-rendering: pixelated;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.85;
+  outline: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
 .gridOverlay {
   position: absolute;
   top: 0;

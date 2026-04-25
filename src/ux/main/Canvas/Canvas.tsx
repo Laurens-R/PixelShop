@@ -8,6 +8,7 @@ import type { TextLayerState, ShapeLayerState, MaskLayerState } from '@/types'
 import { TOOL_REGISTRY } from '@/tools'
 import type { ToolContext, ToolHandler } from '@/tools'
 import { brushOptions } from '@/tools/brush'
+import { pencilOptions, getPencilBrushPreviewDataUrl } from '@/tools/pencil'
 import { eraserOptions } from '@/tools/eraser'
 import { cloneStampOptions } from '@/tools/cloneStamp'
 import { cloneStampStore } from '@/core/store/cloneStampStore'
@@ -71,6 +72,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const toolOverlayRef = useRef<HTMLCanvasElement>(null)
   const brushCursorRef = useRef<HTMLDivElement>(null)
+  const pixelBrushCursorRef = useRef<HTMLDivElement>(null)
   const canvasWrapperRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const zoomRef = useRef(state.canvas.zoom)
@@ -594,6 +596,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
       // Always reset the class so brushCursorCrossHair doesn't linger when switching between circle-cursor tools
       brushCursorRef.current.className = styles.brushCursor
     }
+    if (pixelBrushCursorRef.current) pixelBrushCursorRef.current.style.display = 'none'
   }, [state.activeTool, isActive])
 
   const buildCtx = (): ToolContext | null => {
@@ -770,6 +773,35 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
           el.className = styles.brushCursor
         }
       }
+      if (tool === 'pencil' && pencilOptions.pixelBrush && pixelBrushCursorRef.current) {
+        const preview = getPencilBrushPreviewDataUrl()
+        if (preview) {
+          const dpr  = window.devicePixelRatio
+          const zoom = zoomRef.current
+          let canvasX = pos.x, canvasY = pos.y
+          if (pencilOptions.snapToBrush) {
+            canvasX = Math.round(pos.x / preview.width)  * preview.width
+            canvasY = Math.round(pos.y / preview.height) * preview.height
+          }
+          const scaledW = preview.width  * zoom / dpr
+          const scaledH = preview.height * zoom / dpr
+          const screenX = (canvasX) * zoom / dpr - scaledW / 2
+          const screenY = (canvasY) * zoom / dpr - scaledH / 2
+          const el = pixelBrushCursorRef.current
+          el.style.display          = 'block'
+          el.style.left             = `${screenX}px`
+          el.style.top              = `${screenY}px`
+          el.style.width            = `${scaledW}px`
+          el.style.height           = `${scaledH}px`
+          el.style.backgroundImage  = `url("${preview.dataUrl}")`
+          el.style.backgroundSize   = '100% 100%'
+        }
+      } else if (pixelBrushCursorRef.current && pixelBrushCursorRef.current.style.display !== 'none') {
+        pixelBrushCursorRef.current.style.display = 'none'
+      }
+      if (tool === 'pencil' && canvasRef.current) {
+        canvasRef.current.style.cursor = pencilOptions.pixelBrush ? 'none' : ''
+      }
       const ctx = buildCtx()
       if (ctx) toolHandlerRef.current.onHover?.(pos, ctx)
     },
@@ -800,6 +832,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
               width:  width  * state.canvas.zoom / window.devicePixelRatio,
               height: height * state.canvas.zoom / window.devicePixelRatio,
               cursor: (state.activeTool === 'brush' || state.activeTool === 'eraser') ? 'none'
+                    : (state.activeTool === 'pencil' && pencilOptions.pixelBrush) ? 'none'
                     : (state.activeTool === 'polygonal-selection') ? 'crosshair'
                     : undefined,
               // Bilinear when zoomed out (smooth downscale); nearest when at or above 100% (crisp pixel art)
@@ -818,6 +851,7 @@ export const Canvas = forwardRef<CanvasHandle, CanvasProps>(function Canvas(
             height={height}
           />
           <div ref={brushCursorRef} className={styles.brushCursor} />
+          <div ref={pixelBrushCursorRef} className={styles.pixelBrushCursor} />
           {state.canvas.showGrid && (() => {
             const { gridType, gridColor, gridSize, zoom } = state.canvas
             const dpr = window.devicePixelRatio

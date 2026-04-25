@@ -25,6 +25,21 @@ export const pencilOptions = {
   motionBlur:   5,      // 0 = round dabs, 100 = dabs elongated along stroke direction (size > 1)
   /** The currently active pixel brush. null = use the standard shape-based pencil. */
   pixelBrush:   null as PixelBrush | null,
+  /**
+   * Snap brush position to a grid aligned to the brush dimensions so stamps
+   * never overlap each other — only effective when a pixel brush is active.
+   */
+  snapToBrush: false,
+}
+
+/**
+ * Snap canvas coordinates to the nearest brush-grid position.
+ * The grid cell size matches the brush dimensions, so stamps tile perfectly.
+ */
+function snapToBrushGrid(x: number, y: number, brush: PixelBrush): { x: number; y: number } {
+  const gx = Math.round(x / brush.width)  * brush.width
+  const gy = Math.round(y / brush.height) * brush.height
+  return { x: gx, y: gy }
 }
 
 // ─── Pixel brush stamp cache ──────────────────────────────────────────────────
@@ -39,6 +54,38 @@ function getBrushPixels(brush: PixelBrush): Uint8ClampedArray {
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
   brushPixelCache.set(brush.id, bytes)
   return bytes
+}
+
+/**
+ * Returns a CSS data-URL for the current pixel brush, or null if no brush is active.
+ * Cached so the canvas DOM update is cheap (only regenerated when the brush changes).
+ */
+let _brushPreviewCache: { id: string; dataUrl: string } | null = null
+
+export function getPencilBrushPreviewDataUrl(): { dataUrl: string; width: number; height: number } | null {
+  const brush = pencilOptions.pixelBrush
+  if (!brush) return null
+
+  if (_brushPreviewCache?.id === brush.id) {
+    return { dataUrl: _brushPreviewCache.dataUrl, width: brush.width, height: brush.height }
+  }
+
+  const pixels = getBrushPixels(brush)
+  const cvs = document.createElement('canvas')
+  cvs.width  = brush.width
+  cvs.height = brush.height
+  const ctx = cvs.getContext('2d')!
+  const imageData = ctx.createImageData(brush.width, brush.height)
+  imageData.data.set(pixels.subarray(0, brush.width * brush.height * 4))
+  ctx.putImageData(imageData, 0, 0)
+  const dataUrl = cvs.toDataURL()
+  _brushPreviewCache = { id: brush.id, dataUrl }
+  return { dataUrl, width: brush.width, height: brush.height }
+}
+
+/** Invalidate the preview cache (call when the active brush changes). */
+export function invalidatePencilBrushPreview(): void {
+  _brushPreviewCache = null
 }
 
 // ─── Module-level context refs (for selection capture from the Options UI) ────
@@ -307,7 +354,11 @@ function createPencilHandler(): ToolHandler {
       if (pencilOptions.size === 1 || brush) {
         // 1px path — direct Bresenham, no smoothing (also used for pixel brushes)
         lastRendered = null; lastCtrl = null
-        const px = Math.round(x), py = Math.round(y)
+        let px = Math.round(x), py = Math.round(y)
+        if (brush && pencilOptions.snapToBrush) {
+          const snapped = snapToBrushGrid(x, y, brush)
+          px = snapped.x; py = snapped.y
+        }
         const { renderer, layer, layers, primaryColor, selectionMask, render, growLayerToFit } = ctx
         const { r, g, b, a } = primaryColor
         const sel = selectionMask ? { mask: selectionMask, width: renderer.pixelWidth } : undefined
@@ -354,7 +405,11 @@ function createPencilHandler(): ToolHandler {
 
       if (pencilOptions.size === 1 || brush) {
         if (!lastPx) return
-        const x1 = Math.round(x), y1 = Math.round(y)
+        let x1 = Math.round(x), y1 = Math.round(y)
+        if (brush && pencilOptions.snapToBrush) {
+          const snapped = snapToBrushGrid(x, y, brush)
+          x1 = snapped.x; y1 = snapped.y
+        }
         if (lastPx.x === x1 && lastPx.y === y1) return
         const { renderer, layer, layers, primaryColor, selectionMask, render, growLayerToFit } = ctx
         const { r, g, b, a } = primaryColor
@@ -600,6 +655,7 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
   const [smoothing,    setSmoothing]   = useState(pencilOptions.smoothing)
   const [motionBlur,   setMotionBlur]  = useState(pencilOptions.motionBlur)
   const [activeBrush,  setActiveBrush] = useState<PixelBrush | null>(null)
+  const [snapToBrush,  setSnapToBrush] = useState(pencilOptions.snapToBrush)
   const [flyoutOpen,   setFlyoutOpen]  = useState(false)
   const [modalOpen,    setModalOpen]   = useState(false)
   const [userBrushes,  setUserBrushes] = useState<PixelBrush[]>(() => pixelBrushStore.getUserBrushes())
@@ -628,10 +684,16 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
     setPixelPerfect(e.target.checked)
   }
 
+  const handleSnapToBrush = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    pencilOptions.snapToBrush = e.target.checked
+    setSnapToBrush(e.target.checked)
+  }
+
   const handleSelectBrush = useCallback((id: string | null): void => {
     const all = [...state.pixelBrushes, ...userBrushes]
     const found = id ? (all.find(b => b.id === id) ?? null) : null
     pencilOptions.pixelBrush = found
+    invalidatePencilBrushPreview()
     setActiveBrush(found)
   }, [state.pixelBrushes, userBrushes])
 
@@ -689,6 +751,19 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
         Pixel perfect
       </label>
       <span className={styles.optSep} />
+      {activeBrush && (
+        <>
+          <label className={styles.optCheckLabel} title="Snap to brush grid — stamps tile perfectly without overlap">
+            <input
+              type="checkbox"
+              checked={snapToBrush}
+              onChange={handleSnapToBrush}
+            />
+            Snap to brush
+          </label>
+          <span className={styles.optSep} />
+        </>
+      )}
       <label className={styles.optLabel} title="Filter pointer noise — higher values smooth the path at the cost of slight lag">Smoothing:</label>
       <SliderInput value={smoothing} min={0} max={100} suffix="%" inputWidth={42} onChange={handleSmoothing} />
       <span className={styles.optSep} />
