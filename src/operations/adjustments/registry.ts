@@ -1,5 +1,5 @@
 import type { AdjustmentType, AdjustmentParamsMap } from '@/types'
-import { createDefaultCurvesParams } from '@/adjustments/curves'
+import { createDefaultCurvesParams } from '@/operations/adjustments/curves'
 
 export interface AdjustmentRegistrationEntry<T extends AdjustmentType = AdjustmentType> {
   adjustmentType: T

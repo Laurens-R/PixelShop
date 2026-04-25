@@ -1,4 +1,4 @@
-import { gpuComputeNLinks, gpuComputeDataTerms, isGrabCutComputeReady } from '@/webgpu/compute/grabcutCompute'
+import { gpuComputeNLinks, gpuComputeDataTerms, isGrabCutComputeReady } from '@/graphicspipeline/webgpu/compute/grabcutCompute'
 import {
   grabCutComputeBeta,
   grabCutKmeansInit,

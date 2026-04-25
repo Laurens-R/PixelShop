@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { median } from '@/webgpu/compute/filterCompute'
+import { median } from '@/graphicspipeline/webgpu/compute/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/ui/Canvas/canvasHandle'
 import { ToolWindow } from '@/ux'

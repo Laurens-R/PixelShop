@@ -1,4 +1,4 @@
-import type { WebGPURenderer, GpuLayer } from '@/webgpu/rendering/WebGPURenderer'
+import type { WebGPURenderer, GpuLayer } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 
 /**
  * Bresenham's line algorithm — plots every integer pixel between (x0,y0) and

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CurvesChannel, CurvesControlPoint, CurvesVisualAids } from '@/types'
-import { buildCurveLut, detectLutClipping } from '@/adjustments/curves'
+import { buildCurveLut, detectLutClipping } from '@/operations/adjustments/curves'
 import styles from './CurvesGraph.module.scss'
 
 // ─── Constants ────────────────────────────────────────────────────────────────

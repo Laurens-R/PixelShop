@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { motionBlur } from '@/webgpu/compute/filterCompute'
+import { motionBlur } from '@/graphicspipeline/webgpu/compute/filterCompute'
 import { selectionStore } from '@/store/selectionStore'
 import type { CanvasHandle } from '@/components/ui/Canvas/canvasHandle'
 import { ToolWindow } from '@/ux'

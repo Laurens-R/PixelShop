@@ -1,7 +1,7 @@
 import type { AdjustmentLayerState, LayerState, RGBAColor, OutlineParams } from '@/types'
 import { isGroupLayer } from '@/types'
-import { buildCurvesLuts } from '@/adjustments/curves'
-import type { GpuLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/webgpu/WebGPURenderer'
+import { buildCurvesLuts } from '@/operations/adjustments/curves'
+import type { GpuLayer, AdjustmentRenderOp, RenderPlanEntry } from '@/graphicspipeline/webgpu/rendering/WebGPURenderer'
 import { buildRootLayerIds } from '@/utils/layerTree'
 
 function srgbByteToLinear(r: number, g: number, b: number): { r: number; g: number; b: number } {

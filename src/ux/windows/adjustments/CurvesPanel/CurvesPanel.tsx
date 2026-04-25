@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { CurvesAdjustmentLayer, CurvesChannel, CurvesControlPoint } from '@/types'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { useCurvesHistogram } from '@/hooks/useCurvesHistogram'
 import {
   cloneCurvesParams,
@@ -9,11 +9,11 @@ import {
   validateCurvesParams,
   withDirtyPresetRef,
   makeIdentityCurve,
-} from '@/adjustments/curves'
+} from '@/operations/adjustments/curves'
 import {
   BUILTIN_CURVES_PRESETS,
   clonePresetChannels,
-} from '@/adjustments/curvesPresets'
+} from '@/operations/adjustments/curvesPresets'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import {
   getAdjustmentClipboardData,
