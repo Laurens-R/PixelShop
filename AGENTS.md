@@ -66,9 +66,10 @@ Components are divided into four categories. Choosing the right category is impo
 
 | Category | Path | What it can access |
 |---|---|---|
-| **Widgets** | `ux/widgets/` | Props only. Stateless, reusable anywhere. No app state. |
-| **Windows / Panels** | `ux/main/`, `ux/windows/` | `AppContext` directly. Owns its own state reads and dispatches. |
-| **Modals** | `ux/modals/` | Wraps `ModalDialog`. Composes widgets and panels. |
+| **Widgets** | `ux/widgets/` | UX widgets. Stateless, reusable anywhere. No app state. |
+| **Main UX Framework** | `ux/main/`  | The core overall UX layout |
+| **Floating Window Panels** | `ux/windows/` | Windows for adjustment layers, effects, etc |
+| **Modals** | `ux/modals/` | Wraps `ModalDialog`. Dialogs that are blocking the main UX |
 
 **The key rule:** a widget must never reach into `AppContext`, and a layout (main) component must never duplicate logic that belongs in a panel. For example, `RightPanel` (`ux/main/`) hosts `ColorPicker` and `LayerPanel` — it renders them, not their contents.
 
