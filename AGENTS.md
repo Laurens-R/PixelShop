@@ -17,52 +17,62 @@ npm run typecheck    # Type-check both main (Node) and renderer (web) processes
 
 PixelShop is an Electron app split into two processes that communicate over IPC:
 
-- **Main process** (`electron/main/`) — Node.js. Handles native file I/O, OS dialogs, and IPC handlers. Never imported from the renderer.
-- **Preload** (`electron/preload/`) — Exposes a typed, sandboxed API to the renderer via `window.electron`. This is the only bridge between the two processes.
+- **Main process** (`electron/main/`) — Node.js. Handles native file I/O, OS dialogs, IPC handlers, and ML model inference (SAM, RVM). Never imported from the renderer.
+- **Preload** (`electron/preload/`) — Exposes a typed, sandboxed API to the renderer via `window.api`. This is the only bridge between the two processes.
 - **Renderer** (`src/`) — React 19 app. All UI, canvas drawing, and tool logic lives here.
 
 ### Renderer structure
 
-The renderer is organized around a clear separation of concerns:
+The renderer is organized into five top-level domains:
 
 ```
 src/
-  App.tsx              ← thin orchestrator: composes hooks, renders layout
-  store/               ← global state (AppContext, CanvasContext) + module-level singletons
-  hooks/               ← all business logic
-  components/          ← all UI
-  tools/               ← drawing tool handlers + options UIs
-  adjustments/         ← adjustment layer registry, curves data, AdjustmentIcons
-  filters/             ← filter registry
-  rasterization/       ← unified flatten/merge/export pipeline
-  webgpu/              ← WebGPU renderer, WGSL shaders
-  wasm/                ← TypeScript wrapper over C++/WASM
-  export/              ← file export helpers
-  types/               ← shared TypeScript types
-  utils/               ← palette, color, and miscellaneous utilities
-  styles/              ← global SCSS
+  App.tsx                    ← thin orchestrator: composes hooks, renders layout
+  main.tsx                   ← entry point
+  core/
+    io/                      ← file export helpers (exportPng, exportJpeg, exportWebp, exportTiff, exportTga, imageLoader)
+    operations/
+      adjustments/           ← adjustment layer registry + curves data
+      filters/               ← filter registry
+    services/                ← all business logic hooks (20+)
+    store/                   ← AppContext, CanvasContext, module-level singletons, tabTypes
+  graphicspipeline/
+    rasterization/           ← unified flatten/merge/export pipeline
+    webgpu/                  ← WebGPU renderer, compute pipelines, WGSL shaders
+  styles/                    ← global.scss, _mixins.scss, _variables.scss
+  tools/                     ← drawing tool handlers + options UIs + algorithm/
+  types/                     ← shared TypeScript types (index.ts)
+  utils/                     ← palette, color, layer tree, and miscellaneous utilities
+  ux/                        ← all UI components
+    main/                    ← layout chrome (Canvas, MenuBar, RightPanel, StatusBar, TabBar, ToolOptionsBar, Toolbar, TopBar, TransformToolbar)
+    modals/                  ← dialogs wrapping ModalDialog
+    widgets/                 ← stateless, reusable UI components
+    windows/
+      adjustments/           ← one panel component per adjustment type (11)
+      effects/               ← one options component per real-time effect (7)
+      filters/               ← one dialog component per filter (16)
+  wasm/                      ← TypeScript wrapper over C++/WASM
 ```
 
-**`App.tsx` is a thin orchestrator.** It composes hooks and renders the layout — nothing more. Business logic that would otherwise live inline in `App.tsx` belongs in a dedicated hook under `src/hooks/`.
+**`App.tsx` is a thin orchestrator.** It composes hooks and renders the layout — nothing more. Business logic that would otherwise live inline in `App.tsx` belongs in a dedicated hook under `src/core/services/`.
 
-### Hooks (`src/hooks/`)
+### Hooks (`src/core/services/`)
 
 Each hook owns **one cohesive concern** and encapsulates all business logic for that domain. Hooks accept a `canvasHandleRef` and `dispatch` as inputs and never hold UI state. Examples of the expected granularity: file operations (`useFileOps`), layer manipulation (`useLayers`), undo/redo history (`useHistory`), canvas dimension transforms (`useCanvasTransforms`). If a hook is doing two clearly unrelated jobs, split it.
 
-### Components (`src/components/`)
+### Components (`src/ux/`)
 
 Components are divided into four categories. Choosing the right category is important — it defines what the component is allowed to know about.
 
 | Category | Path | What it can access |
 |---|---|---|
-| **Widgets** | `widgets/` | Props only. Stateless, reusable anywhere. No app state. |
-| **Panels** | `panels/` | `AppContext` directly. Owns its own state reads and dispatches. |
-| **Dialogs** | `dialogs/` | Wraps `ModalDialog`. Composes widgets and panels. |
-| **Window** | `window/` | Layout chrome. Embeds panels and widgets; never re-implements panel logic inline. |
+| **Widgets** | `ux/widgets/` | Props only. Stateless, reusable anywhere. No app state. |
+| **Windows / Panels** | `ux/main/`, `ux/windows/` | `AppContext` directly. Owns its own state reads and dispatches. |
+| **Modals** | `ux/modals/` | Wraps `ModalDialog`. Composes widgets and panels. |
 
-**The key rule:** a widget must never reach into `AppContext`, and a window component must never duplicate logic that belongs in a panel. For example, `RightPanel` (window) hosts `ColorPicker` and `LayerPanel` (panels) — it renders them, not their contents.
+**The key rule:** a widget must never reach into `AppContext`, and a layout (main) component must never duplicate logic that belongs in a panel. For example, `RightPanel` (`ux/main/`) hosts `ColorPicker` and `LayerPanel` — it renders them, not their contents.
 
-**Folder conventions:** one component per folder with a PascalCase name. Each folder contains exactly `ComponentName.tsx` and `ComponentName.module.scss`. All components are exported from `src/components/index.ts`. Always check existing components before building new UI.
+**Folder conventions:** one component per folder with a PascalCase name. Each folder contains exactly `ComponentName.tsx` and `ComponentName.module.scss`. All components are exported from `src/ux/index.ts`. Always check existing components before building new UI.
 
 ### Tools (`src/tools/`)
 
@@ -76,6 +86,7 @@ Every handler factory receives a **`ToolContext`** on each pointer event:
 - `ctx.renderer` — the `WebGPURenderer` instance
 - `ctx.layer` — the active `GpuLayer` (layer-local pixel data + offset)
 - `ctx.layers` — all `GpuLayer` objects
+- `ctx.primaryColor`, `ctx.secondaryColor`, `ctx.zoom`, `ctx.selectionMask`, etc.
 
 **Coordinate spaces:** `GpuLayer.data` is in **layer-local** space (`layerWidth × layerHeight × 4`). Canvas-space operations (e.g. `selectionStore.floodFillSelect`) require a canvas-sized buffer. When sampling only the active layer at canvas-space coordinates, scatter `layer.data` into a canvas-sized `Uint8Array` offset by `layer.offsetX, layer.offsetY`.
 
@@ -83,20 +94,20 @@ Every handler factory receives a **`ToolContext`** on each pointer event:
 
 Global app state (active tool, colors, layers, swatches, selectedLayerIds) flows through `AppContext` via `useReducer`. The pattern for adding new state:
 1. Add the new field to `AppState` in `src/types/index.ts`.
-2. Add the reducer action to `AppContext.tsx`.
+2. Add the reducer action to `src/core/store/AppContext.tsx`.
 3. Export `AppAction` so hooks outside `AppContext.tsx` can dispatch.
 
 Tab state (multi-document) lives in `useTabs`. Canvas pixel data lives in WebGPU while a tab is active and is serialized to `savedLayerData` only when the tab is backgrounded. Operations that change the canvas dimensions (resize, crop) must increment `canvasKey` on the tab record to force a Canvas remount with the new size.
 
 Avoid re-initializing canvas layers in effects that list `rendererRef.current` as a dependency — use a `hasInitializedRef` guard instead.
 
-**Module-level singletons** (`src/store/`): stateful objects that tools and canvas components import directly without going through React. These include `selectionStore` (selection mask + flood-fill), `historyStore`, `clipboardStore`, `adjustmentClipboardStore`, `adjustmentPreviewStore`, `cursorStore`, `cropStore`, and `transformStore`. They are not React state; update them imperatively and call their `notify()` method to trigger subscribers.
+**Module-level singletons** (`src/core/store/`): stateful objects that tools and canvas components import directly without going through React. These include `selectionStore` (selection mask + pending geometry), `historyStore`, `clipboardStore`, `adjustmentClipboardStore`, `adjustmentPreviewStore`, `cursorStore`, `cropStore`, `transformStore`, `objectSelectionStore`, and `polygonalSelectionStore`. They are not React state; update them imperatively and call their `notify()` method to trigger subscribers.
 
 **`selectedLayerIds`** is kept in `AppState` (not as local panel state) so that hooks like `useLayers` can act on multi-layer selections. Any action that resets the layer stack (`SET_ACTIVE_LAYER`, `REORDER_LAYERS`, `RESTORE_LAYERS`, `NEW_CANVAS`, `OPEN_FILE`, `RESTORE_TAB`, `SWITCH_TAB`) also resets `selectedLayerIds` to `[]`.
 
-### WebGPU (`src/webgpu/`)
+### WebGPU (`src/graphicspipeline/webgpu/`)
 
-`WebGPURenderer.ts` is the GPU pixel read/write layer. It operates on `GpuLayer` objects:
+`rendering/WebGPURenderer.ts` is the GPU pixel read/write layer. `AdjustmentEncoder.ts` owns the 25 compute pipelines for adjustments and real-time effects. `compute/filterCompute.ts` handles destructive filter compute passes. It operates on `GpuLayer` objects:
 
 ```ts
 interface GpuLayer {
@@ -122,58 +133,57 @@ Key methods used by tools and layer operations:
 
 Do not bypass `WebGPURenderer` to manipulate pixel data directly.
 
-WGSL shaders live in `src/webgpu/shaders/`:
-- `adjustments/` — one file per adjustment type
-- `filters/` — one file per filter type
+WGSL shaders live in `src/graphicspipeline/webgpu/shaders/rendering/`:
 - `composite.ts`, `blit.ts`, `checker.ts` — compositing and utility passes
 
-The render plan for the on-screen preview is built in `src/components/window/Canvas/canvasPlan.ts` and consumed by `WebGPURenderer`.
+Adjustment shaders are compiled and registered inside `AdjustmentEncoder.ts`. Filter shaders are compiled inside `filterCompute.ts`.
 
-Layer compositing for flatten/merge/export is centralized in the unified rasterization pipeline (`src/rasterization/`) and executed from a shared render plan. Do not add separate compositing implementations for these operations.
+The render plan for the on-screen preview is built in `src/ux/main/Canvas/canvasPlan.ts` and consumed by `WebGPURenderer`.
+
+Layer compositing for flatten/merge/export is centralized in the unified rasterization pipeline (`src/graphicspipeline/rasterization/`) and executed from a shared render plan. Do not add separate compositing implementations for these operations.
 
 ### Adjustment Layers
 
 Adjustment layers are non-destructive pixel operations inserted into the layer stack. They are backed by WGSL compute shaders and rendered in real time.
 
-**Registry** (`src/adjustments/registry.ts`): every adjustment type is registered with a `label`, `defaultParams`, and a `group`:
-- `'color-adjustments'` — shown in the **Adjustments** top menu
-- `'real-time-effects'` — shown in the **Effects** top menu (bloom, chromatic-aberration, halation, color-key)
+**Registry** (`src/core/operations/adjustments/registry.ts`): every adjustment type is registered with a `label`, `defaultParams`, and a `group`:
+- `'color-adjustments'` — shown in the **Adjustments** top menu (11 types)
+- `'real-time-effects'` — shown in the **Effects** top menu (7 types: bloom, chromatic-aberration, halation, color-key, drop-shadow, glow, outline)
 
 **Adding a new adjustment type:**
 1. Add the `AdjustmentType` literal and its `AdjustmentParamsMap` entry in `src/types/index.ts`.
-2. Register it in `src/adjustments/registry.ts` with label, defaults, and group.
-3. Write the WGSL shader in `src/webgpu/shaders/adjustments/<type>.ts`.
-4. Add the `AdjustmentRenderOp` variant + uniform dispatch in `WebGPURenderer.ts`.
-5. Add the render-plan mapping in `src/components/window/Canvas/canvasPlan.ts`.
-6. Create a panel component in `src/components/panels/<TypeName>Panel/`.
+2. Register it in `src/core/operations/adjustments/registry.ts` with label, defaults, and group.
+3. Write the WGSL shader and register it in `src/graphicspipeline/webgpu/AdjustmentEncoder.ts`.
+4. Add the `AdjustmentRenderOp` variant + uniform dispatch in `AdjustmentEncoder.ts`.
+5. Add the render-plan mapping in `src/ux/main/Canvas/canvasPlan.ts`.
+6. Create a panel component in `src/ux/windows/adjustments/<TypeName>Panel/` or `src/ux/windows/effects/<TypeName>Options/`.
 7. Ensure unified rasterization includes it for flatten/export/merge.
 
-The WGSL uniform struct must match the `Float32Array` passed from `WebGPURenderer.ts` **exactly** (byte offsets, padding, total size).
+The WGSL uniform struct must match the `Float32Array` passed from `AdjustmentEncoder.ts` **exactly** (byte offsets, padding, total size).
 
 ### Filters
 
-Filters are destructive one-shot operations applied to the current pixel layer. They run as WebGPU compute passes and are dispatched from `useFilters`.
+Filters are destructive one-shot operations applied to the current pixel layer. They run as WebGPU compute passes (or WASM) and are dispatched from `useFilters`.
 
-**Registry** (`src/filters/registry.ts`): each `FilterKey` entry maps to a label and a dialog component. WGSL shaders live in `src/webgpu/shaders/filters/<key>.ts`.
+**Registry** (`src/core/operations/filters/registry.ts`): each `FilterKey` entry maps to a label, optional `instant` flag, and a `group`.
 
 **Adding a new filter:**
 1. Add the `FilterKey` literal in `src/types/index.ts`.
-2. Register it in `src/filters/registry.ts`.
-3. Write the WGSL shader in `src/webgpu/shaders/filters/<key>.ts`.
-4. Add the dispatch path in `WebGPURenderer.ts` (or `filterCompute.ts`).
-5. Create a dialog in `src/components/dialogs/<Name>Dialog/`.
-6. Wire it up in `useFilters` and the Filters top menu.
+2. Register it in `src/core/operations/filters/registry.ts`.
+3. Implement the shader/compute path in `src/graphicspipeline/webgpu/compute/filterCompute.ts` (or WASM).
+4. Create a dialog in `src/ux/windows/filters/<Name>Dialog/`.
+5. Wire it up in `useFilters` and the Filters top menu.
 
 ### Unified Rasterization Pipeline
 
-- Flatten, merge, and export must all run through the same centralized rasterization pipeline (`src/rasterization/`). Do not add ad-hoc compositing paths for one operation.
+- Flatten, merge, and export must all run through the same centralized rasterization pipeline (`src/graphicspipeline/rasterization/`). Do not add ad-hoc compositing paths for one operation.
 - The pipeline only supports `RasterBackend = 'gpu'`. There is no CPU fallback.
 - `rasterizeDocument({ plan, width, height, reason, renderer })` is the single entry point. `reason` is one of `'flatten' | 'export' | 'sample' | 'merge'`.
 - Temporary preview-bypass state must never leak into final flatten/export/merge outputs.
 - If flatten/export/merge execution fails, surface the error to the user. Never silently no-op.
 
 Maintenance checklist for new adjustment/filter types:
-1. Add the new adjustment/filter to the adjustment registry and related adjustment types.
+1. Add the new adjustment/filter to the registry and related types.
 2. Add its render-plan entry mapping.
 3. Add its WebGPU pass/shader path.
 4. Ensure unified rasterization includes it for flatten/export/merge.
@@ -202,7 +212,7 @@ import styles from './MyComponent.module.scss'
 
 ### IPC
 
-Main → Renderer communication goes through `electron/main/ipc.ts` and the typed preload at `electron/preload/index.ts`. In the renderer, use `window.electron.ipcRenderer.*`. Never import Electron modules directly in `src/`.
+Main → Renderer communication goes through `electron/main/ipc.ts` and the typed preload at `electron/preload/index.ts`. In the renderer, use `window.api.*`. Never import Electron modules directly in `src/`.
 
 ### Top Menu
 
@@ -210,8 +220,8 @@ Menu order: **File → Edit → Select → Layer → Adjustments → Effects →
 
 - **Select** menu: Invert Selection (`Ctrl+Shift+I`)
 - **Adjustments** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'color-adjustments'`
-- **Effects** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'real-time-effects'` (bloom, chromatic-aberration, halation, color-key)
-- **Layer** menu: New Layer, Duplicate Layer, Delete Layer | Rasterize Layer | Merge Selected, Merge Down, Merge Visible, Flatten Image
+- **Effects** menu: all `ADJUSTMENT_REGISTRY` entries with `group: 'real-time-effects'` (bloom, chromatic-aberration, halation, color-key, drop-shadow, glow, outline)
+- **Layer** menu: New Layer, Duplicate Layer, Delete Layer | Rasterize Layer | Group Layers, Ungroup Layers | Merge Selected, Merge Down, Merge Visible, Flatten Image
 
 ### Pointer / Tablet Input
 
@@ -230,7 +240,7 @@ For tools with a custom cursor (brush, eraser), hide the native cursor (`cursor:
 
 ## WASM / C++ Layer
 
-CPU-intensive operations (flood fill, blur, resize, dithering, quantization) are implemented in C++17 under `wasm/src/` and compiled to WASM via Emscripten. The TypeScript side of this boundary is `src/wasm/index.ts`, which exposes a clean async API. Never import from `src/wasm/generated/` directly.
+CPU-intensive operations (flood fill, blur, resize, dithering, quantization, inpainting, segmentation, transforms) are implemented in C++17 under `wasm/src/` and compiled to WASM via Emscripten. The TypeScript side of this boundary is `src/wasm/index.ts`, which exposes a clean async API. Never import from `src/wasm/generated/` directly.
 
 ### Adding a new operation
 1. Implement in a new `.h`/`.cpp` under `wasm/src/`.
@@ -245,12 +255,12 @@ CPU-intensive operations (flood fill, blur, resize, dithering, quantization) are
 - `src/wasm/generated/` is gitignored — run `build:wasm` on a fresh clone.
 
 ### Setting up Emscripten (first time)
-```powershell
+```bash
 git clone https://github.com/emscripten-core/emsdk.git
 cd emsdk
-.\emsdk install latest
-.\emsdk activate latest
-.\emsdk_env.ps1         # re-run in each new terminal
+./emsdk install latest
+./emsdk activate latest
+source ./emsdk_env.sh   # re-run in each new terminal
 
 # Back in PixelShop:
 npm run build:wasm
