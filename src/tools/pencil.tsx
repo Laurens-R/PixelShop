@@ -751,19 +751,6 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
         Pixel perfect
       </label>
       <span className={styles.optSep} />
-      {activeBrush && (
-        <>
-          <label className={styles.optCheckLabel} title="Snap to brush grid — stamps tile perfectly without overlap">
-            <input
-              type="checkbox"
-              checked={snapToBrush}
-              onChange={handleSnapToBrush}
-            />
-            Snap to brush
-          </label>
-          <span className={styles.optSep} />
-        </>
-      )}
       <label className={styles.optLabel} title="Filter pointer noise — higher values smooth the path at the cost of slight lag">Smoothing:</label>
       <SliderInput value={smoothing} min={0} max={100} suffix="%" inputWidth={42} onChange={handleSmoothing} />
       <span className={styles.optSep} />
@@ -812,6 +799,19 @@ function PencilOptions({ styles }: { styles: ToolOptionsStyles }): React.JSX.Ele
           open={modalOpen}
           onClose={() => setModalOpen(false)}
         />
+      )}
+      {activeBrush && (
+        <>
+          <label className={styles.optCheckLabel} title="Snap to brush grid — stamps tile perfectly without overlap">
+            <input
+              type="checkbox"
+              checked={snapToBrush}
+              onChange={handleSnapToBrush}
+            />
+            Snap to brush
+          </label>
+          <span className={styles.optSep} />
+        </>
       )}
     </>
   )
