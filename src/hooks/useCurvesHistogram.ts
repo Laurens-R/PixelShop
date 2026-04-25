@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { computeHistogramRGBA } from '@/wasm'
 import type { CurvesChannel } from '@/types'
 import type { CurvesHistogramResult } from '@/wasm/types'

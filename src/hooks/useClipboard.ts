@@ -6,7 +6,7 @@ import type { ClipboardData } from '@/store/clipboardStore'
 import { makeTabId } from '@/store/tabTypes'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ export interface UseClipboardReturn {
 async function encodePng(data: Uint8Array, width: number, height: number): Promise<string> {
   const canvas = new OffscreenCanvas(width, height)
   const ctx = canvas.getContext('2d')!
-  ctx.putImageData(new ImageData(new Uint8ClampedArray(data.buffer), width, height), 0, 0)
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0)
   const blob = await canvas.convertToBlob({ type: 'image/png' })
   const ab = await blob.arrayBuffer()
   const bytes = new Uint8Array(ab)

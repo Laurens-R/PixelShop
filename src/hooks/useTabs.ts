@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { cloneHistoryEntries, historyStore } from '@/store/historyStore'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { makeTabId, INITIAL_SNAPSHOT, DEFAULT_SWATCHES } from '@/store/tabTypes'
 import type { TabRecord, TabSnapshot } from '@/store/tabTypes'
 

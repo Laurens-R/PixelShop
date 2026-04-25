@@ -1,6 +1,6 @@
 import { useCallback, type MutableRefObject } from 'react'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
-import type { ExportSettings } from '@/components/dialogs/ExportDialog/ExportDialog'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
+import type { ExportSettings } from '@/ux/modals/ExportDialog/ExportDialog'
 import type { AppState } from '@/types'
 import { exportPng } from '@/io/exportPng'
 import { exportJpeg } from '@/io/exportJpeg'

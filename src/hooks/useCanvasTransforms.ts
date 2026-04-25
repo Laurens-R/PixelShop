@@ -4,10 +4,10 @@ import { resizeBilinear, resizeNearest } from '@/wasm'
 import { cropStore } from '@/store/cropStore'
 import type { AppState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import type { TabRecord } from '@/store/tabTypes'
-import type { ResizeImageSettings } from '@/components/dialogs/ResizeImageDialog/ResizeImageDialog'
-import type { ResizeCanvasSettings } from '@/components/dialogs/ResizeCanvasDialog/ResizeCanvasDialog'
+import type { ResizeImageSettings } from '@/ux/modals/ResizeImageDialog/ResizeImageDialog'
+import type { ResizeCanvasSettings } from '@/ux/modals/ResizeCanvasDialog/ResizeCanvasDialog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

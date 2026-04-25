@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import type { Dispatch, MutableRefObject } from 'react'
 import type { AppState, LayerState, PixelLayerState } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
+import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { showOperationError } from '@/utils/userFeedback'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
