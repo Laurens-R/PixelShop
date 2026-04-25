@@ -2,37 +2,37 @@ import React, { useEffect } from 'react'
 import { useAppContext } from '@/store/AppContext'
 import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer, DropShadowAdjustmentLayer, GlowAdjustmentLayer, OutlineAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/components/ui/Canvas/Canvas'
-import { BrightnessContrastPanel } from '../adjustments/BrightnessContrastPanel/BrightnessContrastPanel'
-import { HueSaturationPanel } from '../adjustments/HueSaturationPanel/HueSaturationPanel'
-import { ColorVibrancePanel } from '../adjustments/ColorVibrancePanel/ColorVibrancePanel'
-import { ColorBalancePanel } from '../adjustments/ColorBalancePanel/ColorBalancePanel'
-import { BlackAndWhitePanel } from '../adjustments/BlackAndWhitePanel/BlackAndWhitePanel'
-import { ColorTemperaturePanel } from '../adjustments/ColorTemperaturePanel/ColorTemperaturePanel'
-import { InvertPanel } from '../adjustments/InvertPanel/InvertPanel'
-import { SelectiveColorPanel } from '../adjustments/SelectiveColorPanel/SelectiveColorPanel'
-import { CurvesPanel } from '../adjustments/CurvesPanel/CurvesPanel'
-import { ColorGradingPanel } from '../adjustments/ColorGradingPanel/ColorGradingPanel'
-import { ReduceColorsPanel } from '../adjustments/ReduceColorsPanel/ReduceColorsPanel'
-import { BloomOptions } from '../effects/BloomOptions/BloomOptions'
-import { ChromaticAberrationOptions } from '../effects/ChromaticAberrationOptions/ChromaticAberrationOptions'
-import { HalationOptions } from '../effects/HalationOptions/HalationOptions'
-import { ColorKeyPanel } from '../effects/ColorKeyPanel/ColorKeyPanel'
-import { DropShadowOptions } from '../effects/DropShadowOptions/DropShadowOptions'
-import { GlowOptions } from '../effects/GlowOptions/GlowOptions'
-import { OutlineOptions } from '../effects/OutlineOptions/OutlineOptions'
+import { BrightnessContrastPanel } from './adjustments/BrightnessContrastPanel/BrightnessContrastPanel'
+import { HueSaturationPanel } from './adjustments/HueSaturationPanel/HueSaturationPanel'
+import { ColorVibrancePanel } from './adjustments/ColorVibrancePanel/ColorVibrancePanel'
+import { ColorBalancePanel } from './adjustments/ColorBalancePanel/ColorBalancePanel'
+import { BlackAndWhitePanel } from './adjustments/BlackAndWhitePanel/BlackAndWhitePanel'
+import { ColorTemperaturePanel } from './adjustments/ColorTemperaturePanel/ColorTemperaturePanel'
+import { InvertPanel } from './adjustments/InvertPanel/InvertPanel'
+import { SelectiveColorPanel } from './adjustments/SelectiveColorPanel/SelectiveColorPanel'
+import { CurvesPanel } from './adjustments/CurvesPanel/CurvesPanel'
+import { ColorGradingPanel } from './adjustments/ColorGradingPanel/ColorGradingPanel'
+import { ReduceColorsPanel } from './adjustments/ReduceColorsPanel/ReduceColorsPanel'
+import { BloomOptions } from './effects/BloomOptions/BloomOptions'
+import { ChromaticAberrationOptions } from './effects/ChromaticAberrationOptions/ChromaticAberrationOptions'
+import { HalationOptions } from './effects/HalationOptions/HalationOptions'
+import { ColorKeyPanel } from './effects/ColorKeyPanel/ColorKeyPanel'
+import { DropShadowOptions } from './effects/DropShadowOptions/DropShadowOptions'
+import { GlowOptions } from './effects/GlowOptions/GlowOptions'
+import { OutlineOptions } from './effects/OutlineOptions/OutlineOptions'
 import { ToolWindow } from '@/components'
-import styles from './AdjustmentPanel.module.scss'
+import styles from './ToolWindow.module.scss'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
-interface AdjustmentPanelProps {
+interface ToolWindowProps {
   onClose: () => void
   canvasHandleRef?: { readonly current: CanvasHandle | null }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function adjustmentTitle(layer: AdjustmentLayerState): string {
+function toolTitle(layer: AdjustmentLayerState): string {
   switch (layer.adjustmentType) {
     case 'brightness-contrast': return 'Brightness/Contrast'
     case 'hue-saturation':      return 'Hue/Saturation'
@@ -221,7 +221,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelProps): React.JSX.Element | null {
+export function AdjustmentPanel({ onClose, canvasHandleRef }: ToolWindowProps): React.JSX.Element | null {
   const { state } = useAppContext()
   const { openAdjustmentLayerId, layers } = state
 
@@ -250,7 +250,7 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: AdjustmentPanelPro
 
   return (
     <ToolWindow
-      title={adjustmentTitle(adjLayer)}
+      title={toolTitle(adjLayer)}
       icon={<AdjPanelIcon type={adjLayer.adjustmentType} />}
       onClose={onClose}
       width={panelWidth}
