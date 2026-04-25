@@ -1,5 +1,5 @@
 import type { AdjustmentParamsMap } from '@/types'
-import type { CurvesLuts } from '@/adjustments/curves'
+import type { CurvesLuts } from '@/operations/adjustments/curves'
 
 // ─── Param type aliases ────────────────────────────────────────────────────────
 

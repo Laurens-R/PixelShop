@@ -44,7 +44,7 @@ import type {
   SelectiveColorPassParams,
   ColorGradingPassParams,
 } from './types'
-import type { CurvesLuts } from '@/adjustments/curves'
+import type { CurvesLuts } from '@/operations/adjustments/curves'
 
 // ─── Free helper ──────────────────────────────────────────────────────────────
 

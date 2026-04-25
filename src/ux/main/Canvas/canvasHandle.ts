@@ -6,7 +6,7 @@ import { isGroupLayer } from '@/types'
 import { buildRenderPlan as buildCanvasRenderPlan, buildSubPlan } from './canvasPlan'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 import { encodePng } from './pngHelpers'
-import { rasterizeDocument, type RasterBackend, type RasterReason } from '@/rasterization'
+import { rasterizeDocument, type RasterBackend, type RasterReason } from '@/operations/rasterization'
 
 // ─── Public handle type (imported by App.tsx and other callers) ────────────
 

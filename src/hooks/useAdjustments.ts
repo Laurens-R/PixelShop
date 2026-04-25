@@ -3,7 +3,7 @@ import type { Dispatch, MutableRefObject } from 'react'
 import type { AppState, AdjustmentLayerState, AdjustmentType, LayerState } from '@/types'
 import { isPixelLayer } from '@/types'
 import type { AppAction } from '@/store/AppContext'
-import { ADJUSTMENT_REGISTRY } from '@/adjustments/registry'
+import { ADJUSTMENT_REGISTRY } from '@/operations/adjustments/registry'
 import { adjustmentPreviewStore } from '@/store/adjustmentPreviewStore'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
