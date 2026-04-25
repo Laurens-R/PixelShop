@@ -34,6 +34,7 @@ import { ReduceNoiseDialog } from '@/ux/windows/filters/ReduceNoiseDialog/Reduce
 import { LensFlareDialog } from '@/ux/windows/filters/LensFlareDialog/LensFlareDialog'
 import { PixelateDialog } from '@/ux/windows/filters/PixelateDialog/PixelateDialog'
 import { GeneratePaletteDialog } from '@/ux/modals/GeneratePaletteDialog/GeneratePaletteDialog'
+import { ColorDitheringSetupModal } from '@/ux/modals/ColorDitheringSetupModal/ColorDitheringSetupModal'
 import { ContentAwareFillProgress } from '@/ux'
 import { ContentAwareFillOptionsDialog } from '@/ux/modals/ContentAwareFillOptionsDialog/ContentAwareFillOptionsDialog'
 import { useTabs } from '@/core/services/useTabs'
@@ -104,6 +105,7 @@ function AppContent(): React.JSX.Element {
   const [showLensFlareDialog,       setShowLensFlareDialog]       = useState(false)
   const [showPixelateDialog,         setShowPixelateDialog]         = useState(false)
   const [showGeneratePaletteDialog,   setShowGeneratePaletteDialog]   = useState(false)
+  const [showColorDitheringSetup,      setShowColorDitheringSetup]      = useState(false)
   const [showContentAwareFillOptionsDialog, setShowContentAwareFillOptionsDialog] = useState(false)
   const [contentAwareFillOptionsMode,  setContentAwareFillOptionsMode]  = useState<'fill' | 'delete'>('fill')
   const [cloneStampNotification,       setCloneStampNotification]       = useState<string | null>(null)
@@ -442,7 +444,11 @@ function AppContent(): React.JSX.Element {
     // Dynamic: adjustment / effects layers
     if (actionId.startsWith('adj:')) {
       const type = actionId.slice(4) as AdjustmentType
-      requireTransformDecision(() => adjustments.handleCreateAdjustmentLayer(type))
+      if (type === 'color-dithering') {
+        requireTransformDecision(() => setShowColorDitheringSetup(true))
+      } else {
+        requireTransformDecision(() => adjustments.handleCreateAdjustmentLayer(type))
+      }
       return
     }
     // Dynamic: filters
@@ -610,7 +616,13 @@ function AppContent(): React.JSX.Element {
         isMergeSelectedEnabled={isMergeSelectedEnabled}
         onAbout={() => setShowAboutDialog(true)}
         onKeyboardShortcuts={() => setShowShortcutsDialog(true)}
-        onCreateAdjustmentLayer={(type) => requireTransformDecision(() => adjustments.handleCreateAdjustmentLayer(type))}
+        onCreateAdjustmentLayer={(type) => requireTransformDecision(() => {
+          if (type === 'color-dithering') {
+            setShowColorDitheringSetup(true)
+          } else {
+            adjustments.handleCreateAdjustmentLayer(type)
+          }
+        })}
         isAdjustmentMenuEnabled={adjustments.isAdjustmentMenuEnabled}
         adjustmentMenuItems={ADJUSTMENT_MENU_ITEMS}
         effectsMenuItems={EFFECTS_MENU_ITEMS}
@@ -914,6 +926,19 @@ function AppContent(): React.JSX.Element {
         onApply={(palette) => {
           captureHistory('Generate Palette', { swatches: palette })
           dispatch({ type: 'SET_SWATCHES', payload: palette })
+        }}
+      />
+
+      <ColorDitheringSetupModal
+        open={showColorDitheringSetup}
+        onCancel={() => setShowColorDitheringSetup(false)}
+        onOpenGeneratePalette={() => {
+          setShowColorDitheringSetup(false)
+          setShowGeneratePaletteDialog(true)
+        }}
+        onProceed={(addReduceColors) => {
+          setShowColorDitheringSetup(false)
+          adjustments.handleCreateColorDitheringWithSetup(addReduceColors)
         }}
       />
 

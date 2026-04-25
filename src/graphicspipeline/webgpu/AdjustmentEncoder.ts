@@ -16,6 +16,7 @@ import {
   CURVES_COMPUTE,
   CG_COMPUTE,
   RC_COMPUTE,
+  DITHER_COMPUTE,
   BLOOM_EXTRACT_COMPUTE,
   BLOOM_DOWNSAMPLE_COMPUTE,
   BLOOM_BLUR_H_COMPUTE,
@@ -80,6 +81,9 @@ export class AdjustmentEncoder {
   private readonly curvesPipeline:   GPUComputePipeline
   private readonly cgPipeline:       GPUComputePipeline
   private readonly rcPipeline:       GPUComputePipeline
+
+  // Color Dithering
+  private readonly ditherPipeline: GPUComputePipeline
 
   // Bloom compute pipelines
   private readonly bloomExtractPipeline:    GPUComputePipeline
@@ -159,6 +163,8 @@ export class AdjustmentEncoder {
     this.curvesPipeline   = createComputePipeline(device, CURVES_COMPUTE,    'cs_curves')
     this.cgPipeline       = createComputePipeline(device, CG_COMPUTE,        'cs_color_grading')
     this.rcPipeline       = createComputePipeline(device, RC_COMPUTE,        'cs_reduce_colors')
+
+    this.ditherPipeline   = createComputePipeline(device, DITHER_COMPUTE,    'cs_color_dithering')
 
     this.bloomExtractPipeline    = createComputePipeline(device, BLOOM_EXTRACT_COMPUTE,    'cs_bloom_extract')
     this.bloomDownsamplePipeline = createComputePipeline(device, BLOOM_DOWNSAMPLE_COMPUTE, 'cs_bloom_downsample')
@@ -263,6 +269,10 @@ export class AdjustmentEncoder {
     }
     if (entry.kind === 'reduce-colors') {
       this.encodeReduceColorsPass(encoder, srcTex, dstTex, entry.palette, entry.paletteCount, entry.selMaskLayer)
+      return
+    }
+    if (entry.kind === 'color-dithering') {
+      this.encodeColorDitheringPass(encoder, srcTex, dstTex, entry.palette, entry.paletteCount, entry.style, entry.opacity, entry.selMaskLayer)
       return
     }
     if (entry.kind === 'bloom') {
@@ -652,6 +662,56 @@ export class AdjustmentEncoder {
 
     const pass = encoder.beginComputePass()
     pass.setPipeline(this.rcPipeline)
+    pass.setBindGroup(0, bindGroup)
+    pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
+    pass.end()
+
+    this.pendingDestroyBuffers.push(paramsBuf, palBuf, maskFlagsBuf)
+  }
+
+  private encodeColorDitheringPass(
+    encoder: GPUCommandEncoder,
+    srcTex: GPUTexture,
+    dstTex: GPUTexture,
+    palette: Float32Array,
+    paletteCount: number,
+    style: number,
+    opacity: number,
+    selMaskLayer?: GpuLayer,
+  ): void {
+    const { device, pixelWidth: w, pixelHeight: h } = this
+
+    const paramsData = new Uint32Array(8)
+    paramsData[0] = paletteCount
+    paramsData[1] = style
+    paramsData[2] = Math.round(opacity)
+    const paramsBuf = createUniformBuffer(device, 32)
+    device.queue.writeBuffer(paramsBuf, 0, paramsData)
+
+    const palBuf = createStorageBuffer(device, 256 * 16)
+    device.queue.writeBuffer(palBuf, 0, palette as Float32Array<ArrayBuffer>)
+
+    const maskFlagsData = new Uint32Array(8)
+    maskFlagsData[0] = selMaskLayer ? 1 : 0
+    const maskFlagsBuf = createUniformBuffer(device, 32)
+    writeUniformBuffer(device, maskFlagsBuf, maskFlagsData)
+
+    const dummyMask = selMaskLayer?.texture ?? srcTex
+
+    const bindGroup = device.createBindGroup({
+      layout: this.ditherPipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: srcTex.createView() },
+        { binding: 1, resource: dstTex.createView() },
+        { binding: 2, resource: { buffer: paramsBuf } },
+        { binding: 3, resource: dummyMask.createView() },
+        { binding: 4, resource: { buffer: maskFlagsBuf } },
+        { binding: 5, resource: { buffer: palBuf } },
+      ],
+    })
+
+    const pass = encoder.beginComputePass()
+    pass.setPipeline(this.ditherPipeline)
     pass.setBindGroup(0, bindGroup)
     pass.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8))
     pass.end()

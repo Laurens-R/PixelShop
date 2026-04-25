@@ -115,6 +115,12 @@ export const ADJUSTMENT_REGISTRY = [
     group: 'color-adjustments',
   },
   {
+    adjustmentType: 'color-dithering' as const,
+    label: 'Color Dithering…',
+    defaultParams: { style: 'bayer4' as const, opacity: 100 },
+    group: 'color-adjustments',
+  },
+  {
     adjustmentType: 'bloom' as const,
     label: 'Bloom…',
     group: 'real-time-effects',

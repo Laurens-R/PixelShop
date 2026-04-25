@@ -214,6 +214,7 @@ export type AdjustmentType =
   | 'curves'
   | 'color-grading'
   | 'reduce-colors'
+  | 'color-dithering'
   | 'bloom'
   | 'chromatic-aberration'
   | 'halation'
@@ -338,6 +339,10 @@ export interface AdjustmentParamsMap {
     mode: 'reduce' | 'palette'
     colorCount: number
     derivedPalette: RGBAColor[] | null
+  }
+  'color-dithering': {
+    style: 'bayer4' | 'bayer8'
+    opacity: number
   }
   'bloom': {
     threshold: number
@@ -512,6 +517,12 @@ export interface ReduceColorsAdjustmentLayer extends AdjustmentLayerBase {
   hasMask: boolean
 }
 
+export interface ColorDitheringAdjustmentLayer extends AdjustmentLayerBase {
+  adjustmentType: 'color-dithering'
+  params: AdjustmentParamsMap['color-dithering']
+  hasMask: boolean
+}
+
 export interface BloomAdjustmentLayer extends AdjustmentLayerBase {
   adjustmentType: 'bloom'
   params: AdjustmentParamsMap['bloom']
@@ -566,6 +577,7 @@ export type AdjustmentLayerState =
   | CurvesAdjustmentLayer
   | ColorGradingAdjustmentLayer
   | ReduceColorsAdjustmentLayer
+  | ColorDitheringAdjustmentLayer
   | BloomAdjustmentLayer
   | ChromaticAberrationAdjustmentLayer
   | HalationAdjustmentLayer

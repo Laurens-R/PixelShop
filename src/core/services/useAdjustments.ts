@@ -18,10 +18,11 @@ interface UseAdjustmentsOptions {
 }
 
 export interface UseAdjustmentsReturn {
-  handleCreateAdjustmentLayer: (adjustmentType: AdjustmentType) => void
-  handleOpenAdjustmentPanel:   (layerId: string) => void
-  handleCloseAdjustmentPanel:  () => void
-  isAdjustmentMenuEnabled:     boolean
+  handleCreateAdjustmentLayer:             (adjustmentType: AdjustmentType) => void
+  handleCreateColorDitheringWithSetup:     (addReduceColors: boolean) => void
+  handleOpenAdjustmentPanel:               (layerId: string) => void
+  handleCloseAdjustmentPanel:              () => void
+  isAdjustmentMenuEnabled:                 boolean
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -111,10 +112,17 @@ export function useAdjustments({
     }
   }, [stateRef, captureHistory, dispatch, getSelectionPixels, registerAdjMask])
 
+  const handleCreateColorDitheringWithSetup = useCallback((addReduceColors: boolean): void => {
+    if (addReduceColors) {
+      handleCreateAdjustmentLayer('reduce-colors')
+    }
+    handleCreateAdjustmentLayer('color-dithering')
+  }, [handleCreateAdjustmentLayer])
+
   const handleOpenAdjustmentPanel = useCallback((layerId: string): void => {
     dispatch({ type: 'SET_ACTIVE_LAYER', payload: layerId })
     dispatch({ type: 'SET_OPEN_ADJUSTMENT', payload: layerId })
   }, [dispatch])
 
-  return { handleCreateAdjustmentLayer, handleOpenAdjustmentPanel, handleCloseAdjustmentPanel, isAdjustmentMenuEnabled }
+  return { handleCreateAdjustmentLayer, handleCreateColorDitheringWithSetup, handleOpenAdjustmentPanel, handleCloseAdjustmentPanel, isAdjustmentMenuEnabled }
 }

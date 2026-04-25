@@ -69,15 +69,6 @@ void pixelops_resize_nearest(
     resize_nearest(src, srcWidth, srcHeight, dst, dstWidth, dstHeight);
 }
 
-// ─── Floyd-Steinberg Dithering ────────────────────────────────────────────────
-
-EMSCRIPTEN_KEEPALIVE
-void pixelops_dither_floyd_steinberg(
-    uint8_t* pixels, int width, int height,
-    const uint8_t* palette, int paletteSize
-) {
-    dither_floyd_steinberg(pixels, width, height, palette, paletteSize);
-}
 
 // ─── Bayer Ordered Dithering ─────────────────────────────────────────────────
 

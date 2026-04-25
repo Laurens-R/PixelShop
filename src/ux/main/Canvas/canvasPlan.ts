@@ -152,6 +152,32 @@ export function buildAdjustmentEntry(
       paletteCount,
     }
   }
+  if (ls.adjustmentType === 'color-dithering') {
+    const STYLE_MAP: Record<string, number> = {
+      'bayer4': 0, 'bayer8': 1,
+    }
+    const style = STYLE_MAP[ls.params.style] ?? 0
+    const paletteCount = Math.min(swatches.length, 256)
+    const palette = new Float32Array(256 * 4)
+    for (let i = 0; i < paletteCount; i++) {
+      const { r, g, b } = swatches[i]
+      const lin = srgbByteToLinear(r, g, b)
+      palette[i * 4 + 0] = lin.r
+      palette[i * 4 + 1] = lin.g
+      palette[i * 4 + 2] = lin.b
+      palette[i * 4 + 3] = 0
+    }
+    return {
+      kind: 'color-dithering',
+      layerId: ls.id,
+      visible: ls.visible,
+      selMaskLayer: mask,
+      palette,
+      paletteCount,
+      style,
+      opacity: ls.params.opacity ?? 100,
+    }
+  }
   if (ls.adjustmentType === 'bloom') {
     return {
       kind: 'bloom',

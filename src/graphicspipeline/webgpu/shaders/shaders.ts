@@ -15,6 +15,7 @@ export { SEL_COLOR_COMPUTE } from './compute/adjustments/selective-color'
 export { CURVES_COMPUTE } from './compute/adjustments/curves'
 export { CG_COMPUTE } from './compute/adjustments/color-grading'
 export { RC_COMPUTE } from './compute/adjustments/reduce-colors'
+export { DITHER_COMPUTE } from './compute/adjustments/color-dithering'
 export {
   BLOOM_EXTRACT_COMPUTE,
   BLOOM_DOWNSAMPLE_COMPUTE,

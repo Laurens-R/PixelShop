@@ -40,11 +40,6 @@ export interface PixelOpsModule {
     dstPtr: number, dstWidth: number, dstHeight: number
   ): void
 
-  _pixelops_dither_floyd_steinberg(
-    pixelsPtr: number, width: number, height: number,
-    palettePtr: number, paletteSize: number
-  ): void
-
   _pixelops_dither_bayer(
     pixelsPtr: number, width: number, height: number, matrixSize: number
   ): void

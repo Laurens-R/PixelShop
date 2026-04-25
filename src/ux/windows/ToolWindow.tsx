@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { useAppContext } from '@/core/store/AppContext'
-import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer, DropShadowAdjustmentLayer, GlowAdjustmentLayer, OutlineAdjustmentLayer } from '@/types'
+import type { AdjustmentLayerState, BrightnessContrastAdjustmentLayer, HueSaturationAdjustmentLayer, ColorVibranceAdjustmentLayer, ColorBalanceAdjustmentLayer, BlackAndWhiteAdjustmentLayer, ColorTemperatureAdjustmentLayer, ColorInvertAdjustmentLayer, SelectiveColorAdjustmentLayer, CurvesAdjustmentLayer, ColorGradingAdjustmentLayer, ReduceColorsAdjustmentLayer, ColorDitheringAdjustmentLayer, BloomAdjustmentLayer, ChromaticAberrationAdjustmentLayer, HalationAdjustmentLayer, ColorKeyAdjustmentLayer, DropShadowAdjustmentLayer, GlowAdjustmentLayer, OutlineAdjustmentLayer } from '@/types'
 import type { CanvasHandle } from '@/ux/main/Canvas/Canvas'
 import { BrightnessContrastPanel } from './adjustments/BrightnessContrastPanel/BrightnessContrastPanel'
 import { HueSaturationPanel } from './adjustments/HueSaturationPanel/HueSaturationPanel'
@@ -13,6 +13,7 @@ import { SelectiveColorPanel } from './adjustments/SelectiveColorPanel/Selective
 import { CurvesPanel } from './adjustments/CurvesPanel/CurvesPanel'
 import { ColorGradingPanel } from './adjustments/ColorGradingPanel/ColorGradingPanel'
 import { ReduceColorsPanel } from './adjustments/ReduceColorsPanel/ReduceColorsPanel'
+import { ColorDitheringPanel } from './adjustments/ColorDitheringPanel/ColorDitheringPanel'
 import { BloomOptions } from './effects/BloomOptions/BloomOptions'
 import { ChromaticAberrationOptions } from './effects/ChromaticAberrationOptions/ChromaticAberrationOptions'
 import { HalationOptions } from './effects/HalationOptions/HalationOptions'
@@ -45,6 +46,7 @@ function toolTitle(layer: AdjustmentLayerState): string {
     case 'curves':              return 'Curves'
     case 'color-grading':       return 'Color Grading'
     case 'reduce-colors':       return 'Reduce Colors'
+    case 'color-dithering':     return 'Color Dithering'
     case 'bloom':               return 'Bloom'
     case 'chromatic-aberration': return 'Chromatic Aberration'
     case 'halation':             return 'Halation'
@@ -144,6 +146,19 @@ const ReduceColorsHeaderIcon = (): React.JSX.Element => (
   </svg>
 )
 
+const ColorDitheringHeaderIcon = (): React.JSX.Element => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+    <rect x="0" y="0" width="3" height="3" />
+    <rect x="6" y="0" width="3" height="3" />
+    <rect x="3" y="3" width="3" height="3" />
+    <rect x="9" y="3" width="3" height="3" />
+    <rect x="0" y="6" width="3" height="3" />
+    <rect x="6" y="6" width="3" height="3" />
+    <rect x="3" y="9" width="3" height="3" />
+    <rect x="9" y="9" width="3" height="3" />
+  </svg>
+)
+
 const BloomHeaderIcon = (): React.JSX.Element => (
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.1" aria-hidden="true">
     <circle cx="6" cy="6" r="1.5" fill="currentColor" stroke="none" />
@@ -209,6 +224,7 @@ function AdjPanelIcon({ type }: { type: AdjustmentLayerState['adjustmentType'] }
   if (type === 'curves') return <CurvesHeaderIcon />
   if (type === 'color-grading') return <ColorGradingHeaderIcon />
   if (type === 'reduce-colors') return <ReduceColorsHeaderIcon />
+  if (type === 'color-dithering') return <ColorDitheringHeaderIcon />
   if (type === 'bloom') return <BloomHeaderIcon />
   if (type === 'chromatic-aberration') return <ChromaticAberrationHeaderIcon />
   if (type === 'halation') return <HalationHeaderIcon />
@@ -298,6 +314,12 @@ export function AdjustmentPanel({ onClose, canvasHandleRef }: ToolWindowProps): 
             layer={adjLayer as ReduceColorsAdjustmentLayer}
             parentLayerName={parentLayerName}
             canvasHandleRef={canvasHandleRef}
+          />
+        )}
+        {adjLayer.adjustmentType === 'color-dithering' && (
+          <ColorDitheringPanel
+            layer={adjLayer as ColorDitheringAdjustmentLayer}
+            parentLayerName={parentLayerName}
           />
         )}
         {adjLayer.adjustmentType === 'bloom' && (

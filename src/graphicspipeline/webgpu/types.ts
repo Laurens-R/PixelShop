@@ -55,6 +55,16 @@ export type AdjustmentRenderOp =
       paletteCount: number
     }
   | {
+      kind: 'color-dithering'
+      layerId: string
+      visible: boolean
+      selMaskLayer?: GpuLayer
+      palette: Float32Array
+      paletteCount: number
+      style: number  // 0=bayer4, 1=bayer8
+      opacity: number
+    }
+  | {
       kind: 'bloom'
       layerId:   string
       threshold: number

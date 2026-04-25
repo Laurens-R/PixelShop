@@ -142,23 +142,6 @@ export async function resizeNearest(
   )
 }
 
-/** Floyd-Steinberg error-diffusion dithering using the given RGBA palette. */
-export async function ditherFloydSteinberg(
-  pixels: Uint8Array, width: number, height: number,
-  palette: Uint8Array // RGBA entries, palette.length / 4 = paletteSize
-): Promise<Uint8Array> {
-  const m = await getPixelOps()
-  const palPtr = m._malloc(palette.byteLength)
-  try {
-    m.HEAPU8.set(palette, palPtr)
-    return withInPlaceBuffer(m, pixels, ptr =>
-      m._pixelops_dither_floyd_steinberg(ptr, width, height, palPtr, palette.length / 4)
-    )
-  } finally {
-    m._free(palPtr)
-  }
-}
-
 /** Ordered (Bayer) dithering. matrixSize: 2, 4, or 8. */
 export async function ditherBayer(
   pixels: Uint8Array, width: number, height: number, matrixSize: 2 | 4 | 8 = 4
